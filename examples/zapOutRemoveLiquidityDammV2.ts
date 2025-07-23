@@ -67,9 +67,9 @@ import { NATIVE_MINT } from "@solana/spl-token";
   ).blockhash;
   transaction.sign(wallet);
 
-  //   console.log(await connection.simulateTransaction(transaction));
-  const signature = await connection.sendRawTransaction(
-    transaction.serialize()
-  );
-  console.log(signature);
+  console.log(await connection.simulateTransaction(transaction));
+  // const signature = await connection.sendRawTransaction(
+  //   transaction.serialize()
+  // );
+  // console.log(signature);
 })();
