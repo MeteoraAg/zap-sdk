@@ -34,7 +34,13 @@ import {
   deriveDammV2PoolAuthority,
   getSwapDammV2Accounts,
 } from "./helpers/dammV2";
-import DLMM, { RemainingAccountInfo } from "@meteora-ag/dlmm";
+import DLMM, {
+  getBinArrayAccountMetasCoverage,
+  MEMO_PROGRAM_ID,
+  RemainingAccountInfo,
+  RemainingAccountsInfoSlice,
+  wrapPosition,
+} from "@meteora-ag/dlmm";
 import {
   convertAccountTypeToNumber,
   getSwapDlmmAccounts,
@@ -320,23 +326,15 @@ export class Zap {
    */
   async zapOutSwapDlmm(params: ZapOutSwapDlmmParams): Promise<Transaction> {
     const {
-      user,
       poolAddress,
       inputTokenMint,
       minimumSwapAmountOut,
       dlmm,
-      outputTokenMint,
-      outputTokenProgram,
+      inputTokenAccount,
+      outputTokenAccount,
     } = params;
 
     const swapForY = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
-    const inputTokenAccount = deriveTokenLedgerAddress(inputTokenMint);
-    const outputTokenAccount = getAssociatedTokenAddressSync(
-      outputTokenMint,
-      user,
-      true,
-      outputTokenProgram
-    );
 
     const swapDlmmAccounts = getSwapDlmmAccounts(
       poolAddress,
@@ -445,7 +443,7 @@ export class Zap {
   async removeDlmmLiquidityWithZapOut(
     params: RemoveDlmmLiquidityWithZapOutParams
   ): Promise<Transaction> {
-    const {
+    let {
       user,
       poolAddress,
       position,
@@ -459,19 +457,145 @@ export class Zap {
       cluster: this.cluster,
     });
 
-    const removeLiquidityTx = await dlmm.removeLiquidity({
-      user,
-      position,
-      fromBinId,
-      toBinId,
-      bps,
+    const positionAccount = await this.connection.getAccountInfo(position);
+
+    const positionState = wrapPosition(dlmm.program, position, positionAccount);
+
+    const lbPair = positionState.lbPair();
+    const liquidityShares = positionState.liquidityShares();
+
+    const liquidityShareWithBinId = liquidityShares.map((share, i) => {
+      return {
+        share,
+        binId: positionState.lowerBinId().add(new BN(i)),
+      };
     });
 
-    const [inputTokenMint, outputTokenProgram] = dlmm.lbPair.tokenXMint.equals(
+    const binIdsWithLiquidity = liquidityShareWithBinId.filter((bin) => {
+      return !bin.share.isZero();
+    });
+
+    if (binIdsWithLiquidity.length == 0) {
+      throw new Error("No liquidity to remove");
+    }
+
+    const lowerBinIdWithLiquidity = binIdsWithLiquidity[0].binId.toNumber();
+    const upperBinIdWithLiquidity =
+      binIdsWithLiquidity[binIdsWithLiquidity.length - 1].binId.toNumber();
+
+    // Avoid to attempt to load uninitialized bin array on the program
+    if (fromBinId < lowerBinIdWithLiquidity) {
+      fromBinId = lowerBinIdWithLiquidity;
+    }
+
+    if (toBinId > upperBinIdWithLiquidity) {
+      toBinId = upperBinIdWithLiquidity;
+    }
+
+    let slices: RemainingAccountsInfoSlice[] = [];
+    if (dlmm.tokenX.transferHookAccountMetas.length > 0) {
+      slices.push({
+        accountsType: {
+          transferHookX: {},
+        },
+        length: dlmm.tokenX.transferHookAccountMetas.length,
+      });
+    }
+
+    if (dlmm.tokenY.transferHookAccountMetas.length > 0) {
+      slices.push({
+        accountsType: {
+          transferHookY: {},
+        },
+        length: dlmm.tokenY.transferHookAccountMetas.length,
+      });
+    }
+
+    const transferHookAccounts = dlmm.tokenX.transferHookAccountMetas.concat(
+      dlmm.tokenY.transferHookAccountMetas
+    );
+
+    const binArrayAccountsMeta = getBinArrayAccountMetasCoverage(
+      new BN(fromBinId),
+      new BN(toBinId),
+      dlmm.pubkey,
+      dlmm.program.programId
+    );
+
+    const [inputTokenMint, outputTokenProgram, inputTokenProgram] =
+      dlmm.lbPair.tokenXMint.equals(outputTokenMint)
+        ? [dlmm.lbPair.tokenYMint, dlmm.tokenX.owner, dlmm.tokenY.owner]
+        : [dlmm.lbPair.tokenXMint, dlmm.tokenY.owner, dlmm.tokenX.owner];
+    const tokenLedgerAccount = deriveTokenLedgerAddress(inputTokenMint);
+    const outputTokenAccount = getAssociatedTokenAddressSync(
+      outputTokenMint,
+      user,
+      true,
+      outputTokenProgram
+    );
+
+    const [userTokenX, userTokenY] = dlmm.lbPair.tokenXMint.equals(
       outputTokenMint
     )
-      ? [dlmm.lbPair.tokenYMint, dlmm.tokenX.owner]
-      : [dlmm.lbPair.tokenXMint, dlmm.tokenY.owner];
+      ? [outputTokenAccount, tokenLedgerAccount]
+      : [tokenLedgerAccount, outputTokenAccount];
+
+    const preInstructions: TransactionInstruction[] = [];
+    const tokenLedgerAccountData = await this.connection.getAccountInfo(
+      tokenLedgerAccount
+    );
+    if (!tokenLedgerAccountData) {
+      const initializeTokenledgerTx = await this.initializeTokenLedger(
+        user,
+        inputTokenMint,
+        inputTokenProgram
+      );
+      preInstructions.push(...initializeTokenledgerTx.instructions);
+    }
+
+    const outputTokenAccountData = await this.connection.getAccountInfo(
+      outputTokenAccount
+    );
+    if (!outputTokenAccountData) {
+      const ix = createAssociatedTokenAccountIdempotentInstruction(
+        user,
+        outputTokenAccount,
+        user,
+        outputTokenMint,
+        outputTokenProgram
+      );
+
+      preInstructions.push(ix);
+    }
+
+    const binArrayBitmapExtension = dlmm.binArrayBitmapExtension
+      ? dlmm.binArrayBitmapExtension.publicKey
+      : dlmm.program.programId;
+
+    const removeLiquidityTx = await dlmm.program.methods
+      .removeLiquidityByRange2(fromBinId, toBinId, bps.toNumber(), {
+        slices,
+      })
+      .accounts({
+        position,
+        lbPair,
+        userTokenX,
+        userTokenY,
+        reserveX: dlmm.lbPair.reserveX,
+        reserveY: dlmm.lbPair.reserveY,
+        tokenXMint: dlmm.tokenX.publicKey,
+        tokenYMint: dlmm.tokenY.publicKey,
+        binArrayBitmapExtension,
+        tokenXProgram: dlmm.tokenX.owner,
+        tokenYProgram: dlmm.tokenY.owner,
+        sender: user,
+        memoProgram: MEMO_PROGRAM_ID,
+      })
+      .preInstructions(preInstructions)
+      .remainingAccounts(transferHookAccounts)
+      .remainingAccounts(binArrayAccountsMeta)
+      .transaction();
+    ////
 
     const zapOutSwapDlmmTx = await this.zapOutSwapDlmm({
       user,
@@ -479,19 +603,19 @@ export class Zap {
       inputTokenMint,
       minimumSwapAmountOut,
       dlmm,
-      outputTokenMint,
-      outputTokenProgram,
+      inputTokenAccount: tokenLedgerAccount,
+      outputTokenAccount,
     });
 
-    const transaction = new Transaction();
-    if (removeLiquidityTx instanceof Array) {
-      transaction.add(...removeLiquidityTx);
-    } else {
-      transaction.add(removeLiquidityTx);
+    const unwarpSOLInstruction = [];
+    if (outputTokenMint.equals(NATIVE_MINT)) {
+      const unwarpSOLIx = await unwrapSOLInstruction(user, user, true);
+      unwarpSOLInstruction.push(unwarpSOLIx);
     }
 
-    transaction.add(zapOutSwapDlmmTx);
-
-    return transaction;
+    return new Transaction()
+      .add(removeLiquidityTx)
+      .add(zapOutSwapDlmmTx)
+      .add(...unwarpSOLInstruction);
   }
 }

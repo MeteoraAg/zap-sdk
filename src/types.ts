@@ -29,8 +29,8 @@ export type ZapOutSwapDlmmParams = {
   inputTokenMint: PublicKey;
   minimumSwapAmountOut: BN;
   dlmm: DLMM;
-  outputTokenMint: PublicKey;
-  outputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
 };
 
 export type RemoveDammV2LiquidityWithZapOutParams = {
