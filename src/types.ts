@@ -16,12 +16,10 @@ export type ZapOutParams = {
 };
 
 export type ZapOutSwapDammV2Params = {
-  user: PublicKey;
   poolAddress: PublicKey;
   poolState: PoolState;
-  inputTokenMint: PublicKey;
-  outputTokenMint: PublicKey;
-  outputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
   minimumSwapAmountOut: BN;
 };
 

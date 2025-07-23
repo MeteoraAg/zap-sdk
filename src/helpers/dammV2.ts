@@ -15,6 +15,13 @@ function deriveDammV2EventAuthority() {
   )[0];
 }
 
+export function deriveDammV2PoolAuthority(): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("pool_authority")],
+    CP_AMM_PROGRAM_ID
+  )[0];
+}
+
 export function getSwapDammV2Accounts(
   pool: PublicKey,
   poolState: PoolState,
