@@ -5,8 +5,13 @@ import {
   Connection,
   PublicKey,
   Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
+} from "@solana/spl-token";
 import { deriveTokenLedgerAddress, deriveZapAuthorityAddress } from "./pda";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap.json";
@@ -23,8 +28,12 @@ import {
   CP_AMM_PROGRAM_ID,
   CpAmm,
   getTokenProgram,
+  unwrapSOLInstruction,
 } from "@meteora-ag/cp-amm-sdk";
-import { getSwapDammV2Accounts } from "./helpers/dammV2";
+import {
+  deriveDammV2PoolAuthority,
+  getSwapDammV2Accounts,
+} from "./helpers/dammV2";
 import DLMM, { RemainingAccountInfo } from "@meteora-ag/dlmm";
 import {
   convertAccountTypeToNumber,
@@ -125,22 +134,13 @@ export class Zap {
    */
   async zapOutSwapDammV2(params: ZapOutSwapDammV2Params): Promise<Transaction> {
     const {
-      user,
       poolAddress,
       poolState,
-      inputTokenMint,
-      outputTokenMint,
-      outputTokenProgram,
+      inputTokenAccount,
+      outputTokenAccount,
       minimumSwapAmountOut,
     } = params;
 
-    const inputTokenAccount = deriveTokenLedgerAddress(inputTokenMint);
-    const outputTokenAccount = getAssociatedTokenAddressSync(
-      outputTokenMint,
-      user,
-      true,
-      outputTokenProgram
-    );
     const swapDammV2Accounts = getSwapDammV2Accounts(
       poolAddress,
       poolState,
@@ -192,39 +192,116 @@ export class Zap {
       vestings,
     } = params;
     const dammV2 = new CpAmm(this.connection);
-    const removeLiquidityTx = await dammV2.removeLiquidity({
-      owner: user,
-      position,
-      pool: poolAddress,
-      positionNftAccount,
-      liquidityDelta,
-      tokenAAmountThreshold,
-      tokenBAmountThreshold,
-      tokenAMint: poolState.tokenAMint,
-      tokenBMint: poolState.tokenBMint,
-      tokenAVault: poolState.tokenAVault,
-      tokenBVault: poolState.tokenBVault,
-      tokenAProgram: getTokenProgram(poolState.tokenAFlag),
-      tokenBProgram: getTokenProgram(poolState.tokenBFlag),
-      vestings,
-      currentPoint: new BN(0), // current Point is not impact with remove liquidity function
-    });
-    const [inputTokenMint, outputTokenProgram] = poolState.tokenAMint.equals(
+    const program = dammV2._program;
+
+    const [inputTokenMint, outputTokenProgram, inputTokenProgram] =
+      poolState.tokenAMint.equals(outputTokenMint)
+        ? [
+            poolState.tokenBMint,
+            getTokenProgram(poolState.tokenAFlag),
+            getTokenProgram(poolState.tokenBFlag),
+          ]
+        : [
+            poolState.tokenAMint,
+            getTokenProgram(poolState.tokenBFlag),
+            getTokenProgram(poolState.tokenAFlag),
+          ];
+    const tokenLedgerAccount = deriveTokenLedgerAddress(inputTokenMint);
+    const outputTokenAccount = getAssociatedTokenAddressSync(
+      outputTokenMint,
+      user,
+      true,
+      outputTokenProgram
+    );
+
+    const [tokenAAccount, tokenBAccount] = poolState.tokenAMint.equals(
       outputTokenMint
     )
-      ? [poolState.tokenBMint, getTokenProgram(poolState.tokenAFlag)]
-      : [poolState.tokenAMint, getTokenProgram(poolState.tokenBFlag)];
+      ? [outputTokenAccount, tokenLedgerAccount]
+      : [tokenLedgerAccount, outputTokenAccount];
+
+    const preInstructions: TransactionInstruction[] = [];
+    const tokenLedgerAccountData = await this.connection.getAccountInfo(
+      tokenLedgerAccount
+    );
+    if (!tokenLedgerAccountData) {
+      const initializeTokenledgerTx = await this.initializeTokenLedger(
+        user,
+        inputTokenMint,
+        inputTokenProgram
+      );
+      preInstructions.push(...initializeTokenledgerTx.instructions);
+    }
+
+    const outputTokenAccountData = await this.connection.getAccountInfo(
+      outputTokenAccount
+    );
+    if (!outputTokenAccountData) {
+      const ix = createAssociatedTokenAccountIdempotentInstruction(
+        user,
+        outputTokenAccount,
+        user,
+        outputTokenMint,
+        outputTokenProgram
+      );
+
+      preInstructions.push(ix);
+    }
+
+    if (vestings.length > 0) {
+      const refreshVestingTx = await dammV2.refreshVesting({
+        owner: user,
+        position,
+        positionNftAccount,
+        pool: poolAddress,
+        vestingAccounts: vestings.map((item) => item.account),
+      });
+
+      preInstructions.push(...refreshVestingTx.instructions);
+    }
+
+    const removeLiquidityTx = await program.methods
+      .removeLiquidity({
+        liquidityDelta,
+        tokenAAmountThreshold,
+        tokenBAmountThreshold,
+      })
+      .accountsPartial({
+        poolAuthority: deriveDammV2PoolAuthority(),
+        pool: poolAddress,
+        position,
+        positionNftAccount,
+        owner: user,
+        tokenAAccount,
+        tokenBAccount,
+        tokenAMint: poolState.tokenAMint,
+        tokenBMint: poolState.tokenBMint,
+        tokenAVault: poolState.tokenAVault,
+        tokenBVault: poolState.tokenBVault,
+        tokenAProgram: getTokenProgram(poolState.tokenAFlag),
+        tokenBProgram: getTokenProgram(poolState.tokenBFlag),
+      })
+      .preInstructions(preInstructions)
+      .transaction();
+
     const zapOutSwapDammV2Tx = await this.zapOutSwapDammV2({
-      user,
       poolAddress,
       poolState,
-      inputTokenMint,
-      outputTokenMint,
-      outputTokenProgram,
+      inputTokenAccount: tokenLedgerAccount,
+      outputTokenAccount,
       minimumSwapAmountOut,
     });
 
-    return new Transaction().add(removeLiquidityTx).add(zapOutSwapDammV2Tx);
+    const unwarpSOLInstruction = [];
+    if (outputTokenMint.equals(NATIVE_MINT)) {
+      const unwarpSOLIx = await unwrapSOLInstruction(user, user, true);
+      unwarpSOLInstruction.push(unwarpSOLIx);
+    }
+
+    return new Transaction()
+      .add(removeLiquidityTx)
+      .add(zapOutSwapDammV2Tx)
+      .add(...unwarpSOLInstruction);
   }
 
   ///////////// DLMM METHODS /////////////
@@ -351,9 +428,9 @@ export class Zap {
   }
 
   /**
-   * Removes liquidity from a DLMM position and automatically swaps one of the 
+   * Removes liquidity from a DLMM position and automatically swaps one of the
    * received tokens to the desired output token in a single transaction.
-   * 
+   *
    * @param params - Remove DLMM liquidity with zap out parameters
    * @param params.user - Public key of the position owner
    * @param params.poolAddress - Public key of the DLMM pair
