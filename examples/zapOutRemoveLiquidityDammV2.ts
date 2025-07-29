@@ -1,5 +1,5 @@
 import { clusterApiUrl, Connection, Keypair, PublicKey } from "@solana/web3.js";
-import { Zap } from "../src/zap";
+import { Zap } from "../src";
 import {
   CpAmm,
   getAmountAFromLiquidityDelta,
