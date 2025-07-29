@@ -19,7 +19,7 @@ export type Zap = {
       accounts: [
         {
           name: "zapAuthority";
-          address: "5GAePfba5djevckzzENFkU22BQobHa4mQTQoJaG7DbDk";
+          address: "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk";
         },
         {
           name: "tokenLedgerAccount";
@@ -106,7 +106,7 @@ export type Zap = {
       accounts: [
         {
           name: "zapAuthority";
-          address: "5GAePfba5djevckzzENFkU22BQobHa4mQTQoJaG7DbDk";
+          address: "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk";
         },
         {
           name: "tokenLedgerAccount";
@@ -143,6 +143,16 @@ export type Zap = {
       code: 6002;
       name: "typeCastFailed";
       msg: "Type cast error";
+    },
+    {
+      code: 6003;
+      name: "invalidDataLen";
+      msg: "Invalid data length";
+    },
+    {
+      code: 6004;
+      name: "mathOverflow";
+      msg: "Math operation overflow";
     }
   ];
 };

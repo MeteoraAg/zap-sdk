@@ -1,12 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
 import {
-  CpAmm,
   derivePoolAuthority,
   PoolState,
   CP_AMM_PROGRAM_ID,
   getTokenProgram,
 } from "@meteora-ag/cp-amm-sdk";
-import { deriveZapAuthorityAddress } from "../pda";
+import { deriveZapAuthorityAddress } from "./pda";
 
 function deriveDammV2EventAuthority() {
   return PublicKey.findProgramAddressSync(

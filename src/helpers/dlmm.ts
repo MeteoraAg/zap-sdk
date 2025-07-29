@@ -1,13 +1,10 @@
 import DLMM, {
   BinArrayBitmapExtensionAccount,
-  deriveOracle,
-  LBCLMM_PROGRAM_IDS,
   LbPair,
   MEMO_PROGRAM_ID,
-  RemainingAccountInfo,
 } from "@meteora-ag/dlmm";
 import { AccountMeta, PublicKey } from "@solana/web3.js";
-import { deriveZapAuthorityAddress } from "../pda";
+import { deriveZapAuthorityAddress } from "./pda";
 
 export function deriveDlmmEventAuthority(programId: PublicKey) {
   return PublicKey.findProgramAddressSync(

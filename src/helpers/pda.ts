@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import ZapIDL from "./idl/zap.json";
+import ZapIDL from "../idl/zap.json";
 
 export function deriveZapAuthorityAddress(): PublicKey {
   return PublicKey.findProgramAddressSync(

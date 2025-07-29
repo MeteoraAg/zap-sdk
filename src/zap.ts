@@ -12,7 +12,10 @@ import {
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import { deriveTokenLedgerAddress, deriveZapAuthorityAddress } from "./pda";
+import {
+  deriveTokenLedgerAddress,
+  deriveZapAuthorityAddress,
+} from "./helpers/pda";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap.json";
 import { Zap as ZapTypes } from "./idl/zap";

@@ -7,6 +7,7 @@ export enum ActionType {
   SwapDammV2,
   SwapDlmm,
 }
+
 export type ZapOutParams = {
   actionType: number;
   payloadData: Buffer<ArrayBufferLike>;
