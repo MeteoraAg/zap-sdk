@@ -1,25 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 import {
-  derivePoolAuthority,
   PoolState,
   CP_AMM_PROGRAM_ID,
   getTokenProgram,
 } from "@meteora-ag/cp-amm-sdk";
-import { deriveZapAuthorityAddress } from "./pda";
-
-function deriveDammV2EventAuthority() {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("__event_authority")],
-    CP_AMM_PROGRAM_ID
-  )[0];
-}
-
-export function deriveDammV2PoolAuthority(): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("pool_authority")],
-    CP_AMM_PROGRAM_ID
-  )[0];
-}
+import {
+  deriveDammV2EventAuthority,
+  deriveDammV2PoolAuthority,
+  deriveZapAuthorityAddress,
+} from "./pda";
 
 export function getSwapDammV2Accounts(
   pool: PublicKey,
@@ -37,7 +26,7 @@ export function getSwapDammV2Accounts(
     {
       isSigner: false,
       isWritable: false,
-      pubkey: derivePoolAuthority(),
+      pubkey: deriveDammV2PoolAuthority(),
     },
     {
       isSigner: false,

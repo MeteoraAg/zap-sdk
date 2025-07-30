@@ -1,11 +1,16 @@
-import { PoolState, VestingState } from "@meteora-ag/cp-amm-sdk";
+import { Program } from "@coral-xyz/anchor";
+import { PoolState } from "@meteora-ag/cp-amm-sdk";
 import DLMM from "@meteora-ag/dlmm";
 import { AccountMeta, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
+import { Zap as ZapTypes } from "./idl/zap";
+
+export type ZapProgram = Program<ZapTypes>;
 
 export enum ActionType {
   SwapDammV2,
   SwapDlmm,
+  SwapJupiterV6,
 }
 
 export type ZapOutParams = {
@@ -16,7 +21,7 @@ export type ZapOutParams = {
   ammProgram: PublicKey;
 };
 
-export type ZapOutSwapDammV2Params = {
+export type ZapOutThroughDammV2Params = {
   poolAddress: PublicKey;
   poolState: PoolState;
   inputTokenAccount: PublicKey;
@@ -24,7 +29,7 @@ export type ZapOutSwapDammV2Params = {
   minimumSwapAmountOut: BN;
 };
 
-export type ZapOutSwapDlmmParams = {
+export type ZapOutThroughDlmmParams = {
   user: PublicKey;
   poolAddress: PublicKey;
   inputTokenMint: PublicKey;
@@ -34,30 +39,74 @@ export type ZapOutSwapDlmmParams = {
   outputTokenAccount: PublicKey;
 };
 
-export type RemoveDammV2LiquidityWithZapOutParams = {
-  user: PublicKey;
-  poolAddress: PublicKey;
-  poolState: PoolState;
-  position: PublicKey;
-  positionNftAccount: PublicKey;
-  liquidityDelta: BN;
-  outputTokenMint: PublicKey;
-  tokenAAmountThreshold: BN;
-  tokenBAmountThreshold: BN;
-  minimumSwapAmountOut: BN;
-  vestings: Array<{
-    account: PublicKey;
-    vestingState: VestingState;
-  }>;
-};
+export interface ZapOutThroughJupiterParams {
+  inputTokenMint: PublicKey;
+  inputTokenAccount: PublicKey;
+  jupiterSwapResponse: JupiterSwapInstructionResponse;
+  jupiterQuoteResponse: JupiterQuoteResponse;
+}
 
-export type RemoveDlmmLiquidityWithZapOutParams = {
-  user: PublicKey;
-  poolAddress: PublicKey;
-  position: PublicKey;
-  fromBinId: number;
-  toBinId: number;
-  outputTokenMint: PublicKey;
-  bps: BN;
-  minimumSwapAmountOut: BN;
-};
+export interface JupiterQuoteResponse {
+  inputMint: string;
+  inAmount: string;
+  outputMint: string;
+  outAmount: string;
+  otherAmountThreshold: string;
+  swapMode: string;
+  slippageBps: number;
+  platformFee: any;
+  priceImpactPct: string;
+  routePlan: JupiterRoutePlan[];
+  contextSlot: number;
+  timeTaken: number;
+  swapUsdValue: string;
+  simplerRouteUsed: boolean;
+  mostReliableAmmsQuoteReport: {
+    info: Record<string, string>;
+  };
+  useIncurredSlippageForQuoting: any;
+  otherRoutePlans: any;
+  aggregatorVersion: any;
+}
+
+export interface JupiterRoutePlan {
+  swapInfo: any;
+  percent: number;
+  bps: number;
+}
+
+export interface JupiterInstruction {
+  programId: string;
+  accounts: any[];
+  data: string;
+}
+
+export interface JupiterSwapInstructionResponse {
+  tokenLedgerInstruction: JupiterInstruction | null;
+  computeBudgetInstructions: JupiterInstruction[];
+  setupInstructions: JupiterInstruction[];
+  swapInstruction: JupiterInstruction;
+  cleanupInstruction: JupiterInstruction;
+  otherInstructions: JupiterInstruction[];
+  addressLookupTableAddresses: string[];
+  prioritizationFeeLamports: number;
+  computeUnitLimit: number;
+  prioritizationType: {
+    computeBudget: {
+      microLamports: number;
+      estimatedMicroLamports: number;
+    };
+  };
+  simulationSlot: any;
+  dynamicSlippageReport: any;
+  simulationError: any;
+  addressesByLookupTableAddress: any;
+  blockhashWithMetadata: {
+    blockhash: number[];
+    lastValidBlockHeight: number;
+    fetchedAt: {
+      secs_since_epoch: number;
+      nanos_since_epoch: number;
+    };
+  };
+}

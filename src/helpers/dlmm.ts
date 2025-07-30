@@ -3,30 +3,8 @@ import DLMM, {
   LbPair,
   MEMO_PROGRAM_ID,
 } from "@meteora-ag/dlmm";
-import { AccountMeta, PublicKey } from "@solana/web3.js";
-import { deriveZapAuthorityAddress } from "./pda";
-
-export function deriveDlmmEventAuthority(programId: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("__event_authority")],
-    programId
-  )[0];
-}
-
-export function convertAccountTypeToNumber(accountType: object): number {
-  if (JSON.stringify(accountType) === JSON.stringify({ transferHookX: {} })) {
-    return 0;
-  }
-
-  if (JSON.stringify(accountType) === JSON.stringify({ transferHookY: {} })) {
-    return 1;
-  }
-  if (
-    JSON.stringify(accountType) === JSON.stringify({ transferHookReward: {} })
-  ) {
-    return 2;
-  }
-}
+import { PublicKey } from "@solana/web3.js";
+import { deriveDlmmEventAuthority, deriveZapAuthorityAddress } from "./pda";
 
 export function getSwapDlmmAccounts(
   poolAddress: PublicKey,

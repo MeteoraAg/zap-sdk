@@ -5,51 +5,28 @@ import {
   Connection,
   PublicKey,
   Transaction,
-  TransactionInstruction,
 } from "@solana/web3.js";
-import {
-  createAssociatedTokenAccountIdempotentInstruction,
-  getAssociatedTokenAddressSync,
-  NATIVE_MINT,
-} from "@solana/spl-token";
-import {
-  deriveTokenLedgerAddress,
-  deriveZapAuthorityAddress,
-} from "./helpers/pda";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap.json";
 import { Zap as ZapTypes } from "./idl/zap";
 import {
   ActionType,
-  RemoveDammV2LiquidityWithZapOutParams,
-  RemoveDlmmLiquidityWithZapOutParams,
   ZapOutParams,
-  ZapOutSwapDammV2Params,
-  ZapOutSwapDlmmParams,
+  ZapOutThroughDammV2Params,
+  ZapOutThroughDlmmParams,
+  ZapOutThroughJupiterParams,
+  ZapProgram,
 } from "./types";
+import { CP_AMM_PROGRAM_ID } from "@meteora-ag/cp-amm-sdk";
+import { RemainingAccountInfo } from "@meteora-ag/dlmm";
 import {
-  CP_AMM_PROGRAM_ID,
-  CpAmm,
-  getTokenProgram,
-  unwrapSOLInstruction,
-} from "@meteora-ag/cp-amm-sdk";
-import {
-  deriveDammV2PoolAuthority,
-  getSwapDammV2Accounts,
-} from "./helpers/dammV2";
-import DLMM, {
-  getBinArrayAccountMetasCoverage,
-  MEMO_PROGRAM_ID,
-  RemainingAccountInfo,
-  RemainingAccountsInfoSlice,
-  wrapPosition,
-} from "@meteora-ag/dlmm";
-import {
-  convertAccountTypeToNumber,
   getSwapDlmmAccounts,
-} from "./helpers/dlmm";
-
-export type ZapProgram = Program<ZapTypes>;
+  getSwapDammV2Accounts,
+  deriveTokenLedgerAddress,
+  deriveZapAuthorityAddress,
+  convertAccountTypeToNumber,
+} from "./helpers";
+import { JUP_V6_PROGRAM_ID } from "./constants";
 
 export class Zap {
   private zapAuthority: PublicKey;
@@ -107,7 +84,7 @@ export class Zap {
    * @param params.ammProgram - AMM program ID to interact with
    * @returns builder transaction
    */
-  async zapOut(params: ZapOutParams): Promise<Transaction> {
+  private async zapOut(params: ZapOutParams): Promise<Transaction> {
     const {
       tokenLedgerAccount,
       actionType,
@@ -141,7 +118,9 @@ export class Zap {
    * @param params.minimumSwapAmountOut - Minimum amount to receive (slippage protection)
    * @returns built transaction
    */
-  async zapOutSwapDammV2(params: ZapOutSwapDammV2Params): Promise<Transaction> {
+  async zapOutThroughDammV2(
+    params: ZapOutThroughDammV2Params
+  ): Promise<Transaction> {
     const {
       poolAddress,
       poolState,
@@ -166,156 +145,10 @@ export class Zap {
     });
   }
 
-  /**
-   * Removes liquidity from a DAMM V2 position and automatically swaps one of the
-   * received tokens to the desired output token in a single transaction.
-   *
-   * @param params - Remove liquidity with zap out parameters
-   * @param params.user - Public key of the position owner
-   * @param params.poolState - Pool state data containing token information
-   * @param params.position - Position data to remove liquidity from
-   * @param params.poolAddress - Public key of the pool
-   * @param params.positionNftAccount - NFT account representing the position
-   * @param params.liquidityDelta - Amount of liquidity to remove
-   * @param params.outputTokenMint - Desired output token mint
-   * @param params.tokenAAmountThreshold - Minimum amount of token A to receive
-   * @param params.tokenBAmountThreshold - Minimum amount of token B to receive
-   * @param params.minimumSwapAmountOut - Minimum amount from the swap (slippage protection)
-   * @param params.vestings - Vesting schedules if applicable
-   * @returns Promise resolving to a Transaction that removes liquidity and swaps tokens
-   */
-  async removeDammV2LiquidityWithZapOut(
-    params: RemoveDammV2LiquidityWithZapOutParams
-  ): Promise<Transaction> {
-    const {
-      user,
-      poolState,
-      position,
-      poolAddress,
-      positionNftAccount,
-      liquidityDelta,
-      outputTokenMint,
-      tokenAAmountThreshold,
-      tokenBAmountThreshold,
-      minimumSwapAmountOut,
-      vestings,
-    } = params;
-    const dammV2 = new CpAmm(this.connection);
-    const program = dammV2._program;
-
-    const [inputTokenMint, outputTokenProgram, inputTokenProgram] =
-      poolState.tokenAMint.equals(outputTokenMint)
-        ? [
-            poolState.tokenBMint,
-            getTokenProgram(poolState.tokenAFlag),
-            getTokenProgram(poolState.tokenBFlag),
-          ]
-        : [
-            poolState.tokenAMint,
-            getTokenProgram(poolState.tokenBFlag),
-            getTokenProgram(poolState.tokenAFlag),
-          ];
-    const tokenLedgerAccount = deriveTokenLedgerAddress(inputTokenMint);
-    const outputTokenAccount = getAssociatedTokenAddressSync(
-      outputTokenMint,
-      user,
-      true,
-      outputTokenProgram
-    );
-
-    const [tokenAAccount, tokenBAccount] = poolState.tokenAMint.equals(
-      outputTokenMint
-    )
-      ? [outputTokenAccount, tokenLedgerAccount]
-      : [tokenLedgerAccount, outputTokenAccount];
-
-    const preInstructions: TransactionInstruction[] = [];
-    const tokenLedgerAccountData = await this.connection.getAccountInfo(
-      tokenLedgerAccount
-    );
-    if (!tokenLedgerAccountData) {
-      const initializeTokenledgerTx = await this.initializeTokenLedger(
-        user,
-        inputTokenMint,
-        inputTokenProgram
-      );
-      preInstructions.push(...initializeTokenledgerTx.instructions);
-    }
-
-    const outputTokenAccountData = await this.connection.getAccountInfo(
-      outputTokenAccount
-    );
-    if (!outputTokenAccountData) {
-      const ix = createAssociatedTokenAccountIdempotentInstruction(
-        user,
-        outputTokenAccount,
-        user,
-        outputTokenMint,
-        outputTokenProgram
-      );
-
-      preInstructions.push(ix);
-    }
-
-    if (vestings.length > 0) {
-      const refreshVestingTx = await dammV2.refreshVesting({
-        owner: user,
-        position,
-        positionNftAccount,
-        pool: poolAddress,
-        vestingAccounts: vestings.map((item) => item.account),
-      });
-
-      preInstructions.push(...refreshVestingTx.instructions);
-    }
-
-    const removeLiquidityTx = await program.methods
-      .removeLiquidity({
-        liquidityDelta,
-        tokenAAmountThreshold,
-        tokenBAmountThreshold,
-      })
-      .accountsPartial({
-        poolAuthority: deriveDammV2PoolAuthority(),
-        pool: poolAddress,
-        position,
-        positionNftAccount,
-        owner: user,
-        tokenAAccount,
-        tokenBAccount,
-        tokenAMint: poolState.tokenAMint,
-        tokenBMint: poolState.tokenBMint,
-        tokenAVault: poolState.tokenAVault,
-        tokenBVault: poolState.tokenBVault,
-        tokenAProgram: getTokenProgram(poolState.tokenAFlag),
-        tokenBProgram: getTokenProgram(poolState.tokenBFlag),
-      })
-      .preInstructions(preInstructions)
-      .transaction();
-
-    const zapOutSwapDammV2Tx = await this.zapOutSwapDammV2({
-      poolAddress,
-      poolState,
-      inputTokenAccount: tokenLedgerAccount,
-      outputTokenAccount,
-      minimumSwapAmountOut,
-    });
-
-    const unwarpSOLInstruction = [];
-    if (outputTokenMint.equals(NATIVE_MINT)) {
-      const unwarpSOLIx = await unwrapSOLInstruction(user, user, true);
-      unwarpSOLInstruction.push(unwarpSOLIx);
-    }
-
-    return new Transaction()
-      .add(removeLiquidityTx)
-      .add(zapOutSwapDammV2Tx)
-      .add(...unwarpSOLInstruction);
-  }
-
   ///////////// DLMM METHODS /////////////
   /**
-   * Performs a token swap using DLMM as part of a zap out operation
+   * Performs a token swap using DLMM protocol as part of a zap out operation.
+   * Swaps tokens from the input token ledger to the user's output token account.
    *
    * @param params - DLMM swap parameters
    * @param params.user - Public key of the user performing the swap
@@ -327,7 +160,9 @@ export class Zap {
    * @param params.outputTokenProgram - Token program for the output token
    * @returns Promise resolving to a Transaction that performs the DLMM swap
    */
-  async zapOutSwapDlmm(params: ZapOutSwapDlmmParams): Promise<Transaction> {
+  async zapOutThroughDlmm(
+    params: ZapOutThroughDlmmParams
+  ): Promise<Transaction> {
     const {
       poolAddress,
       inputTokenMint,
@@ -428,197 +263,78 @@ export class Zap {
     });
   }
 
+  ///////////// JUPV6 METHODS /////////////
+
   /**
-   * Removes liquidity from a DLMM position and automatically swaps one of the
-   * received tokens to the desired output token in a single transaction.
+   * Performs a token swap using Jupiter V6 protocol as part of a zap out operation.
    *
-   * @param params - Remove DLMM liquidity with zap out parameters
-   * @param params.user - Public key of the position owner
-   * @param params.poolAddress - Public key of the DLMM pair
-   * @param params.position - Position data containing liquidity information
-   * @param params.fromBinId - Starting bin ID for liquidity removal
-   * @param params.toBinId - Ending bin ID for liquidity removal
-   * @param params.outputTokenMint - Desired output token mint
-   * @param params.minimumSwapAmountOut - Minimum amount from the swap
-   * @param params.bps - Basis points of liquidity to remove (10000 = 100%)
-   * @returns transaction
+   * This method works directly with Jupiter's swap-instructions API response,
+   * processing the accounts and instruction data with minimal modifications.
+   *
+   * @param params - Jupiter V6 swap parameters from Jupiter API
    */
-  async removeDlmmLiquidityWithZapOut(
-    params: RemoveDlmmLiquidityWithZapOutParams
+  async zapOutThroughJupiter(
+    params: ZapOutThroughJupiterParams
   ): Promise<Transaction> {
-    let {
-      user,
-      poolAddress,
-      position,
-      fromBinId,
-      toBinId,
-      outputTokenMint,
-      minimumSwapAmountOut,
-      bps,
-    } = params;
-    const dlmm = await DLMM.create(this.connection, poolAddress, {
-      cluster: this.cluster,
-    });
+    const { inputTokenMint, jupiterSwapResponse, jupiterQuoteResponse } =
+      params;
 
-    const positionAccount = await this.connection.getAccountInfo(position);
-
-    const positionState = wrapPosition(dlmm.program, position, positionAccount);
-
-    const lbPair = positionState.lbPair();
-    const liquidityShares = positionState.liquidityShares();
-
-    const liquidityShareWithBinId = liquidityShares.map((share, i) => {
-      return {
-        share,
-        binId: positionState.lowerBinId().add(new BN(i)),
-      };
-    });
-
-    const binIdsWithLiquidity = liquidityShareWithBinId.filter((bin) => {
-      return !bin.share.isZero();
-    });
-
-    if (binIdsWithLiquidity.length == 0) {
-      throw new Error("No liquidity to remove");
-    }
-
-    const lowerBinIdWithLiquidity = binIdsWithLiquidity[0].binId.toNumber();
-    const upperBinIdWithLiquidity =
-      binIdsWithLiquidity[binIdsWithLiquidity.length - 1].binId.toNumber();
-
-    // Avoid to attempt to load uninitialized bin array on the program
-    if (fromBinId < lowerBinIdWithLiquidity) {
-      fromBinId = lowerBinIdWithLiquidity;
-    }
-
-    if (toBinId > upperBinIdWithLiquidity) {
-      toBinId = upperBinIdWithLiquidity;
-    }
-
-    let slices: RemainingAccountsInfoSlice[] = [];
-    if (dlmm.tokenX.transferHookAccountMetas.length > 0) {
-      slices.push({
-        accountsType: {
-          transferHookX: {},
-        },
-        length: dlmm.tokenX.transferHookAccountMetas.length,
-      });
-    }
-
-    if (dlmm.tokenY.transferHookAccountMetas.length > 0) {
-      slices.push({
-        accountsType: {
-          transferHookY: {},
-        },
-        length: dlmm.tokenY.transferHookAccountMetas.length,
-      });
-    }
-
-    const transferHookAccounts = dlmm.tokenX.transferHookAccountMetas.concat(
-      dlmm.tokenY.transferHookAccountMetas
-    );
-
-    const binArrayAccountsMeta = getBinArrayAccountMetasCoverage(
-      new BN(fromBinId),
-      new BN(toBinId),
-      dlmm.pubkey,
-      dlmm.program.programId
-    );
-
-    const [inputTokenMint, outputTokenProgram, inputTokenProgram] =
-      dlmm.lbPair.tokenXMint.equals(outputTokenMint)
-        ? [dlmm.lbPair.tokenYMint, dlmm.tokenX.owner, dlmm.tokenY.owner]
-        : [dlmm.lbPair.tokenXMint, dlmm.tokenY.owner, dlmm.tokenX.owner];
     const tokenLedgerAccount = deriveTokenLedgerAddress(inputTokenMint);
-    const outputTokenAccount = getAssociatedTokenAddressSync(
-      outputTokenMint,
-      user,
-      true,
-      outputTokenProgram
-    );
 
-    const [userTokenX, userTokenY] = dlmm.lbPair.tokenXMint.equals(
-      outputTokenMint
-    )
-      ? [outputTokenAccount, tokenLedgerAccount]
-      : [tokenLedgerAccount, outputTokenAccount];
-
-    const preInstructions: TransactionInstruction[] = [];
-    const tokenLedgerAccountData = await this.connection.getAccountInfo(
+    const tokenLedgerAccountInfo = await this.connection.getAccountInfo(
       tokenLedgerAccount
     );
-    if (!tokenLedgerAccountData) {
-      const initializeTokenledgerTx = await this.initializeTokenLedger(
-        user,
-        inputTokenMint,
-        inputTokenProgram
-      );
-      preInstructions.push(...initializeTokenledgerTx.instructions);
+    if (!tokenLedgerAccountInfo) {
+      throw new Error("Token ledger account not found");
     }
 
-    const outputTokenAccountData = await this.connection.getAccountInfo(
-      outputTokenAccount
+    const tokenAccountData = Buffer.from(tokenLedgerAccountInfo.data);
+    const amount = tokenAccountData.readBigUInt64LE(64);
+
+    const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
+      (account, index) => {
+        const pubkey =
+          typeof account.pubkey === "string"
+            ? new PublicKey(account.pubkey)
+            : account.pubkey;
+
+        // Replace input token account with token ledger account
+        if (pubkey.equals(params.inputTokenAccount)) {
+          return {
+            pubkey: tokenLedgerAccount,
+            isSigner: false,
+            isWritable: account.isWritable || false,
+          };
+        }
+
+        // Ensure no account is marked as signer - the zap contract will handle all signing
+        return {
+          pubkey,
+          isSigner: false,
+          isWritable: account.isWritable || false,
+        };
+      }
     );
-    if (!outputTokenAccountData) {
-      const ix = createAssociatedTokenAccountIdempotentInstruction(
-        user,
-        outputTokenAccount,
-        user,
-        outputTokenMint,
-        outputTokenProgram
-      );
 
-      preInstructions.push(ix);
-    }
+    console.log(remainingAccounts);
 
-    const binArrayBitmapExtension = dlmm.binArrayBitmapExtension
-      ? dlmm.binArrayBitmapExtension.publicKey
-      : dlmm.program.programId;
+    const instructionBytes = Buffer.from(
+      jupiterSwapResponse.swapInstruction.data,
+      "base64"
+    );
 
-    const removeLiquidityTx = await dlmm.program.methods
-      .removeLiquidityByRange2(fromBinId, toBinId, bps.toNumber(), {
-        slices,
-      })
-      .accounts({
-        position,
-        lbPair,
-        userTokenX,
-        userTokenY,
-        reserveX: dlmm.lbPair.reserveX,
-        reserveY: dlmm.lbPair.reserveY,
-        tokenXMint: dlmm.tokenX.publicKey,
-        tokenYMint: dlmm.tokenY.publicKey,
-        binArrayBitmapExtension,
-        tokenXProgram: dlmm.tokenX.owner,
-        tokenYProgram: dlmm.tokenY.owner,
-        sender: user,
-        memoProgram: MEMO_PROGRAM_ID,
-      })
-      .preInstructions(preInstructions)
-      .remainingAccounts(transferHookAccounts)
-      .remainingAccounts(binArrayAccountsMeta)
-      .transaction();
-    ////
+    console.log("Payload data as bytes array:", Array.from(instructionBytes));
 
-    const zapOutSwapDlmmTx = await this.zapOutSwapDlmm({
-      user,
-      poolAddress,
-      inputTokenMint,
-      minimumSwapAmountOut,
-      dlmm,
-      inputTokenAccount: tokenLedgerAccount,
-      outputTokenAccount,
+    // Remove the discriminator from the payload
+    const payloadData = instructionBytes.slice(8);
+    console.log("Payload data as bytes array:", Array.from(payloadData));
+
+    return await this.zapOut({
+      tokenLedgerAccount,
+      actionType: ActionType.SwapJupiterV6,
+      payloadData,
+      remainingAccounts,
+      ammProgram: JUP_V6_PROGRAM_ID,
     });
-
-    const unwarpSOLInstruction = [];
-    if (outputTokenMint.equals(NATIVE_MINT)) {
-      const unwarpSOLIx = await unwrapSOLInstruction(user, user, true);
-      unwarpSOLInstruction.push(unwarpSOLIx);
-    }
-
-    return new Transaction()
-      .add(removeLiquidityTx)
-      .add(zapOutSwapDlmmTx)
-      .add(...unwarpSOLInstruction);
   }
 }
