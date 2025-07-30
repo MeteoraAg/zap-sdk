@@ -1,7 +1,3 @@
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { AccountMeta } from "@solana/web3.js";
-import { JUP_V6_PROGRAM_ID } from "../constants";
-
 /**
  * Maps Jupiter swap labels to their enum indices
  * Exact mapping based on Jupiter V6 IDL Swap enum order

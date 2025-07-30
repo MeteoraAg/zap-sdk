@@ -276,36 +276,35 @@ export class Zap {
   async zapOutThroughJupiter(
     params: ZapOutThroughJupiterParams
   ): Promise<Transaction> {
-    const { inputTokenMint, jupiterSwapResponse, jupiterQuoteResponse } =
-      params;
+    const {
+      inputTokenMint,
+      inputTokenAccount,
+      jupiterSwapResponse,
+      jupiterQuoteResponse,
+    } = params;
 
-    const tokenLedgerAccount = deriveTokenLedgerAddress(inputTokenMint);
+    let remainingAccounts = jupiterSwapResponse.swapInstruction.accounts;
 
-    const tokenLedgerAccountInfo = await this.connection.getAccountInfo(
-      tokenLedgerAccount
-    );
-    if (!tokenLedgerAccountInfo) {
-      throw new Error("Token ledger account not found");
-    }
+    remainingAccounts[1].pubkey = this.zapAuthority.toString();
+    remainingAccounts[1].isSigner = false;
 
-    const tokenAccountData = Buffer.from(tokenLedgerAccountInfo.data);
-    const amount = tokenAccountData.readBigUInt64LE(64);
+    remainingAccounts[2].pubkey = inputTokenAccount.toString();
 
-    const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
+    remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account, index) => {
         const pubkey =
           typeof account.pubkey === "string"
             ? new PublicKey(account.pubkey)
             : account.pubkey;
 
-        // Replace input token account with token ledger account
-        if (pubkey.equals(params.inputTokenAccount)) {
-          return {
-            pubkey: tokenLedgerAccount,
-            isSigner: false,
-            isWritable: account.isWritable || false,
-          };
-        }
+        // // Replace input token account with token ledger account
+        // if (pubkey.equals(params.inputTokenAccount)) {
+        //   return {
+        //     pubkey: tokenLedgerAccount,
+        //     isSigner: false,
+        //     isWritable: account.isWritable || false,
+        //   };
+        // }
 
         // Ensure no account is marked as signer - the zap contract will handle all signing
         return {
@@ -330,7 +329,7 @@ export class Zap {
     console.log("Payload data as bytes array:", Array.from(payloadData));
 
     return await this.zapOut({
-      tokenLedgerAccount,
+      tokenLedgerAccount: inputTokenAccount,
       actionType: ActionType.SwapJupiterV6,
       payloadData,
       remainingAccounts,
