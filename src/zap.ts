@@ -25,8 +25,13 @@ import {
   deriveTokenLedgerAddress,
   deriveZapAuthorityAddress,
   convertAccountTypeToNumber,
+  getOrCreateATAInstruction,
 } from "./helpers";
 import { JUP_V6_PROGRAM_ID } from "./constants";
+import {
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 export class Zap {
   private zapAuthority: PublicKey;
@@ -91,6 +96,7 @@ export class Zap {
       payloadData,
       remainingAccounts,
       ammProgram,
+      preInstructions,
     } = params;
     return this.zapProgram.methods
       .zapOut(actionType, payloadData)
@@ -100,6 +106,7 @@ export class Zap {
         ammProgram,
       })
       .remainingAccounts(remainingAccounts)
+      .preInstructions(preInstructions || [])
       .transaction();
   }
 
@@ -270,17 +277,40 @@ export class Zap {
    * Swaps tokens from the input token ledger to the user's output token account.
    *
    * @param params - Jupiter V6 swap parameters from Jupiter API
+   * @param params.user - Public key of the user performing the swap
+   * @param params.inputMint - Token mint being swapped from
+   * @param params.outputMint - Token mint being swapped to
+   * @param params.inputTokenAccount - Token ledger account to swap from
+   * @param params.jupiterSwapResponse - Jupiter swap instruction response
+   * @param params.inputTokenProgram - Token program for the input token (defaults to SPL Token)
+   * @returns built transaction
    */
   async zapOutThroughJupiter(
     params: ZapOutThroughJupiterParams
   ): Promise<Transaction> {
-    const { inputTokenAccount, outputTokenAccount, jupiterSwapResponse } =
-      params;
+    const {
+      user,
+      inputTokenAccount,
+      inputMint,
+      outputMint,
+      jupiterSwapResponse,
+      inputTokenProgram = TOKEN_PROGRAM_ID,
+    } = params;
+
+    // user inputMint ATA
+    const userInputMintAta = getAssociatedTokenAddressSync(inputMint, user);
+
+    const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
+      await getOrCreateATAInstruction(
+        this.connection,
+        outputMint,
+        user,
+        user,
+        true,
+        TOKEN_PROGRAM_ID
+      );
 
     const originalAccounts = jupiterSwapResponse.swapInstruction.accounts;
-
-    console.log("originalAccounts", originalAccounts);
-    console.log("originalAccounts length", originalAccounts.length);
 
     const remainingAccounts = originalAccounts.map((account, index) => {
       let pubkey =
@@ -288,48 +318,17 @@ export class Zap {
           ? new PublicKey(account.pubkey)
           : account.pubkey;
 
-      if (account.isSigner) {
+      const pubkeyStr = pubkey.toString();
+      const userStr = user.toString();
+      const userInputMintAtaStr = userInputMintAta.toString();
+
+      // Replace user address with zap authority address and remove signer
+      if (pubkeyStr === userStr) {
         pubkey = this.zapAuthority;
-      } else if (index === 2) {
+      }
+      // Replace user ATA for input token by zap token ledger account
+      else if (pubkeyStr === userInputMintAtaStr) {
         pubkey = inputTokenAccount;
-      } else if (index === 3) {
-        pubkey = outputTokenAccount;
-      } else {
-        const pubkeyStr = pubkey.toString();
-
-        const signerAccount = originalAccounts.find((acc) => acc.isSigner);
-        if (
-          signerAccount &&
-          pubkeyStr ===
-            (typeof signerAccount.pubkey === "string"
-              ? signerAccount.pubkey
-              : signerAccount.pubkey.toString())
-        ) {
-          pubkey = this.zapAuthority;
-        }
-
-        const sourceAccount = originalAccounts[2];
-        const destAccount = originalAccounts[3];
-
-        // If the account is the zap authority input token account, set it to the input token ledger account
-        if (
-          sourceAccount &&
-          pubkeyStr ===
-            (typeof sourceAccount.pubkey === "string"
-              ? sourceAccount.pubkey
-              : sourceAccount.pubkey.toString())
-        ) {
-          pubkey = inputTokenAccount;
-        } else if (
-          // If the account is the zap authority output token account, set it to the user output token account
-          destAccount &&
-          pubkeyStr ===
-            (typeof destAccount.pubkey === "string"
-              ? destAccount.pubkey
-              : destAccount.pubkey.toString())
-        ) {
-          pubkey = outputTokenAccount;
-        }
       }
 
       // Ensure no account is marked as signer - the zap program handles signing
@@ -340,10 +339,6 @@ export class Zap {
       };
     });
 
-    console.log("remainingAccounts", remainingAccounts);
-    console.log("remainingAccounts length", remainingAccounts.length);
-
-    // Extract instruction data and remove discriminator
     const instructionBytes = Buffer.from(
       jupiterSwapResponse.swapInstruction.data,
       "base64"
@@ -358,6 +353,9 @@ export class Zap {
       payloadData,
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
+      preInstructions: [outputTokenAccountAtaIx].filter(
+        (ix) => ix !== undefined
+      ),
     });
   }
 }

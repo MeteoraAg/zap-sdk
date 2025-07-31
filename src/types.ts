@@ -1,7 +1,11 @@
 import { Program } from "@coral-xyz/anchor";
 import { PoolState } from "@meteora-ag/cp-amm-sdk";
 import DLMM from "@meteora-ag/dlmm";
-import { AccountMeta, PublicKey } from "@solana/web3.js";
+import {
+  AccountMeta,
+  PublicKey,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap as ZapTypes } from "./idl/zap";
 
@@ -19,6 +23,7 @@ export type ZapOutParams = {
   tokenLedgerAccount: PublicKey;
   remainingAccounts: AccountMeta[];
   ammProgram: PublicKey;
+  preInstructions?: TransactionInstruction[];
 };
 
 export type ZapOutThroughDammV2Params = {
@@ -40,9 +45,12 @@ export type ZapOutThroughDlmmParams = {
 };
 
 export interface ZapOutThroughJupiterParams {
+  user: PublicKey;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
   inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
+  inputTokenProgram?: PublicKey;
 }
 
 export interface JupiterQuoteResponse {
