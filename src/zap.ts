@@ -84,7 +84,7 @@ export class Zap {
    * @param params.ammProgram - AMM program ID to interact with
    * @returns builder transaction
    */
-  private async zapOut(params: ZapOutParams): Promise<Transaction> {
+  async zapOut(params: ZapOutParams): Promise<Transaction> {
     const {
       tokenLedgerAccount,
       actionType,
@@ -267,66 +267,90 @@ export class Zap {
 
   /**
    * Performs a token swap using Jupiter V6 protocol as part of a zap out operation.
-   *
-   * This method works directly with Jupiter's swap-instructions API response,
-   * processing the accounts and instruction data with minimal modifications.
+   * Swaps tokens from the input token ledger to the user's output token account.
    *
    * @param params - Jupiter V6 swap parameters from Jupiter API
    */
   async zapOutThroughJupiter(
     params: ZapOutThroughJupiterParams
   ): Promise<Transaction> {
-    const {
-      inputTokenMint,
-      inputTokenAccount,
-      jupiterSwapResponse,
-      jupiterQuoteResponse,
-    } = params;
+    const { inputTokenAccount, outputTokenAccount, jupiterSwapResponse } =
+      params;
 
-    let remainingAccounts = jupiterSwapResponse.swapInstruction.accounts;
+    const originalAccounts = jupiterSwapResponse.swapInstruction.accounts;
 
-    remainingAccounts[1].pubkey = this.zapAuthority.toString();
-    remainingAccounts[1].isSigner = false;
+    console.log("originalAccounts", originalAccounts);
+    console.log("originalAccounts length", originalAccounts.length);
 
-    remainingAccounts[2].pubkey = inputTokenAccount.toString();
+    const remainingAccounts = originalAccounts.map((account, index) => {
+      let pubkey =
+        typeof account.pubkey === "string"
+          ? new PublicKey(account.pubkey)
+          : account.pubkey;
 
-    remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
-      (account, index) => {
-        const pubkey =
-          typeof account.pubkey === "string"
-            ? new PublicKey(account.pubkey)
-            : account.pubkey;
+      if (account.isSigner) {
+        pubkey = this.zapAuthority;
+      } else if (index === 2) {
+        pubkey = inputTokenAccount;
+      } else if (index === 3) {
+        pubkey = outputTokenAccount;
+      } else {
+        const pubkeyStr = pubkey.toString();
 
-        // // Replace input token account with token ledger account
-        // if (pubkey.equals(params.inputTokenAccount)) {
-        //   return {
-        //     pubkey: tokenLedgerAccount,
-        //     isSigner: false,
-        //     isWritable: account.isWritable || false,
-        //   };
-        // }
+        const signerAccount = originalAccounts.find((acc) => acc.isSigner);
+        if (
+          signerAccount &&
+          pubkeyStr ===
+            (typeof signerAccount.pubkey === "string"
+              ? signerAccount.pubkey
+              : signerAccount.pubkey.toString())
+        ) {
+          pubkey = this.zapAuthority;
+        }
 
-        // Ensure no account is marked as signer - the zap contract will handle all signing
-        return {
-          pubkey,
-          isSigner: false,
-          isWritable: account.isWritable || false,
-        };
+        const sourceAccount = originalAccounts[2];
+        const destAccount = originalAccounts[3];
+
+        // If the account is the zap authority input token account, set it to the input token ledger account
+        if (
+          sourceAccount &&
+          pubkeyStr ===
+            (typeof sourceAccount.pubkey === "string"
+              ? sourceAccount.pubkey
+              : sourceAccount.pubkey.toString())
+        ) {
+          pubkey = inputTokenAccount;
+        } else if (
+          // If the account is the zap authority output token account, set it to the user output token account
+          destAccount &&
+          pubkeyStr ===
+            (typeof destAccount.pubkey === "string"
+              ? destAccount.pubkey
+              : destAccount.pubkey.toString())
+        ) {
+          pubkey = outputTokenAccount;
+        }
       }
-    );
 
-    console.log(remainingAccounts);
+      // Ensure no account is marked as signer - the zap program handles signing
+      return {
+        pubkey: pubkey,
+        isSigner: false,
+        isWritable: account.isWritable || false,
+      };
+    });
 
+    console.log("remainingAccounts", remainingAccounts);
+    console.log("remainingAccounts length", remainingAccounts.length);
+
+    // Extract instruction data and remove discriminator
     const instructionBytes = Buffer.from(
       jupiterSwapResponse.swapInstruction.data,
       "base64"
     );
 
-    console.log("Payload data as bytes array:", Array.from(instructionBytes));
-
-    // Remove the discriminator from the payload
+    // Remove the 8-byte discriminator
     const payloadData = instructionBytes.slice(8);
-    console.log("Payload data as bytes array:", Array.from(payloadData));
 
     return await this.zapOut({
       tokenLedgerAccount: inputTokenAccount,

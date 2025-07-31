@@ -40,10 +40,9 @@ export type ZapOutThroughDlmmParams = {
 };
 
 export interface ZapOutThroughJupiterParams {
-  inputTokenMint: PublicKey;
   inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
-  jupiterQuoteResponse: JupiterQuoteResponse;
 }
 
 export interface JupiterQuoteResponse {
