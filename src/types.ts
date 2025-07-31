@@ -50,7 +50,6 @@ export interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
-  inputTokenProgram?: PublicKey;
 }
 
 export interface JupiterQuoteResponse {

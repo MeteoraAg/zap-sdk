@@ -294,7 +294,6 @@ export class Zap {
       inputMint,
       outputMint,
       jupiterSwapResponse,
-      inputTokenProgram = TOKEN_PROGRAM_ID,
     } = params;
 
     // user inputMint ATA
@@ -311,6 +310,8 @@ export class Zap {
       );
 
     const originalAccounts = jupiterSwapResponse.swapInstruction.accounts;
+
+    console.log("originalAccounts", originalAccounts);
 
     const remainingAccounts = originalAccounts.map((account, index) => {
       let pubkey =
@@ -338,6 +339,8 @@ export class Zap {
         isWritable: account.isWritable || false,
       };
     });
+
+    console.log("remainingAccounts", remainingAccounts);
 
     const instructionBytes = Buffer.from(
       jupiterSwapResponse.swapInstruction.data,
