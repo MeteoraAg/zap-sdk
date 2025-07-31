@@ -56,12 +56,20 @@ async function main() {
       quoteResponse
     );
 
+    // Get token programs for input and output mints
+    console.log("3. Getting token programs...");
+    const outputTokenProgram = await getTokenProgramFromMint(
+      connection,
+      outputMint
+    );
+
     const zapOutTx = await zap.zapOutThroughJupiter({
       user: wallet.publicKey,
       inputMint,
       outputMint,
       inputTokenAccount: inputMintTokenLedgerAccount,
       jupiterSwapResponse: swapInstructionResponse,
+      outputTokenProgram: outputTokenProgram,
     });
 
     const { blockhash } = await connection.getLatestBlockhash("confirmed");
@@ -81,6 +89,34 @@ async function main() {
   }
 }
 
+async function getTokenProgramFromMint(
+  connection: Connection,
+  mint: PublicKey
+): Promise<PublicKey> {
+  try {
+    const mintInfo = await connection.getAccountInfo(mint);
+    if (!mintInfo) {
+      throw new Error(`Mint account not found: ${mint.toString()}`);
+    }
+
+    if (
+      mintInfo.owner.equals(
+        new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+      )
+    ) {
+      return new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+    } else {
+      return TOKEN_PROGRAM_ID;
+    }
+  } catch (error) {
+    console.warn(
+      `Failed to determine token program for ${mint.toString()}, defaulting to TOKEN_PROGRAM_ID:`,
+      error
+    );
+    return TOKEN_PROGRAM_ID;
+  }
+}
+
 /**
  * Setup and fund token ledger if needed
  */
@@ -97,10 +133,14 @@ async function setupTokenLedger(
 
   if (!tokenLedgerInfo) {
     console.log("Token ledger not found, initializing...");
+    const inputTokenProgram = await getTokenProgramFromMint(
+      connection,
+      inputMint
+    );
     const initTx = await zap.initializeTokenLedger(
       wallet.publicKey,
       inputMint,
-      TOKEN_PROGRAM_ID
+      inputTokenProgram
     );
 
     const { blockhash } = await connection.getLatestBlockhash("confirmed");

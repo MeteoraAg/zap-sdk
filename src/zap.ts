@@ -294,6 +294,7 @@ export class Zap {
       inputMint,
       outputMint,
       jupiterSwapResponse,
+      outputTokenProgram,
     } = params;
 
     // user inputMint ATA
@@ -306,7 +307,7 @@ export class Zap {
         user,
         user,
         true,
-        TOKEN_PROGRAM_ID
+        outputTokenProgram
       );
 
     const originalAccounts = jupiterSwapResponse.swapInstruction.accounts;
