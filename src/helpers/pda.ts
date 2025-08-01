@@ -3,19 +3,7 @@ import ZapIDL from "../idl/zap.json";
 import { CP_AMM_PROGRAM_ID } from "@meteora-ag/cp-amm-sdk";
 import { JUP_V6_PROGRAM_ID } from "../constants";
 
-export function deriveZapAuthorityAddress(): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("zap_authority")],
-    new PublicKey(ZapIDL.address)
-  )[0];
-}
 
-export function deriveTokenLedgerAddress(mintAddress: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("token_ledger"), mintAddress.toBuffer()],
-    new PublicKey(ZapIDL.address)
-  )[0];
-}
 
 export function deriveDlmmEventAuthority(programId: PublicKey) {
   return PublicKey.findProgramAddressSync(

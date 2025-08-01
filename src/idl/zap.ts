@@ -14,102 +14,6 @@ export type Zap = {
   },
   "instructions": [
     {
-      "name": "initializeTokenLedger",
-      "discriminator": [
-        244,
-        63,
-        250,
-        192,
-        50,
-        44,
-        172,
-        250
-      ],
-      "accounts": [
-        {
-          "name": "zapAuthority",
-          "address": "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk"
-        },
-        {
-          "name": "tokenLedgerAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  108,
-                  101,
-                  100,
-                  103,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "tokenMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenMint"
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "tokenProgram"
-        },
-        {
-          "name": "eventAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "zapOut",
       "discriminator": [
         155,
@@ -123,25 +27,8 @@ export type Zap = {
       ],
       "accounts": [
         {
-          "name": "zapAuthority",
-          "address": "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk"
-        },
-        {
-          "name": "tokenLedgerAccount",
-          "writable": true
-        },
-        {
           "name": "userTokenInAccount",
           "writable": true
-        },
-        {
-          "name": "tokenInMint",
-          "docs": [
-            "Token in mint"
-          ]
-        },
-        {
-          "name": "inputTokenProgram"
         },
         {
           "name": "ammProgram"
@@ -177,16 +64,11 @@ export type Zap = {
     },
     {
       "code": 6003,
-      "name": "missingRemainingAccountForTransferHook",
-      "msg": "Missing remaining account for transfer hook"
-    },
-    {
-      "code": 6004,
       "name": "typeCastFailed",
       "msg": "Type cast error"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "ammIsNotSupported",
       "msg": "Amm program is not supported"
     }
@@ -206,8 +88,8 @@ export type Zap = {
             "type": "u16"
           },
           {
-            "name": "transferHookLength",
-            "type": "u8"
+            "name": "preUserTokenBalance",
+            "type": "u64"
           },
           {
             "name": "payloadData",

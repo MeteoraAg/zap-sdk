@@ -14,10 +14,7 @@ export type ZapProgram = Program<ZapTypes>;
 export type ZapOutParameters = IdlTypes<ZapTypes>["zapOutParameters"];
 
 export type ZapOutParams = {
-  tokenLedgerAccount: PublicKey;
   userTokenInAccount: PublicKey;
-  tokenInMint: PublicKey;
-  inputTokenProgram: PublicKey;
   zapOutParams: ZapOutParameters;
   remainingAccounts: AccountMeta[];
   ammProgram: PublicKey;

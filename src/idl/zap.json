@@ -8,102 +8,6 @@
   },
   "instructions": [
     {
-      "name": "initialize_token_ledger",
-      "discriminator": [
-        244,
-        63,
-        250,
-        192,
-        50,
-        44,
-        172,
-        250
-      ],
-      "accounts": [
-        {
-          "name": "zap_authority",
-          "address": "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk"
-        },
-        {
-          "name": "token_ledger_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  108,
-                  101,
-                  100,
-                  103,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "token_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_mint"
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "token_program"
-        },
-        {
-          "name": "event_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "zap_out",
       "discriminator": [
         155,
@@ -117,25 +21,8 @@
       ],
       "accounts": [
         {
-          "name": "zap_authority",
-          "address": "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk"
-        },
-        {
-          "name": "token_ledger_account",
-          "writable": true
-        },
-        {
           "name": "user_token_in_account",
           "writable": true
-        },
-        {
-          "name": "token_in_mint",
-          "docs": [
-            "Token in mint"
-          ]
-        },
-        {
-          "name": "input_token_program"
         },
         {
           "name": "amm_program"
@@ -171,16 +58,11 @@
     },
     {
       "code": 6003,
-      "name": "MissingRemainingAccountForTransferHook",
-      "msg": "Missing remaining account for transfer hook"
-    },
-    {
-      "code": 6004,
       "name": "TypeCastFailed",
       "msg": "Type cast error"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "AmmIsNotSupported",
       "msg": "Amm program is not supported"
     }
@@ -200,8 +82,8 @@
             "type": "u16"
           },
           {
-            "name": "transfer_hook_length",
-            "type": "u8"
+            "name": "pre_user_token_balance",
+            "type": "u64"
           },
           {
             "name": "payload_data",
