@@ -10,7 +10,6 @@ import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap.json";
 import { Zap as ZapTypes } from "./idl/zap";
 import {
-  ActionType,
   ZapOutParams,
   ZapOutThroughDammV2Params,
   ZapOutThroughDlmmParams,
@@ -27,7 +26,7 @@ import {
   convertAccountTypeToNumber,
   getOrCreateATAInstruction,
 } from "./helpers";
-import { JUP_V6_PROGRAM_ID } from "./constants";
+import { AMOUNT_IN_JUP_V6_REVERSE_OFFSET, JUP_V6_PROGRAM_ID } from "./constants";
 import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
@@ -92,17 +91,22 @@ export class Zap {
   async zapOut(params: ZapOutParams): Promise<Transaction> {
     const {
       tokenLedgerAccount,
-      actionType,
-      payloadData,
+      zapOutParams,
+      userTokenInAccount,
+      tokenInMint,
+      inputTokenProgram,
       remainingAccounts,
       ammProgram,
       preInstructions,
     } = params;
     return this.zapProgram.methods
-      .zapOut(actionType, payloadData)
+      .zapOut(zapOutParams)
       .accountsPartial({
         zapAuthority: this.zapAuthority,
         tokenLedgerAccount,
+        userTokenInAccount,
+        tokenInMint,
+        inputTokenProgram,
         ammProgram,
       })
       .remainingAccounts(remainingAccounts)
@@ -125,32 +129,32 @@ export class Zap {
    * @param params.minimumSwapAmountOut - Minimum amount to receive (slippage protection)
    * @returns built transaction
    */
-  async zapOutThroughDammV2(
-    params: ZapOutThroughDammV2Params
-  ): Promise<Transaction> {
-    const {
-      poolAddress,
-      poolState,
-      inputTokenAccount,
-      outputTokenAccount,
-      minimumSwapAmountOut,
-    } = params;
+  // async zapOutThroughDammV2(
+  //   params: ZapOutThroughDammV2Params
+  // ): Promise<Transaction> {
+  //   const {
+  //     poolAddress,
+  //     poolState,
+  //     inputTokenAccount,
+  //     outputTokenAccount,
+  //     minimumSwapAmountOut,
+  //   } = params;
 
-    const swapDammV2Accounts = getSwapDammV2Accounts(
-      poolAddress,
-      poolState,
-      inputTokenAccount,
-      outputTokenAccount
-    );
-    const payloadData = minimumSwapAmountOut.toArrayLike(Buffer, "le", 8);
-    return await this.zapOut({
-      tokenLedgerAccount: inputTokenAccount,
-      actionType: ActionType.SwapDammV2,
-      payloadData,
-      remainingAccounts: swapDammV2Accounts,
-      ammProgram: CP_AMM_PROGRAM_ID,
-    });
-  }
+  //   const swapDammV2Accounts = getSwapDammV2Accounts(
+  //     poolAddress,
+  //     poolState,
+  //     inputTokenAccount,
+  //     outputTokenAccount
+  //   );
+  //   const payloadData = minimumSwapAmountOut.toArrayLike(Buffer, "le", 8);
+  //   return await this.zapOut({
+  //     tokenLedgerAccount: inputTokenAccount,
+  //     actionType: ActionType.SwapDammV2,
+  //     payloadData,
+  //     remainingAccounts: swapDammV2Accounts,
+  //     ammProgram: CP_AMM_PROGRAM_ID,
+  //   });
+  // }
 
   ///////////// DLMM METHODS /////////////
   /**
@@ -167,108 +171,108 @@ export class Zap {
    * @param params.outputTokenProgram - Token program for the output token
    * @returns Promise resolving to a Transaction that performs the DLMM swap
    */
-  async zapOutThroughDlmm(
-    params: ZapOutThroughDlmmParams
-  ): Promise<Transaction> {
-    const {
-      poolAddress,
-      inputTokenMint,
-      minimumSwapAmountOut,
-      dlmm,
-      inputTokenAccount,
-      outputTokenAccount,
-    } = params;
+  // async zapOutThroughDlmm(
+  //   params: ZapOutThroughDlmmParams
+  // ): Promise<Transaction> {
+  //   const {
+  //     poolAddress,
+  //     inputTokenMint,
+  //     minimumSwapAmountOut,
+  //     dlmm,
+  //     inputTokenAccount,
+  //     outputTokenAccount,
+  //   } = params;
 
-    const swapForY = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
+  //   const swapForY = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
 
-    const swapDlmmAccounts = getSwapDlmmAccounts(
-      poolAddress,
-      dlmm.lbPair,
-      dlmm.binArrayBitmapExtension,
-      inputTokenAccount,
-      outputTokenAccount,
-      dlmm.lbPair.oracle,
-      dlmm.program.programId,
-      dlmm.tokenX.owner,
-      dlmm.tokenY.owner
-    );
+  //   const swapDlmmAccounts = getSwapDlmmAccounts(
+  //     poolAddress,
+  //     dlmm.lbPair,
+  //     dlmm.binArrayBitmapExtension,
+  //     inputTokenAccount,
+  //     outputTokenAccount,
+  //     dlmm.lbPair.oracle,
+  //     dlmm.program.programId,
+  //     dlmm.tokenX.owner,
+  //     dlmm.tokenY.owner
+  //   );
 
-    let remainingAccountsInfo: RemainingAccountInfo = { slices: [] };
-    if (dlmm.tokenX.transferHookAccountMetas.length > 0) {
-      remainingAccountsInfo.slices.push({
-        accountsType: {
-          transferHookX: {},
-        },
-        length: dlmm.tokenX.transferHookAccountMetas.length,
-      });
-    }
+  //   let remainingAccountsInfo: RemainingAccountInfo = { slices: [] };
+  //   if (dlmm.tokenX.transferHookAccountMetas.length > 0) {
+  //     remainingAccountsInfo.slices.push({
+  //       accountsType: {
+  //         transferHookX: {},
+  //       },
+  //       length: dlmm.tokenX.transferHookAccountMetas.length,
+  //     });
+  //   }
 
-    if (dlmm.tokenY.transferHookAccountMetas.length > 0) {
-      remainingAccountsInfo.slices.push({
-        accountsType: {
-          transferHookY: {},
-        },
-        length: dlmm.tokenY.transferHookAccountMetas.length,
-      });
-    }
+  //   if (dlmm.tokenY.transferHookAccountMetas.length > 0) {
+  //     remainingAccountsInfo.slices.push({
+  //       accountsType: {
+  //         transferHookY: {},
+  //       },
+  //       length: dlmm.tokenY.transferHookAccountMetas.length,
+  //     });
+  //   }
 
-    const transferHookAccounts = dlmm.tokenX.transferHookAccountMetas.concat(
-      dlmm.tokenY.transferHookAccountMetas
-    );
-    const bidBinArrays = await dlmm.getBinArrayForSwap(swapForY, 3);
-    const binArraysPubkey = bidBinArrays.map((b) => b.publicKey);
-    const binArraysAccountMeta: AccountMeta[] = binArraysPubkey.map(
-      (pubkey) => {
-        return {
-          isSigner: false,
-          isWritable: true,
-          pubkey,
-        };
-      }
-    );
+  //   const transferHookAccounts = dlmm.tokenX.transferHookAccountMetas.concat(
+  //     dlmm.tokenY.transferHookAccountMetas
+  //   );
+  //   const bidBinArrays = await dlmm.getBinArrayForSwap(swapForY, 3);
+  //   const binArraysPubkey = bidBinArrays.map((b) => b.publicKey);
+  //   const binArraysAccountMeta: AccountMeta[] = binArraysPubkey.map(
+  //     (pubkey) => {
+  //       return {
+  //         isSigner: false,
+  //         isWritable: true,
+  //         pubkey,
+  //       };
+  //     }
+  //   );
 
-    const minimumAmountOutData = minimumSwapAmountOut.toArrayLike(
-      Buffer,
-      "le",
-      8
-    );
+  //   const minimumAmountOutData = minimumSwapAmountOut.toArrayLike(
+  //     Buffer,
+  //     "le",
+  //     8
+  //   );
 
-    const sliceCount = Buffer.alloc(4);
-    sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
+  //   const sliceCount = Buffer.alloc(4);
+  //   sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
 
-    // Serialize each slice (accounts_type: u8, length: u8)
-    const slicesData = Buffer.concat(
-      remainingAccountsInfo.slices.map((slice) => {
-        const sliceBuffer = Buffer.alloc(2);
-        sliceBuffer.writeUInt8(
-          convertAccountTypeToNumber(slice.accountsType),
-          0
-        );
-        sliceBuffer.writeUInt8(slice.length, 1);
-        return sliceBuffer;
-      })
-    );
+  //   // Serialize each slice (accounts_type: u8, length: u8)
+  //   const slicesData = Buffer.concat(
+  //     remainingAccountsInfo.slices.map((slice) => {
+  //       const sliceBuffer = Buffer.alloc(2);
+  //       sliceBuffer.writeUInt8(
+  //         convertAccountTypeToNumber(slice.accountsType),
+  //         0
+  //       );
+  //       sliceBuffer.writeUInt8(slice.length, 1);
+  //       return sliceBuffer;
+  //     })
+  //   );
 
-    const payloadData = Buffer.concat([
-      minimumAmountOutData,
-      sliceCount,
-      slicesData,
-    ]);
+  //   const payloadData = Buffer.concat([
+  //     minimumAmountOutData,
+  //     sliceCount,
+  //     slicesData,
+  //   ]);
 
-    const remainingAccounts = [
-      ...swapDlmmAccounts,
-      ...transferHookAccounts,
-      ...binArraysAccountMeta,
-    ];
+  //   const remainingAccounts = [
+  //     ...swapDlmmAccounts,
+  //     ...transferHookAccounts,
+  //     ...binArraysAccountMeta,
+  //   ];
 
-    return await this.zapOut({
-      tokenLedgerAccount: inputTokenAccount,
-      actionType: ActionType.SwapDlmm,
-      payloadData,
-      remainingAccounts,
-      ammProgram: dlmm.program.programId,
-    });
-  }
+  //   return await this.zapOut({
+  //     tokenLedgerAccount: inputTokenAccount,
+  //     actionType: ActionType.SwapDlmm,
+  //     payloadData,
+  //     remainingAccounts,
+  //     ammProgram: dlmm.program.programId,
+  //   });
+  // }
 
   ///////////// JUPV6 METHODS /////////////
 
@@ -294,11 +298,17 @@ export class Zap {
       inputMint,
       outputMint,
       jupiterSwapResponse,
+      inputTokenProgram,
       outputTokenProgram,
     } = params;
 
     // user inputMint ATA
-    const userInputMintAta = getAssociatedTokenAddressSync(inputMint, user);
+    const userInputMintAta = getAssociatedTokenAddressSync(
+      inputMint,
+      user,
+      true,
+      inputTokenProgram
+    );
 
     const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
       await getOrCreateATAInstruction(
@@ -310,51 +320,41 @@ export class Zap {
         outputTokenProgram
       );
 
-    const originalAccounts = jupiterSwapResponse.swapInstruction.accounts;
-
-    console.log("originalAccounts", originalAccounts);
-
-    const remainingAccounts = originalAccounts.map((account, index) => {
-      let pubkey =
-        typeof account.pubkey === "string"
-          ? new PublicKey(account.pubkey)
-          : account.pubkey;
-
-      const pubkeyStr = pubkey.toString();
-      const userStr = user.toString();
-      const userInputMintAtaStr = userInputMintAta.toString();
-
-      // Replace user address with zap authority address and remove signer
-      if (pubkeyStr === userStr) {
-        pubkey = this.zapAuthority;
+    const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
+      (account) => {
+        let pubkey =
+          typeof account.pubkey === "string"
+            ? new PublicKey(account.pubkey)
+            : account.pubkey;
+        // Ensure no account is marked as signer - the zap program handles signing
+        return {
+          pubkey: pubkey,
+          isSigner: account.isSigner,
+          isWritable: account.isWritable,
+        };
       }
-      // Replace user ATA for input token by zap token ledger account
-      else if (pubkeyStr === userInputMintAtaStr) {
-        pubkey = inputTokenAccount;
-      }
+    );
 
-      // Ensure no account is marked as signer - the zap program handles signing
-      return {
-        pubkey: pubkey,
-        isSigner: false,
-        isWritable: account.isWritable || false,
-      };
-    });
+    // console.log("remainingAccounts", remainingAccounts);
 
-    console.log("remainingAccounts", remainingAccounts);
-
-    const instructionBytes = Buffer.from(
+    const payloadData = Buffer.from(
       jupiterSwapResponse.swapInstruction.data,
       "base64"
     );
 
-    // Remove the 8-byte discriminator
-    const payloadData = instructionBytes.slice(8);
+    const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
 
     return await this.zapOut({
       tokenLedgerAccount: inputTokenAccount,
-      actionType: ActionType.SwapJupiterV6,
-      payloadData,
+      userTokenInAccount: userInputMintAta,
+      tokenInMint: inputMint,
+      inputTokenProgram,
+      zapOutParams: {
+        percentage: 100, /// should be params
+        offsetAmountIn,
+        transferHookLength: 0, // should check and pass by params
+        payloadData,
+      },
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
       preInstructions: [outputTokenAccountAtaIx].filter(

@@ -125,17 +125,30 @@
           "writable": true
         },
         {
+          "name": "user_token_in_account",
+          "writable": true
+        },
+        {
+          "name": "token_in_mint",
+          "docs": [
+            "Token in mint"
+          ]
+        },
+        {
+          "name": "input_token_program"
+        },
+        {
           "name": "amm_program"
         }
       ],
       "args": [
         {
-          "name": "action_type",
-          "type": "u8"
-        },
-        {
-          "name": "payload_data",
-          "type": "bytes"
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ZapOutParameters"
+            }
+          }
         }
       ]
     }
@@ -143,28 +156,59 @@
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidAmmProgramId",
-      "msg": "Invalid amm program id"
+      "name": "MathOverflow",
+      "msg": "Math operation overflow"
     },
     {
       "code": 6001,
-      "name": "InvalidActionType",
-      "msg": "Invalid action type"
+      "name": "InvalidOffset",
+      "msg": "Invalid offset"
     },
     {
       "code": 6002,
+      "name": "InvalidZapOutParameters",
+      "msg": "Math operation overflow"
+    },
+    {
+      "code": 6003,
+      "name": "MissingRemainingAccountForTransferHook",
+      "msg": "Missing remaining account for transfer hook"
+    },
+    {
+      "code": 6004,
       "name": "TypeCastFailed",
       "msg": "Type cast error"
     },
     {
-      "code": 6003,
-      "name": "InvalidDataLen",
-      "msg": "Invalid data length"
-    },
+      "code": 6005,
+      "name": "AmmIsNotSupported",
+      "msg": "Amm program is not supported"
+    }
+  ],
+  "types": [
     {
-      "code": 6004,
-      "name": "MathOverflow",
-      "msg": "Math operation overflow"
+      "name": "ZapOutParameters",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "percentage",
+            "type": "u8"
+          },
+          {
+            "name": "offset_amount_in",
+            "type": "u16"
+          },
+          {
+            "name": "transfer_hook_length",
+            "type": "u8"
+          },
+          {
+            "name": "payload_data",
+            "type": "bytes"
+          }
+        ]
+      }
     }
   ]
 }

@@ -5,30 +5,39 @@
  * IDL can be found at `target/idl/zap.json`.
  */
 export type Zap = {
-  address: "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz";
-  metadata: {
-    name: "zap";
-    version: "0.1.0";
-    spec: "0.1.0";
-    description: "Created with Anchor";
-  };
-  instructions: [
+  "address": "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz",
+  "metadata": {
+    "name": "zap",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
     {
-      name: "initializeTokenLedger";
-      discriminator: [244, 63, 250, 192, 50, 44, 172, 250];
-      accounts: [
+      "name": "initializeTokenLedger",
+      "discriminator": [
+        244,
+        63,
+        250,
+        192,
+        50,
+        44,
+        172,
+        250
+      ],
+      "accounts": [
         {
-          name: "zapAuthority";
-          address: "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk";
+          "name": "zapAuthority",
+          "address": "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk"
         },
         {
-          name: "tokenLedgerAccount";
-          writable: true;
-          pda: {
-            seeds: [
+          "name": "tokenLedgerAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [
+                "kind": "const",
+                "value": [
                   116,
                   111,
                   107,
@@ -41,37 +50,37 @@ export type Zap = {
                   103,
                   101,
                   114
-                ];
+                ]
               },
               {
-                kind: "account";
-                path: "tokenMint";
+                "kind": "account",
+                "path": "tokenMint"
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "tokenMint";
+          "name": "tokenMint"
         },
         {
-          name: "payer";
-          writable: true;
-          signer: true;
+          "name": "payer",
+          "writable": true,
+          "signer": true
         },
         {
-          name: "systemProgram";
-          address: "11111111111111111111111111111111";
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         },
         {
-          name: "tokenProgram";
+          "name": "tokenProgram"
         },
         {
-          name: "eventAuthority";
-          pda: {
-            seeds: [
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [
+                "kind": "const",
+                "value": [
                   95,
                   95,
                   101,
@@ -89,70 +98,123 @@ export type Zap = {
                   105,
                   116,
                   121
-                ];
+                ]
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "program";
+          "name": "program"
         }
-      ];
-      args: [];
+      ],
+      "args": []
     },
     {
-      name: "zapOut";
-      discriminator: [155, 108, 185, 112, 104, 210, 161, 64];
-      accounts: [
+      "name": "zapOut",
+      "discriminator": [
+        155,
+        108,
+        185,
+        112,
+        104,
+        210,
+        161,
+        64
+      ],
+      "accounts": [
         {
-          name: "zapAuthority";
-          address: "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk";
+          "name": "zapAuthority",
+          "address": "9Q38QjmtUqAFFTFTEE7NmFgXs22cqxBh9DpqmYLt9zdk"
         },
         {
-          name: "tokenLedgerAccount";
-          writable: true;
+          "name": "tokenLedgerAccount",
+          "writable": true
         },
         {
-          name: "ammProgram";
+          "name": "userTokenInAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenInMint",
+          "docs": [
+            "Token in mint"
+          ]
+        },
+        {
+          "name": "inputTokenProgram"
+        },
+        {
+          "name": "ammProgram"
         }
-      ];
-      args: [
+      ],
+      "args": [
         {
-          name: "actionType";
-          type: "u8";
-        },
-        {
-          name: "payloadData";
-          type: "bytes";
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "zapOutParameters"
+            }
+          }
         }
-      ];
+      ]
     }
-  ];
-  errors: [
+  ],
+  "errors": [
     {
-      code: 6000;
-      name: "invalidAmmProgramId";
-      msg: "Invalid amm program id";
+      "code": 6000,
+      "name": "mathOverflow",
+      "msg": "Math operation overflow"
     },
     {
-      code: 6001;
-      name: "invalidActionType";
-      msg: "Invalid action type";
+      "code": 6001,
+      "name": "invalidOffset",
+      "msg": "Invalid offset"
     },
     {
-      code: 6002;
-      name: "typeCastFailed";
-      msg: "Type cast error";
+      "code": 6002,
+      "name": "invalidZapOutParameters",
+      "msg": "Math operation overflow"
     },
     {
-      code: 6003;
-      name: "invalidDataLen";
-      msg: "Invalid data length";
+      "code": 6003,
+      "name": "missingRemainingAccountForTransferHook",
+      "msg": "Missing remaining account for transfer hook"
     },
     {
-      code: 6004;
-      name: "mathOverflow";
-      msg: "Math operation overflow";
+      "code": 6004,
+      "name": "typeCastFailed",
+      "msg": "Type cast error"
+    },
+    {
+      "code": 6005,
+      "name": "ammIsNotSupported",
+      "msg": "Amm program is not supported"
     }
-  ];
+  ],
+  "types": [
+    {
+      "name": "zapOutParameters",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "percentage",
+            "type": "u8"
+          },
+          {
+            "name": "offsetAmountIn",
+            "type": "u16"
+          },
+          {
+            "name": "transferHookLength",
+            "type": "u8"
+          },
+          {
+            "name": "payloadData",
+            "type": "bytes"
+          }
+        ]
+      }
+    }
+  ]
 };

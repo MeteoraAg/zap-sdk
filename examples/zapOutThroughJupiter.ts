@@ -5,19 +5,21 @@ import {
   sendAndConfirmTransaction,
   Transaction,
   SystemProgram,
+  TransactionInstruction,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { deriveTokenLedgerAddress } from "../src/helpers/pda";
 import { Zap } from "../src/zap";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { JupiterQuoteResponse, JupiterSwapInstructionResponse } from "../src";
-
-const keypair = [];
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(new Uint8Array(keypair));
+  const wallet = Keypair.fromSecretKey(
+    Uint8Array.from(require("/Users/minhdo/.config/solana/id.json"))
+  );
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const zap = new Zap(connection);
@@ -55,12 +57,103 @@ async function main() {
       wallet.publicKey,
       quoteResponse
     );
+    // console.log(swapInstructionResponse);
+    const setupInstructions = swapInstructionResponse.setupInstructions.map(
+      (item) =>
+        new TransactionInstruction({
+          keys: item.accounts.map((account) => {
+            return {
+              pubkey: new PublicKey(account.pubkey),
+              isSigner: account.isSigner,
+              isWritable: account.isWritable,
+            };
+          }),
+          programId: new PublicKey(item.programId),
+          data: Buffer.from(item.data, "base64"),
+        })
+    );
+    const { blockhash } = await connection.getLatestBlockhash();
+
+    // const swapInstructions = new TransactionInstruction({
+    //   keys: swapInstructionResponse.swapInstruction.accounts.map((account) => {
+    //     return {
+    //       pubkey: new PublicKey(account.pubkey),
+    //       isSigner: account.isSigner,
+    //       isWritable: account.isWritable,
+    //     };
+    //   }),
+    //   programId: new PublicKey(
+    //     swapInstructionResponse.swapInstruction.programId
+    //   ),
+    //   data: Buffer.from(swapInstructionResponse.swapInstruction.data, "base64"),
+    // });
+    // const tx1 = new Transaction()
+    //   .add(...setupInstructions)
+    //   .add(swapInstructions);
+    // tx1.recentBlockhash = blockhash;
+    // tx1.feePayer = wallet.publicKey;
+    // tx1.sign(wallet);
+
+    // const sig = await connection.sendRawTransaction(tx1.serialize());
+    // console.log(sig);
+
+    //  const simulate1 = await connection.simulateTransaction(tx1);
+    // console.log(simulate1.value.logs);
+    // console.log(simulate1.value.err);
+
+    // return;
+
+    // const swapResponse: any = await (
+    //   await fetch("https://lite-api.jup.ag/swap/v1/swap", {
+    //     method: "POST",
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //     },
+    //     body: JSON.stringify({
+    //       quoteResponse,
+    //       userPublicKey: wallet.publicKey,
+
+    //       dynamicComputeUnitLimit: true,
+    //       dynamicSlippage: true,
+    //       prioritizationFeeLamports: {
+    //         priorityLevelWithMaxLamports: {
+    //           maxLamports: 1000000,
+    //           priorityLevel: "veryHigh",
+    //         },
+    //       },
+    //     }),
+    //   })
+    // ).json();
+
+    // const tx1 = VersionedTransaction.deserialize(
+    //   Buffer.from(swapResponse.swapTransaction, "base64")
+    // );
+    // tx1.sign([wallet]);
+    // const sig = await connection.sendRawTransaction(
+    //   tx1.serialize()
+    // );
+    // console.log(sig);
+    // const simulate1 = await connection.simulateTransaction(tx1);
+    // console.log(simulate1.value.logs);
+    // console.log(simulate1.value.err);
 
     // Get token programs for input and output mints
     console.log("3. Getting token programs...");
     const outputTokenProgram = await getTokenProgramFromMint(
       connection,
       outputMint
+    );
+
+    const inputTokenProgram = await getTokenProgramFromMint(
+      connection,
+      inputMint
+    );
+
+    const transaction = new Transaction();
+    const warpIx = wrapSOLInstruction(
+      wallet.publicKey,
+      inputMintTokenLedgerAccount,
+      BigInt(swapAmount.toString())
     );
 
     const zapOutTx = await zap.zapOutThroughJupiter({
@@ -70,24 +163,55 @@ async function main() {
       inputTokenAccount: inputMintTokenLedgerAccount,
       jupiterSwapResponse: swapInstructionResponse,
       outputTokenProgram: outputTokenProgram,
+      inputTokenProgram: inputTokenProgram
     });
 
-    const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    zapOutTx.recentBlockhash = blockhash;
-    zapOutTx.feePayer = wallet.publicKey;
+    transaction.add(...warpIx).add(zapOutTx);
 
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      zapOutTx,
-      [wallet],
-      { commitment: "confirmed" }
-    );
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = wallet.publicKey;
 
-    console.log(`Zap out transaction sent: ${signature}`);
+    const simulate = await connection.simulateTransaction(transaction);
+    console.log(simulate.value.logs);
+    console.log(simulate.value.err);
+
+    // const signature = await sendAndConfirmTransaction(
+    //   connection,
+    //   zapOutTx,
+    //   [wallet],
+    //   { commitment: "confirmed" }
+    // );
+
+    // console.log(`Zap out transaction sent: ${signature}`);
   } catch (error) {
     console.error(error);
   }
 }
+
+export const wrapSOLInstruction = (
+  from: PublicKey,
+  to: PublicKey,
+  amount: bigint
+): TransactionInstruction[] => {
+  return [
+    SystemProgram.transfer({
+      fromPubkey: from,
+      toPubkey: to,
+      lamports: amount,
+    }),
+    new TransactionInstruction({
+      keys: [
+        {
+          pubkey: to,
+          isSigner: false,
+          isWritable: true,
+        },
+      ],
+      data: Buffer.from(new Uint8Array([17])),
+      programId: TOKEN_PROGRAM_ID,
+    }),
+  ];
+};
 
 async function getTokenProgramFromMint(
   connection: Connection,
