@@ -5,19 +5,20 @@ import {
   sendAndConfirmTransaction,
   Transaction,
   SystemProgram,
+  TransactionInstruction,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
-import { deriveTokenLedgerAddress } from "../src/helpers/pda";
 import { Zap } from "../src/zap";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { JupiterQuoteResponse, JupiterSwapInstructionResponse } from "../src";
-
-const keypair = [];
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(new Uint8Array(keypair));
+  const wallet = Keypair.fromSecretKey(
+    Uint8Array.from(require("/Users/minhdo/.config/solana/id.json"))
+  );
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const zap = new Zap(connection);
@@ -29,19 +30,10 @@ async function main() {
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
   );
 
-  const inputMintTokenLedgerAccount = deriveTokenLedgerAddress(inputMint);
 
-  const swapAmount = new BN(1000000);
+  const swapAmount = new BN(10000000);
 
   try {
-    await setupTokenLedger(
-      connection,
-      zap,
-      wallet,
-      inputMint,
-      inputMintTokenLedgerAccount,
-      swapAmount
-    );
 
     console.log("\n1. Getting quote from Jupiter API...");
     const quoteResponse = await getJupiterQuote(
@@ -55,6 +47,22 @@ async function main() {
       wallet.publicKey,
       quoteResponse
     );
+    // console.log(swapInstructionResponse);
+    const setupInstructions = swapInstructionResponse.setupInstructions.map(
+      (item) =>
+        new TransactionInstruction({
+          keys: item.accounts.map((account) => {
+            return {
+              pubkey: new PublicKey(account.pubkey),
+              isSigner: account.isSigner,
+              isWritable: account.isWritable,
+            };
+          }),
+          programId: new PublicKey(item.programId),
+          data: Buffer.from(item.data, "base64"),
+        })
+    );
+    const { blockhash } = await connection.getLatestBlockhash();
 
     // Get token programs for input and output mints
     console.log("3. Getting token programs...");
@@ -63,31 +71,76 @@ async function main() {
       outputMint
     );
 
+    const inputTokenProgram = await getTokenProgramFromMint(
+      connection,
+      inputMint
+    );
+
+    const inputTokenAccount = getAssociatedTokenAddressSync(inputMint, wallet.publicKey, true, inputTokenProgram)
+
+    const transaction = new Transaction();
+    const warpIx = wrapSOLInstruction(
+      wallet.publicKey,
+      inputTokenAccount,
+      BigInt(swapAmount.toString())
+    );
+
     const zapOutTx = await zap.zapOutThroughJupiter({
       user: wallet.publicKey,
       inputMint,
       outputMint,
-      inputTokenAccount: inputMintTokenLedgerAccount,
+      inputTokenAccount,
       jupiterSwapResponse: swapInstructionResponse,
       outputTokenProgram: outputTokenProgram,
+      inputTokenProgram: inputTokenProgram
     });
 
-    const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    zapOutTx.recentBlockhash = blockhash;
-    zapOutTx.feePayer = wallet.publicKey;
+    transaction.add(...warpIx).add(zapOutTx);
 
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      zapOutTx,
-      [wallet],
-      { commitment: "confirmed" }
-    );
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = wallet.publicKey;
 
-    console.log(`Zap out transaction sent: ${signature}`);
+    const simulate = await connection.simulateTransaction(transaction);
+    console.log(simulate.value.logs);
+    console.log(simulate.value.err);
+
+    // const signature = await sendAndConfirmTransaction(
+    //   connection,
+    //   transaction,
+    //   [wallet],
+    //   { commitment: "confirmed" }
+    // );
+
+    // console.log(`Zap out transaction sent: ${signature}`);
   } catch (error) {
     console.error(error);
   }
 }
+
+export const wrapSOLInstruction = (
+  from: PublicKey,
+  to: PublicKey,
+  amount: bigint
+): TransactionInstruction[] => {
+  return [
+    SystemProgram.transfer({
+      fromPubkey: from,
+      toPubkey: to,
+      lamports: amount,
+    }),
+    new TransactionInstruction({
+      keys: [
+        {
+          pubkey: to,
+          isSigner: false,
+          isWritable: true,
+        },
+      ],
+      data: Buffer.from(new Uint8Array([17])),
+      programId: TOKEN_PROGRAM_ID,
+    }),
+  ];
+};
 
 async function getTokenProgramFromMint(
   connection: Connection,
@@ -114,88 +167,6 @@ async function getTokenProgramFromMint(
       error
     );
     return TOKEN_PROGRAM_ID;
-  }
-}
-
-/**
- * Setup and fund token ledger if needed
- */
-async function setupTokenLedger(
-  connection: Connection,
-  zap: Zap,
-  wallet: Keypair,
-  inputMint: PublicKey,
-  inputTokenAccount: PublicKey,
-  requiredAmount: BN
-): Promise<void> {
-  console.log("Checking token ledger account...");
-  const tokenLedgerInfo = await connection.getAccountInfo(inputTokenAccount);
-
-  if (!tokenLedgerInfo) {
-    console.log("Token ledger not found, initializing...");
-    const inputTokenProgram = await getTokenProgramFromMint(
-      connection,
-      inputMint
-    );
-    const initTx = await zap.initializeTokenLedger(
-      wallet.publicKey,
-      inputMint,
-      inputTokenProgram
-    );
-
-    const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    initTx.recentBlockhash = blockhash;
-    initTx.feePayer = wallet.publicKey;
-
-    const initSignature = await sendAndConfirmTransaction(
-      connection,
-      initTx,
-      [wallet],
-      { commitment: "confirmed" }
-    );
-
-    console.log(`Token ledger initialized: ${initSignature}`);
-  } else {
-    console.log("Token ledger already exists");
-  }
-
-  const tokenLedgerBalance = await connection.getBalance(inputTokenAccount);
-  console.log(`Token ledger balance: ${tokenLedgerBalance} lamports`);
-
-  if (
-    tokenLedgerBalance === 0 ||
-    new BN(tokenLedgerBalance).lt(requiredAmount)
-  ) {
-    console.log(
-      `Funding token ledger with ${requiredAmount.toString()} lamports...`
-    );
-
-    const fundTx = new Transaction();
-    fundTx.add(
-      SystemProgram.transfer({
-        fromPubkey: wallet.publicKey,
-        toPubkey: inputTokenAccount,
-        lamports: requiredAmount.toNumber(),
-      })
-    );
-
-    const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    fundTx.recentBlockhash = blockhash;
-    fundTx.feePayer = wallet.publicKey;
-
-    const fundSignature = await sendAndConfirmTransaction(
-      connection,
-      fundTx,
-      [wallet],
-      { commitment: "confirmed" }
-    );
-
-    console.log(`Token ledger funded: ${fundSignature}`);
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const updatedBalance = await connection.getBalance(inputTokenAccount);
-    console.log(`Updated balance: ${updatedBalance} lamports`);
   }
 }
 

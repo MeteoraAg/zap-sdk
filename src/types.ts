@@ -1,4 +1,4 @@
-import { Program } from "@coral-xyz/anchor";
+import { Program, IdlTypes } from "@coral-xyz/anchor";
 import { PoolState } from "@meteora-ag/cp-amm-sdk";
 import DLMM from "@meteora-ag/dlmm";
 import {
@@ -11,16 +11,11 @@ import { Zap as ZapTypes } from "./idl/zap";
 
 export type ZapProgram = Program<ZapTypes>;
 
-export enum ActionType {
-  SwapDammV2,
-  SwapDlmm,
-  SwapJupiterV6,
-}
+export type ZapOutParameters = IdlTypes<ZapTypes>["zapOutParameters"];
 
 export type ZapOutParams = {
-  actionType: number;
-  payloadData: Buffer<ArrayBufferLike>;
-  tokenLedgerAccount: PublicKey;
+  userTokenInAccount: PublicKey;
+  zapOutParams: ZapOutParameters;
   remainingAccounts: AccountMeta[];
   ammProgram: PublicKey;
   preInstructions?: TransactionInstruction[];
@@ -50,6 +45,7 @@ export interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
+  inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
 }
 
