@@ -31,7 +31,7 @@ async function main() {
   );
 
 
-  const swapAmount = new BN(1000000);
+  const swapAmount = new BN(10000000);
 
   try {
 
@@ -106,7 +106,7 @@ async function main() {
 
     // const signature = await sendAndConfirmTransaction(
     //   connection,
-    //   zapOutTx,
+    //   transaction,
     //   [wallet],
     //   { commitment: "confirmed" }
     // );
