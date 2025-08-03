@@ -132,6 +132,18 @@ export class Zap {
     ).value.amount;
 
     const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapInstructions = wrapSOLInstruction(
+        user,
+        userInputMintAta,
+        BigInt(maxSwapAmount.toString()),
+        inputTokenProgram
+      );
+
+      preInstructions.push(...wrapInstructions);
+    }
 
     const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
       await getOrCreateATAInstruction(
@@ -145,6 +157,13 @@ export class Zap {
 
     if (outputTokenAccountAtaIx) {
       preInstructions.push(outputTokenAccountAtaIx);
+    }
+
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstruction = unwrapSOLInstruction(user, user);
+      if (unwrapInstruction) {
+        postInstructions.push(unwrapInstruction);
+      }
     }
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
@@ -181,6 +200,7 @@ export class Zap {
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
       preInstructions,
+      postInstructions,
     });
   }
 
