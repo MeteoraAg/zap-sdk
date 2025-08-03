@@ -43,10 +43,11 @@ export interface ZapOutThroughJupiterParams {
   user: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
-  inputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
+  maxSwapAmount: BN;
+  percentageToZapOut: number;
 }
 
 export interface JupiterQuoteResponse {

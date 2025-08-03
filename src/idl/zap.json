@@ -86,6 +86,10 @@
             "type": "u64"
           },
           {
+            "name": "max_swap_amount",
+            "type": "u64"
+          },
+          {
             "name": "payload_data",
             "type": "bytes"
           }

@@ -5,20 +5,14 @@ import {
   Connection,
   PublicKey,
   Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap.json";
 import { Zap as ZapTypes } from "./idl/zap";
-import {
-  ZapOutParams,
-  ZapOutThroughJupiterParams,
-  ZapProgram,
-} from "./types";
+import { ZapOutParams, ZapOutThroughJupiterParams, ZapProgram } from "./types";
 
-import {
-
-  getOrCreateATAInstruction,
-} from "./helpers";
+import { getOrCreateATAInstruction } from "./helpers";
 import {
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   JUP_V6_PROGRAM_ID,
@@ -94,12 +88,13 @@ export class Zap {
   ): Promise<Transaction> {
     const {
       user,
-      inputTokenAccount,
       inputMint,
       outputMint,
       jupiterSwapResponse,
       inputTokenProgram,
       outputTokenProgram,
+      maxSwapAmount,
+      percentageToZapOut,
     } = params;
 
     // user inputMint ATA
@@ -110,7 +105,11 @@ export class Zap {
       inputTokenProgram
     );
 
-    const preUserTokenBalance = (await this.zapProgram.provider.connection.getTokenAccountBalance(userInputMintAta)).value.amount
+    const preUserTokenBalance = (
+      await this.connection.getTokenAccountBalance(userInputMintAta)
+    ).value.amount;
+
+    const preInstructions: TransactionInstruction[] = [];
 
     const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
       await getOrCreateATAInstruction(
@@ -121,6 +120,10 @@ export class Zap {
         true,
         outputTokenProgram
       );
+
+    if (outputTokenAccountAtaIx) {
+      preInstructions.push(outputTokenAccountAtaIx);
+    }
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -137,8 +140,6 @@ export class Zap {
       }
     );
 
-    // console.log("remainingAccounts", remainingAccounts);
-
     const payloadData = Buffer.from(
       jupiterSwapResponse.swapInstruction.data,
       "base64"
@@ -149,16 +150,15 @@ export class Zap {
     return await this.zapOut({
       userTokenInAccount: userInputMintAta,
       zapOutParams: {
-        percentage: 100, /// should be params
+        percentage: percentageToZapOut,
         offsetAmountIn,
         preUserTokenBalance: new BN(preUserTokenBalance),
+        maxSwapAmount,
         payloadData,
       },
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
-      preInstructions: [outputTokenAccountAtaIx].filter(
-        (ix) => ix !== undefined
-      ),
+      preInstructions,
     });
   }
 }

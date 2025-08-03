@@ -5,98 +5,93 @@
  * IDL can be found at `target/idl/zap.json`.
  */
 export type Zap = {
-  "address": "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz",
-  "metadata": {
-    "name": "zap",
-    "version": "0.1.0",
-    "spec": "0.1.0",
-    "description": "Created with Anchor"
-  },
-  "instructions": [
+  address: "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz";
+  metadata: {
+    name: "zap";
+    version: "0.1.0";
+    spec: "0.1.0";
+    description: "Created with Anchor";
+  };
+  instructions: [
     {
-      "name": "zapOut",
-      "discriminator": [
-        155,
-        108,
-        185,
-        112,
-        104,
-        210,
-        161,
-        64
-      ],
-      "accounts": [
+      name: "zapOut";
+      discriminator: [155, 108, 185, 112, 104, 210, 161, 64];
+      accounts: [
         {
-          "name": "userTokenInAccount",
-          "writable": true
+          name: "userTokenInAccount";
+          writable: true;
         },
         {
-          "name": "ammProgram"
+          name: "ammProgram";
         }
-      ],
-      "args": [
+      ];
+      args: [
         {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "zapOutParameters"
-            }
-          }
+          name: "params";
+          type: {
+            defined: {
+              name: "zapOutParameters";
+            };
+          };
         }
-      ]
+      ];
     }
-  ],
-  "errors": [
+  ];
+  errors: [
     {
-      "code": 6000,
-      "name": "mathOverflow",
-      "msg": "Math operation overflow"
+      code: 6000;
+      name: "mathOverflow";
+      msg: "Math operation overflow";
     },
     {
-      "code": 6001,
-      "name": "invalidOffset",
-      "msg": "Invalid offset"
+      code: 6001;
+      name: "invalidOffset";
+      msg: "Invalid offset";
     },
     {
-      "code": 6002,
-      "name": "invalidZapOutParameters",
-      "msg": "Math operation overflow"
+      code: 6002;
+      name: "invalidZapOutParameters";
+      msg: "Math operation overflow";
     },
     {
-      "code": 6003,
-      "name": "typeCastFailed",
-      "msg": "Type cast error"
+      code: 6003;
+      name: "typeCastFailed";
+      msg: "Type cast error";
     },
     {
-      "code": 6004,
-      "name": "ammIsNotSupported",
-      "msg": "Amm program is not supported"
+      code: 6004;
+      name: "ammIsNotSupported";
+      msg: "Amm program is not supported";
     }
-  ],
-  "types": [
+  ];
+  types: [
     {
-      "name": "zapOutParameters",
-      "type": {
-        "kind": "struct",
-        "fields": [
+      name: "zapOutParameters";
+      type: {
+        kind: "struct";
+        fields: [
           {
-            "name": "percentage",
-            "type": "u8"
+            name: "percentage";
+            type: "u8";
           },
           {
-            "name": "offsetAmountIn",
-            "type": "u16"
+            name: "offsetAmountIn";
+            type: "u16";
           },
           {
-            "name": "preUserTokenBalance",
-            "type": "u64"
+            name: "preUserTokenBalance";
+            type: "u64";
           },
           {
-            "name": "payloadData",
-            "type": "bytes"
+            name: "maxSwapAmount";
+            type: "u64";
+          },
+          {
+            name: "payloadData";
+            type: "bytes";
           }
-        ]
-      }
+        ];
+      };
     }
-  ]
+  ];
 };

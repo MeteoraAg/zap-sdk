@@ -1,4 +1,4 @@
-export * from "./jupV6";
+export * from "./jupiter";
 export * from "./pda";
 export * from "./common";
 export * from "./token";
