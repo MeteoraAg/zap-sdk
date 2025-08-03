@@ -7,16 +7,25 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { BN, Program } from "@coral-xyz/anchor";
-import ZapIDL from "./idl/zap/zap.json";
-import { Zap as ZapTypes } from "./idl/zap/zap";
-import { ZapOutParams, ZapOutThroughJupiterParams, ZapProgram } from "./types";
-
-import { getOrCreateATAInstruction } from "./helpers";
+import ZapIDL from "./idl/zap/idl.json";
+import { Zap as ZapTypes } from "./idl/zap/idl";
 import {
+  ZapOutParams,
+  ZapOutThroughDammV2Params,
+  ZapOutThroughJupiterParams,
+  ZapProgram,
+} from "./types";
+
+import { getOrCreateATAInstruction, getTokenProgramFromMint } from "./helpers";
+import {
+  AMOUNT_IN_DAMM_V2_OFFSET,
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
+  DAMM_V2_PROGRAM_ID,
+  DAMM_V2_SWAP_DISCRIMINATOR,
   JUP_V6_PROGRAM_ID,
 } from "./constants";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getDammV2Pool, getDammV2RemainingAccounts } from "./helpers/dammV2";
 
 export class Zap {
   private connection: Connection;
@@ -154,6 +163,110 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
+      preInstructions,
+    });
+  }
+
+  /**
+   * Performs a token swap using Damms V2 protocol as part of a zap out operation.
+   * Swaps tokens from the input token ledger to the user's output token account.
+   *
+   * @param params - Damms V2 swap parameters
+   * @param params.user - Public key of the user performing the swap
+   * @param params.poolAddress - Address of the pool to swap through
+   * @param params.inputMint - Token mint being swapped from
+   * @param params.outputMint - Token mint being swapped to
+   * @param params.amountIn - Amount of input token to swap
+   */
+  async zapOutThroughDammV2(
+    params: ZapOutThroughDammV2Params
+  ): Promise<Transaction> {
+    const {
+      user,
+      poolAddress,
+      inputMint,
+      inputTokenProgram,
+      amountIn,
+      minimumSwapAmountOut,
+      maxSwapAmount,
+      percentageToZapOut,
+    } = params;
+
+    const poolState = await getDammV2Pool(this.connection, poolAddress);
+
+    const outputMint = poolState.tokenAMint.equals(inputMint)
+      ? poolState.tokenBMint
+      : poolState.tokenAMint;
+
+    const outputTokenProgram = await getTokenProgramFromMint(
+      this.connection,
+      outputMint
+    );
+
+    // user inputMint ATA
+    const userInputMintAta = getAssociatedTokenAddressSync(
+      inputMint,
+      user,
+      true,
+      inputTokenProgram
+    );
+
+    const preInstructions: TransactionInstruction[] = [];
+
+    const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
+      await getOrCreateATAInstruction(
+        this.connection,
+        outputMint,
+        user,
+        user,
+        true,
+        outputTokenProgram
+      );
+
+    if (outputTokenAccountAtaIx) {
+      preInstructions.push(outputTokenAccountAtaIx);
+    }
+
+    const preUserTokenBalance = (
+      await this.connection.getTokenAccountBalance(userInputMintAta)
+    ).value.amount;
+
+    const tokenAProgram = poolState.tokenAMint.equals(inputMint)
+      ? inputTokenProgram
+      : outputTokenProgram;
+    const tokenBProgram = poolState.tokenBMint.equals(inputMint)
+      ? inputTokenProgram
+      : outputTokenProgram;
+
+    const remainingAccounts = await getDammV2RemainingAccounts(
+      this.connection,
+      poolAddress,
+      user,
+      userInputMintAta,
+      outputTokenAccountAta,
+      tokenAProgram,
+      tokenBProgram
+    );
+
+    const payloadData = Buffer.concat([
+      Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),
+      amountIn.toArrayLike(Buffer, "le", 8),
+      minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
+    ]);
+
+    const offsetAmountIn = AMOUNT_IN_DAMM_V2_OFFSET;
+
+    return await this.zapOut({
+      userTokenInAccount: userInputMintAta,
+      zapOutParams: {
+        percentage: percentageToZapOut,
+        offsetAmountIn,
+        preUserTokenBalance: new BN(preUserTokenBalance),
+        maxSwapAmount,
+        payloadData,
+      },
+      remainingAccounts,
+      ammProgram: DAMM_V2_PROGRAM_ID,
       preInstructions,
     });
   }

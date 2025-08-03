@@ -71,9 +71,9 @@ async function main() {
       user: wallet.publicKey,
       inputMint,
       outputMint,
-      jupiterSwapResponse: swapInstructionResponse,
-      outputTokenProgram: outputTokenProgram,
       inputTokenProgram: inputTokenProgram,
+      outputTokenProgram: outputTokenProgram,
+      jupiterSwapResponse: swapInstructionResponse,
       maxSwapAmount: new BN(swapAmount.toString()),
       percentageToZapOut: 100,
     });
