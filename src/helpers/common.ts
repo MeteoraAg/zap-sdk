@@ -1,24 +1,6 @@
 import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
 
-export function convertAccountTypeToNumber(accountType: object): number {
-  if (JSON.stringify(accountType) === JSON.stringify({ transferHookX: {} })) {
-    return 0;
-  }
-
-  if (JSON.stringify(accountType) === JSON.stringify({ transferHookY: {} })) {
-    return 1;
-  }
-
-  if (
-    JSON.stringify(accountType) === JSON.stringify({ transferHookReward: {} })
-  ) {
-    return 2;
-  }
-
-  throw new Error(`Unknown account type: ${JSON.stringify(accountType)}`);
-}
-
 export async function getTokenProgramFromMint(
   connection: Connection,
   mint: PublicKey

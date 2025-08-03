@@ -12,6 +12,7 @@ import { Zap as ZapTypes } from "./idl/zap/idl";
 import {
   ZapOutParams,
   ZapOutThroughDammV2Params,
+  ZapOutThroughDlmmParams,
   ZapOutThroughJupiterParams,
   ZapProgram,
 } from "./types";
@@ -21,15 +22,23 @@ import {
   getTokenProgramFromMint,
   getDammV2Pool,
   getDammV2RemainingAccounts,
+  convertAccountTypeToNumber,
+  getDlmmRemainingAccounts,
+  getLbPairState,
+  wrapSOLInstruction,
+  unwrapSOLInstruction,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
+  AMOUNT_IN_DLMM_OFFSET,
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   DAMM_V2_PROGRAM_ID,
   DAMM_V2_SWAP_DISCRIMINATOR,
+  DLMM_PROGRAM_ID,
+  DLMM_SWAP_DISCRIMINATOR,
   JUP_V6_PROGRAM_ID,
 } from "./constants";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
 
 export class Zap {
   private connection: Connection;
@@ -67,6 +76,7 @@ export class Zap {
       remainingAccounts,
       ammProgram,
       preInstructions,
+      postInstructions,
     } = params;
     return this.zapProgram.methods
       .zapOut(zapOutParams)
@@ -76,6 +86,7 @@ export class Zap {
       })
       .remainingAccounts(remainingAccounts)
       .preInstructions(preInstructions || [])
+      .postInstructions(postInstructions || [])
       .transaction();
   }
 
@@ -87,9 +98,11 @@ export class Zap {
    * @param params.user - Public key of the user performing the swap
    * @param params.inputMint - Token mint being swapped from
    * @param params.outputMint - Token mint being swapped to
-   * @param params.inputTokenAccount - Token ledger account to swap from
    * @param params.jupiterSwapResponse - Jupiter swap instruction response
    * @param params.inputTokenProgram - Token program for the input token (defaults to SPL Token)
+   * @param params.outputTokenProgram - Token program for the output token (defaults to SPL Token)
+   * @param params.maxSwapAmount - Maximum amount of input token to swap
+   * @param params.percentageToZapOut - Percentage of input token to zap out
    * @returns built transaction
    */
   async zapOutThroughJupiter(
@@ -179,8 +192,11 @@ export class Zap {
    * @param params.user - Public key of the user performing the swap
    * @param params.poolAddress - Address of the pool to swap through
    * @param params.inputMint - Token mint being swapped from
-   * @param params.outputMint - Token mint being swapped to
+   * @param params.inputTokenProgram - Token program for the input token (defaults to SPL Token)
    * @param params.amountIn - Amount of input token to swap
+   * @param params.minimumSwapAmountOut - Minimum amount of output token to receive
+   * @param params.maxSwapAmount - Maximum amount of input token to swap
+   * @param params.percentageToZapOut - Percentage of input token to zap out
    */
   async zapOutThroughDammV2(
     params: ZapOutThroughDammV2Params
@@ -216,6 +232,18 @@ export class Zap {
     );
 
     const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapInstructions = wrapSOLInstruction(
+        user,
+        userInputMintAta,
+        BigInt(amountIn.toString()),
+        inputTokenProgram
+      );
+
+      preInstructions.push(...wrapInstructions);
+    }
 
     const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
       await getOrCreateATAInstruction(
@@ -231,17 +259,16 @@ export class Zap {
       preInstructions.push(outputTokenAccountAtaIx);
     }
 
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstruction = unwrapSOLInstruction(user, user);
+      if (unwrapInstruction) {
+        postInstructions.push(unwrapInstruction);
+      }
+    }
+
     const preUserTokenBalance = (
       await this.connection.getTokenAccountBalance(userInputMintAta)
     ).value.amount;
-
-    const tokenAProgram = poolState.tokenAMint.equals(inputMint)
-      ? inputTokenProgram
-      : outputTokenProgram;
-
-    const tokenBProgram = poolState.tokenBMint.equals(inputMint)
-      ? inputTokenProgram
-      : outputTokenProgram;
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       this.connection,
@@ -249,8 +276,8 @@ export class Zap {
       user,
       userInputMintAta,
       outputTokenAccountAta,
-      tokenAProgram,
-      tokenBProgram
+      inputTokenProgram,
+      outputTokenProgram
     );
 
     const payloadData = Buffer.concat([
@@ -273,6 +300,144 @@ export class Zap {
       remainingAccounts,
       ammProgram: DAMM_V2_PROGRAM_ID,
       preInstructions,
+      postInstructions,
+    });
+  }
+
+  /**
+   * Performs a token swap using Dlmm protocol as part of a zap out operation.
+   * Swaps tokens from the input token ledger to the user's output token account.
+   *
+   * @param params - Dlmm swap parameters
+   * @param params.user - Public key of the user performing the swap
+   * @param params.lbPairAddress - Address of the lbPair to swap through
+   * @param params.inputMint - Token mint being swapped from
+   * @param params.inputTokenProgram - Token program for the input token (defaults to SPL Token)
+   * @param params.amountIn - Amount of input token to swap
+   * @param params.minimumSwapAmountOut - Minimum amount of output token to receive
+   * @param params.maxSwapAmount - Maximum amount of input token to swap
+   * @param params.percentageToZapOut - Percentage of input token to zap out
+   */
+  async zapOutThroughDlmm(
+    params: ZapOutThroughDlmmParams
+  ): Promise<Transaction> {
+    const {
+      user,
+      lbPairAddress,
+      inputMint,
+      inputTokenProgram,
+      amountIn,
+      minimumSwapAmountOut,
+      maxSwapAmount,
+      percentageToZapOut,
+    } = params;
+
+    const lbPairState = await getLbPairState(this.connection, lbPairAddress);
+
+    const outputMint = lbPairState.tokenXMint.equals(inputMint)
+      ? lbPairState.tokenYMint
+      : lbPairState.tokenXMint;
+
+    const outputTokenProgram = await getTokenProgramFromMint(
+      this.connection,
+      outputMint
+    );
+
+    // user inputMint ATA
+    const userInputMintAta = getAssociatedTokenAddressSync(
+      inputMint,
+      user,
+      true,
+      inputTokenProgram
+    );
+
+    const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapInstructions = wrapSOLInstruction(
+        user,
+        userInputMintAta,
+        BigInt(amountIn.toString()),
+        inputTokenProgram
+      );
+
+      preInstructions.push(...wrapInstructions);
+    }
+
+    const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
+      await getOrCreateATAInstruction(
+        this.connection,
+        outputMint,
+        user,
+        user,
+        true,
+        outputTokenProgram
+      );
+
+    if (outputTokenAccountAtaIx) {
+      preInstructions.push(outputTokenAccountAtaIx);
+    }
+
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstruction = unwrapSOLInstruction(user, user);
+      if (unwrapInstruction) {
+        postInstructions.push(unwrapInstruction);
+      }
+    }
+
+    const preUserTokenBalance = (
+      await this.connection.getTokenAccountBalance(userInputMintAta)
+    ).value.amount;
+
+    const { remainingAccounts, remainingAccountsInfo } =
+      await getDlmmRemainingAccounts(
+        this.connection,
+        lbPairAddress,
+        user,
+        userInputMintAta,
+        outputTokenAccountAta,
+        inputTokenProgram,
+        outputTokenProgram
+      );
+
+    const sliceCount = Buffer.alloc(4);
+    sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
+
+    // Serialize each slice (accounts_type: u8, length: u8)
+    const slicesData = Buffer.concat(
+      remainingAccountsInfo.slices.map((slice) => {
+        const sliceBuffer = Buffer.alloc(2);
+        sliceBuffer.writeUInt8(
+          convertAccountTypeToNumber(slice.accountsType),
+          0
+        );
+        sliceBuffer.writeUInt8(slice.length, 1);
+        return sliceBuffer;
+      })
+    );
+
+    const payloadData = Buffer.concat([
+      Buffer.from(DLMM_SWAP_DISCRIMINATOR),
+      amountIn.toArrayLike(Buffer, "le", 8),
+      minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
+      sliceCount,
+      slicesData,
+    ]);
+
+    return await this.zapOut({
+      userTokenInAccount: userInputMintAta,
+      zapOutParams: {
+        percentage: percentageToZapOut,
+        offsetAmountIn: AMOUNT_IN_DLMM_OFFSET,
+        preUserTokenBalance: new BN(preUserTokenBalance),
+        maxSwapAmount,
+        payloadData,
+      },
+      remainingAccounts,
+      ammProgram: DLMM_PROGRAM_ID,
+      preInstructions,
+      postInstructions,
     });
   }
 }

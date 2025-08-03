@@ -1,10 +1,43 @@
 import { PublicKey } from "@solana/web3.js";
-import { DAMM_V2_PROGRAM_ID, JUP_V6_PROGRAM_ID } from "../constants";
+import {
+  DAMM_V2_PROGRAM_ID,
+  JUP_V6_PROGRAM_ID,
+  DLMM_PROGRAM_ID,
+} from "../constants";
+import BN from "bn.js";
 
-export function deriveDlmmEventAuthority(programId: PublicKey) {
+export function deriveDlmmEventAuthority() {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("__event_authority")],
-    programId
+    DLMM_PROGRAM_ID
+  )[0];
+}
+
+export function deriveBinArrayBitmapExtension(lbPair: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("bitmap"), lbPair.toBytes()],
+    DLMM_PROGRAM_ID
+  )[0];
+}
+
+export function deriveOracle(lbPair: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("oracle"), lbPair.toBytes()],
+    DLMM_PROGRAM_ID
+  )[0];
+}
+
+export function deriveBinArray(lbPair: PublicKey, index: BN) {
+  let binArrayBytes: Uint8Array;
+  if (index.isNeg()) {
+    binArrayBytes = new Uint8Array(index.toTwos(64).toBuffer("le", 8));
+  } else {
+    binArrayBytes = new Uint8Array(index.toBuffer("le", 8));
+  }
+
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("bin_array"), lbPair.toBytes(), binArrayBytes],
+    DLMM_PROGRAM_ID
   )[0];
 }
 

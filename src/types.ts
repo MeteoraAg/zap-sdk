@@ -19,6 +19,7 @@ export type ZapOutParams = {
   remainingAccounts: AccountMeta[];
   ammProgram: PublicKey;
   preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
 };
 
 export type ZapOutThroughDammV2Params = {
@@ -34,12 +35,14 @@ export type ZapOutThroughDammV2Params = {
 
 export type ZapOutThroughDlmmParams = {
   user: PublicKey;
-  poolAddress: PublicKey;
-  inputTokenMint: PublicKey;
+  lbPairAddress: PublicKey;
+  inputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  amountIn: BN;
   minimumSwapAmountOut: BN;
-  dlmm: LbClmmTypes;
-  inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
+  maxSwapAmount: BN;
+  percentageToZapOut: number;
+  preInstructions?: TransactionInstruction[];
 };
 
 export interface ZapOutThroughJupiterParams {
@@ -120,3 +123,9 @@ export interface JupiterSwapInstructionResponse {
 
 export type DammV2Pool = IdlAccounts<CpAmmTypes>["pool"];
 export type DammV2Position = IdlAccounts<CpAmmTypes>["position"];
+
+export type LbPairState = IdlAccounts<LbClmmTypes>["lbPair"];
+export type DlmmRemainingAccountsInfo =
+  IdlTypes<LbClmmTypes>["remainingAccountsInfo"];
+export type BinArrayBitmapExtension =
+  IdlTypes<LbClmmTypes>["binArrayBitmapExtension"];
