@@ -1,18 +1,17 @@
 import { Program, IdlTypes, IdlAccounts } from "@coral-xyz/anchor";
-import { PoolState } from "@meteora-ag/cp-amm-sdk";
-import DLMM from "@meteora-ag/dlmm";
 import {
   AccountMeta,
   PublicKey,
   TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
-import { Zap as ZapTypes } from "./idl/zap/idl";
-import { CpAmm } from "./idl/damm-v2/idl";
+import { Zap } from "./idl/zap/idl";
+import { CpAmm as CpAmmTypes } from "./idl/damm-v2/idl";
+import { LbClmm as LbClmmTypes } from "./idl/dlmm/idl";
 
-export type ZapProgram = Program<ZapTypes>;
+export type ZapProgram = Program<Zap>;
 
-export type ZapOutParameters = IdlTypes<ZapTypes>["zapOutParameters"];
+export type ZapOutParameters = IdlTypes<Zap>["zapOutParameters"];
 
 export type ZapOutParams = {
   userTokenInAccount: PublicKey;
@@ -38,7 +37,7 @@ export type ZapOutThroughDlmmParams = {
   poolAddress: PublicKey;
   inputTokenMint: PublicKey;
   minimumSwapAmountOut: BN;
-  dlmm: DLMM;
+  dlmm: LbClmmTypes;
   inputTokenAccount: PublicKey;
   outputTokenAccount: PublicKey;
 };
@@ -119,5 +118,5 @@ export interface JupiterSwapInstructionResponse {
   };
 }
 
-export type DammV2Pool = IdlAccounts<CpAmm>["pool"];
-export type DammV2Position = IdlAccounts<CpAmm>["position"];
+export type DammV2Pool = IdlAccounts<CpAmmTypes>["pool"];
+export type DammV2Position = IdlAccounts<CpAmmTypes>["position"];

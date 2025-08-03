@@ -16,7 +16,12 @@ import {
   ZapProgram,
 } from "./types";
 
-import { getOrCreateATAInstruction, getTokenProgramFromMint } from "./helpers";
+import {
+  getOrCreateATAInstruction,
+  getTokenProgramFromMint,
+  getDammV2Pool,
+  getDammV2RemainingAccounts,
+} from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
@@ -25,7 +30,6 @@ import {
   JUP_V6_PROGRAM_ID,
 } from "./constants";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { getDammV2Pool, getDammV2RemainingAccounts } from "./helpers/dammV2";
 
 export class Zap {
   private connection: Connection;
