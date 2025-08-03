@@ -234,6 +234,7 @@ export class Zap {
     const tokenAProgram = poolState.tokenAMint.equals(inputMint)
       ? inputTokenProgram
       : outputTokenProgram;
+
     const tokenBProgram = poolState.tokenBMint.equals(inputMint)
       ? inputTokenProgram
       : outputTokenProgram;
