@@ -1,5 +1,4 @@
 import {
-  AccountMeta,
   Cluster,
   Commitment,
   Connection,
@@ -8,8 +7,8 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { BN, Program } from "@coral-xyz/anchor";
-import ZapIDL from "./idl/zap.json";
-import { Zap as ZapTypes } from "./idl/zap";
+import ZapIDL from "./idl/zap/zap.json";
+import { Zap as ZapTypes } from "./idl/zap/zap";
 import { ZapOutParams, ZapOutThroughJupiterParams, ZapProgram } from "./types";
 
 import { getOrCreateATAInstruction } from "./helpers";
@@ -17,10 +16,7 @@ import {
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   JUP_V6_PROGRAM_ID,
 } from "./constants";
-import {
-  getAssociatedTokenAddressSync,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 export class Zap {
   private connection: Connection;

@@ -1,9 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
-import ZapIDL from "../idl/zap.json";
 import { CP_AMM_PROGRAM_ID } from "@meteora-ag/cp-amm-sdk";
 import { JUP_V6_PROGRAM_ID } from "../constants";
-
-
 
 export function deriveDlmmEventAuthority(programId: PublicKey) {
   return PublicKey.findProgramAddressSync(
