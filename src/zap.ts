@@ -61,12 +61,13 @@ export class Zap {
   /**
    * Executes a generic zap out operation with custom parameters.
    *
-   * @param ZapOutParams - Zap out operation parameters
-   * @param params.tokenLedgerAccount - Token ledger account to zap out from
-   * @param params.actionType - Type of action to perform (SwapDammV2, SwapDlmm)
-   * @param params.payloadData - Serialized payload data for the specific action
+   * @param params - Zap out operation parameters
+   * @param params.userTokenInAccount - Token ledger account to zap out from
+   * @param params.zapOutParams - Zap out parameters
    * @param params.remainingAccounts - Additional accounts needed for the operation
    * @param params.ammProgram - AMM program ID to interact with
+   * @param params.preInstructions - Instructions to run before the zap out
+   * @param params.postInstructions - Instructions to run after the zap out
    * @returns builder transaction
    */
   async zapOut(params: ZapOutParams): Promise<Transaction> {
