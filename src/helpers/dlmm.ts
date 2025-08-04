@@ -15,9 +15,9 @@ import {
   MAX_BIN_PER_ARRAY,
   MEMO_PROGRAM_ID,
 } from "../constants";
-import { getExtraAccountMetasForTransferHook } from "./token2022";
 import BN from "bn.js";
 import { BinArrayBitmapExtension } from "@meteora-ag/dlmm";
+import { getExtraAccountMetasForTransferHook } from "./token2022";
 
 export async function getLbPairState(
   connection: Connection,
