@@ -19,7 +19,6 @@ import {
   getTokenProgram,
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
-import { NATIVE_MINT } from "@solana/spl-token";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");

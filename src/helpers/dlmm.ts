@@ -47,67 +47,6 @@ export async function getBinArrayBitmapExtension(
   );
 }
 
-export async function getBinArraysForSwap(
-  connection: Connection,
-  lbPair: PublicKey,
-  swapForY: boolean,
-  binArraysNeeded = 4
-) {
-  const [minBinArrayIdx, maxBinArrayIdx] = BIN_ARRAY_INDEX_BOUND;
-
-  const binArrays: PublicKey[] = [];
-  const lbPairState = await getLbPairState(connection, lbPair);
-  const activeBinArrayIdx = binIdToBinArrayIndex(new BN(lbPairState.activeId));
-
-  const [bitmapExtension] = deriveBinArrayBitmapExtension(
-    lbPair,
-    DLMM_PROGRAM_ID
-  );
-
-  const bitmapExtState = await getBinArrayBitmapExtension(
-    connection,
-    bitmapExtension
-  );
-
-  let binArrayIdx = activeBinArrayIdx;
-
-  while (binArrays.length < binArraysNeeded) {
-    if (
-      binArrayIdx.gt(new BN(maxBinArrayIdx)) ||
-      binArrayIdx.lt(new BN(minBinArrayIdx))
-    ) {
-      break;
-    }
-
-    const nextBinArrayIndex = getNextBinArrayIndexWithLiquidity(
-      binArrayIdx,
-      lbPairState,
-      swapForY,
-      bitmapExtState
-    );
-
-    // Bin array exhausted
-    if (!nextBinArrayIndex) {
-      break;
-    } else {
-      const [binArray] = deriveBinArray(
-        lbPair,
-        nextBinArrayIndex,
-        DLMM_PROGRAM_ID
-      );
-
-      binArrays.push(binArray);
-      if (swapForY) {
-        binArrayIdx = nextBinArrayIndex.sub(new BN(1));
-      } else {
-        binArrayIdx = nextBinArrayIndex.add(new BN(1));
-      }
-    }
-  }
-
-  return binArrays;
-}
-
 export function getBitFromBinArrayIndexInBitmapExtension(
   binArrayIndex: BN,
   state: BinArrayBitmapExtension
@@ -323,13 +262,17 @@ export async function getDlmmRemainingAccounts(
     },
   ];
 
-  const binArrays = await getBinArraysForSwap(connection, lbPair, true);
+  const dlmmClient = await DLMM.create(connection, lbPair, {
+    cluster: "mainnet-beta",
+    programId: new PublicKey(DLMM_PROGRAM_ID),
+  });
+  const binArrays = await dlmmClient.getBinArrayForSwap(true, 5);
 
-  const binArraysAccountMeta: AccountMeta[] = binArrays.map((pubkey) => {
+  const binArraysAccountMeta: AccountMeta[] = binArrays.map((binArray) => {
     return {
       isSigner: false,
       isWritable: true,
-      pubkey,
+      pubkey: binArray.publicKey,
     };
   });
 
