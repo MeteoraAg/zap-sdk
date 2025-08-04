@@ -40,7 +40,6 @@ async function main() {
       50,
       true,
       true,
-      true,
       "https://lite-api.jup.ag"
     );
 

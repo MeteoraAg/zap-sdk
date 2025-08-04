@@ -33,14 +33,6 @@ async function main() {
 
   const swapAmount = new BN(10000000);
 
-  // Get pool info to determine output mint
-  const { getDammV2Pool } = await import("../src/helpers");
-  const poolState = await getDammV2Pool(connection, poolAddress);
-
-  const outputMint = poolState.tokenAMint.equals(inputMint)
-    ? poolState.tokenBMint
-    : poolState.tokenAMint;
-
   try {
     console.log("Getting swap instruction from Damm V2...");
 

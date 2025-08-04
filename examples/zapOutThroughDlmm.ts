@@ -33,14 +33,6 @@ async function main() {
 
   const swapAmount = new BN(10000000);
 
-  // Get pool info to determine output mint
-  const { getLbPairState } = await import("../src/helpers");
-  const poolState = await getLbPairState(connection, lbPairAddress);
-
-  const outputMint = poolState.tokenXMint.equals(inputMint)
-    ? poolState.tokenYMint
-    : poolState.tokenXMint;
-
   try {
     console.log("Getting swap instruction from Dlmm...");
 
