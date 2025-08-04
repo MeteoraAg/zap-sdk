@@ -37,8 +37,8 @@ interface ZapOutParams {
   zapOutParams: ZapOutParameters;
   remainingAccounts: AccountMeta[];
   ammProgram: PublicKey;
-  preInstructions?: TransactionInstruction[];
-  postInstructions?: TransactionInstruction[];
+  preInstructions: TransactionInstruction[];
+  postInstructions: TransactionInstruction[];
 }
 ```
 
@@ -105,14 +105,12 @@ async zapOutThroughJupiter(params: ZapOutThroughJupiterParams): Promise<Transact
 
 ```typescript
 interface ZapOutThroughJupiterParams {
-  user: PublicKey;
-  inputMint: PublicKey;
-  outputMint: PublicKey;
-  inputTokenProgram: PublicKey;
-  outputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   maxSwapAmount: BN;
   percentageToZapOut: number;
+  preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
 }
 ```
 
@@ -140,19 +138,17 @@ const swapInstructionResponse = await getJupiterSwapInstruction(
   quoteResponse
 );
 
-const outputTokenProgram = await getTokenProgramFromMint(
-  connection,
-  outputMint
+const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+
+const inputTokenAccount = getAssociatedTokenAddressSync(
+  inputMint,
+  wallet.publicKey,
+  true,
+  inputTokenProgram
 );
 
-const inputTokenProgram = await getTokenProgramFromMint(connection, inputMint);
-
 const zapOutTx = await zap.zapOutThroughJupiter({
-  user: wallet.publicKey,
-  inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
-  outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  inputTokenProgram: inputTokenProgram,
-  outputTokenProgram: outputTokenProgram,
+  inputTokenAccount: inputTokenAccount,
   jupiterSwapResponse: swapInstructionResponse,
   maxSwapAmount: new BN(1000000000),
   percentageToZapOut: 100,
@@ -187,12 +183,14 @@ async zapOutThroughDammV2(params: ZapOutThroughDammV2Params): Promise<Transactio
 interface ZapOutThroughDammV2Params {
   user: PublicKey;
   poolAddress: PublicKey;
-  inputMint: PublicKey;
-  inputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
   percentageToZapOut: number;
+  preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
 }
 ```
 
@@ -203,13 +201,28 @@ A transaction that can be signed and sent to the network.
 #### Example
 
 ```typescript
-const inputTokenProgram = await getTokenProgramFromMint(connection, inputMint);
+const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const outputMint = new PublicKey("So11111111111111111111111111111111111111112");
+
+const inputTokenAccount = getAssociatedTokenAddressSync(
+  inputMint,
+  wallet.publicKey,
+  true,
+  inputTokenProgram
+);
+
+const outputTokenAccount = getAssociatedTokenAddressSync(
+  outputMint,
+  wallet.publicKey,
+  true,
+  outputTokenProgram
+);
 
 const zapOutTx = await zap.zapOutThroughDlmm({
   user: wallet.publicKey,
   poolAddress: new PublicKey("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"),
-  inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
-  inputTokenProgram: inputTokenProgram,
+  inputTokenAccount: inputTokenAccount,
+  outputTokenAccount: outputTokenAccount,
   amountIn: new BN(1000000000),
   minimumSwapAmountOut: new BN(0),
   maxSwapAmount: new BN(1000000000),
@@ -243,12 +256,14 @@ async zapOutThroughDlmm(params: ZapOutThroughDlmmParams): Promise<Transaction>
 interface ZapOutThroughDlmmParams {
   user: PublicKey;
   lbPairAddress: PublicKey;
-  inputMint: PublicKey;
-  inputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
   percentageToZapOut: number;
+  preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
 }
 ```
 
@@ -259,13 +274,28 @@ A transaction that can be signed and sent to the network.
 #### Example
 
 ```typescript
-const inputTokenProgram = await getTokenProgramFromMint(connection, inputMint);
+const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const outputMint = new PublicKey("So11111111111111111111111111111111111111112");
+
+const inputTokenAccount = getAssociatedTokenAddressSync(
+  inputMint,
+  wallet.publicKey,
+  true,
+  inputTokenProgram
+);
+
+const outputTokenAccount = getAssociatedTokenAddressSync(
+  outputMint,
+  wallet.publicKey,
+  true,
+  outputTokenProgram
+);
 
 const zapOutTx = await zap.zapOutThroughDlmm({
   user: wallet.publicKey,
   lbPairAddress: new PublicKey("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"),
-  inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
-  inputTokenProgram: inputTokenProgram,
+  inputTokenAccount: inputTokenAccount,
+  outputTokenAccount: outputTokenAccount,
   amountIn: new BN(1000000000),
   minimumSwapAmountOut: new BN(0),
   maxSwapAmount: new BN(1000000000),
