@@ -8,7 +8,10 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
-import { getTokenProgramFromMint } from "../src/helpers";
+import {
+  getOrCreateATAInstruction,
+  getTokenProgramFromMint,
+} from "../src/helpers";
 import {
   CpAmm,
   getAmountAFromLiquidityDelta,
@@ -16,7 +19,7 @@ import {
   getTokenProgram,
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
-import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
+import { NATIVE_MINT } from "@solana/spl-token";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -28,12 +31,14 @@ async function main() {
   const cpAmm = new CpAmm(connection);
 
   const inputMint = new PublicKey(
-    "6fXwi8pw9CnxcqcuGFGFBBDcD4vG8E5VkeqFRYXTet6g"
-  );
-  const outputMint = NATIVE_MINT;
+    "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups"
+  ); // $URANUS
+  const outputMint = new PublicKey(
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  ); // $USDC
 
   const poolAddress = new PublicKey(
-    "3TeMd6TDxypJzKzApLLmsMuboW49ZbbfH2jSwHsW5YEr"
+    "7ccKzmrXBpFHwyZGPqPuKL6bEyWAETSnHwnWe3jEneVc"
   );
 
   try {
@@ -103,19 +108,33 @@ async function main() {
       outputMint
     );
 
-    const inputTokenAccount = getAssociatedTokenAddressSync(
-      inputMint,
-      wallet.publicKey,
-      true,
-      inputTokenProgram
-    );
+    const { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx } =
+      await getOrCreateATAInstruction(
+        connection,
+        inputMint,
+        wallet.publicKey,
+        wallet.publicKey,
+        true,
+        inputTokenProgram
+      );
 
-    const outputTokenAccount = getAssociatedTokenAddressSync(
-      outputMint,
-      wallet.publicKey,
-      true,
-      outputTokenProgram
-    );
+    if (inputTokenAccountIx) {
+      preInstructions.push(inputTokenAccountIx);
+    }
+
+    const { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx } =
+      await getOrCreateATAInstruction(
+        connection,
+        outputMint,
+        wallet.publicKey,
+        wallet.publicKey,
+        true,
+        outputTokenProgram
+      );
+
+    if (outputTokenAccountIx) {
+      preInstructions.push(outputTokenAccountIx);
+    }
 
     const zapOutTx = await zap.zapOutThroughDammV2({
       user: wallet.publicKey,
