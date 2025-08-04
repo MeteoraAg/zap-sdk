@@ -6,7 +6,7 @@
 	"module": "./dist/index.mjs",
 	"source": "./src/index.ts",
 	"types": "./dist/index.d.ts",
-	"author": "Minh Do <minh@raccoons.dev>",
+	"author": "Minh Do <minh@raccoons.dev>, Dann Wee <dann@raccoons.dev>",
 	"files": [
 		"dist/**"
 	],
@@ -14,17 +14,19 @@
 		"lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
 		"lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
 		"build": "tsup",
+		"clean": "rm -rf dist && rm -rf node_modules",
 		"start": "npm run build -- --watch",
 		"test": "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/*.test.ts"
 	},
 	"devDependencies": {
 		"@types/invariant": "^2.2.35",
+		"tsx": "^4.20.3",
 		"typescript": "^5.8.3"
 	},
 	"dependencies": {
 		"@coral-xyz/anchor": "^0.31.1",
-		"@meteora-ag/cp-amm-sdk": "1.0.12-rc.0",
-		"@meteora-ag/dlmm": "^1.5.5",
+		"@meteora-ag/cp-amm-sdk": "1.1.0",
+		"@meteora-ag/dlmm": "^1.6.1",
 		"@solana/spl-token": "^0.4.13",
 		"@solana/web3.js": "^1.98.2",
 		"@types/bn.js": "^5.1.0",

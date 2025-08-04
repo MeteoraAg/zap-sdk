@@ -1,63 +1,193 @@
-import DLMM, {
-  BinArrayBitmapExtensionAccount,
-  deriveOracle,
-  LBCLMM_PROGRAM_IDS,
-  LbPair,
+import { AccountMeta, Connection, PublicKey } from "@solana/web3.js";
+import {
+  AccountsType,
+  BIN_ARRAY_INDEX_BOUND,
+  DLMM_PROGRAM_ID,
+  DLMM_SWAP_DISCRIMINATOR,
   MEMO_PROGRAM_ID,
+} from "../constants";
+import BN from "bn.js";
+import DLMM, {
+  BinArrayBitmapExtension,
+  isOverflowDefaultBinArrayBitmap,
+  BIN_ARRAY_BITMAP_SIZE,
+  LbPair,
   RemainingAccountInfo,
+  createProgram,
+  deriveBinArrayBitmapExtension,
+  deriveOracle,
+  deriveEventAuthority,
 } from "@meteora-ag/dlmm";
-import { AccountMeta, PublicKey } from "@solana/web3.js";
-import { deriveZapAuthorityAddress } from "../pda";
+import { getExtraAccountMetasForTransferHook } from "./token2022";
 
-export function deriveDlmmEventAuthority(programId: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("__event_authority")],
-    programId
-  )[0];
+export async function getLbPairState(
+  connection: Connection,
+  lbPair: PublicKey
+): Promise<LbPair> {
+  const dlmmClient = await DLMM.create(connection, lbPair, {
+    cluster: "mainnet-beta",
+    programId: new PublicKey(DLMM_PROGRAM_ID),
+  });
+  return dlmmClient.lbPair;
 }
 
-export function convertAccountTypeToNumber(accountType: object): number {
-  if (JSON.stringify(accountType) === JSON.stringify({ transferHookX: {} })) {
-    return 0;
+export async function getBinArrayBitmapExtension(
+  connection: Connection,
+  binArray: PublicKey
+): Promise<BinArrayBitmapExtension | null> {
+  const program = createProgram(connection);
+  const account = await connection.getAccountInfo(binArray);
+  if (!account) {
+    return null;
   }
-
-  if (JSON.stringify(accountType) === JSON.stringify({ transferHookY: {} })) {
-    return 1;
-  }
-  if (
-    JSON.stringify(accountType) === JSON.stringify({ transferHookReward: {} })
-  ) {
-    return 2;
-  }
+  return program.coder.accounts.decode(
+    "binArrayBitmapExtension",
+    Buffer.from(account.data)
+  );
 }
 
-export function getSwapDlmmAccounts(
-  poolAddress: PublicKey,
-  lbPairState: LbPair,
-  binArrayBitmapExtension: BinArrayBitmapExtensionAccount | null,
-  inputTokenAccount: PublicKey,
-  outputTokenAccount: PublicKey,
-  oracle: PublicKey,
-  dlmmProgramId: PublicKey,
+export function getBitFromBinArrayIndexInBitmapExtension(
+  binArrayIndex: BN,
+  state: BinArrayBitmapExtension
+) {
+  // In extension, the range start with -513 and 512
+  // Brain burst, let's just shift back to the actual index and calculate from there ...
+  const idx = binArrayIndex.isNeg()
+    ? binArrayIndex.add(new BN(1)).abs().sub(BIN_ARRAY_BITMAP_SIZE)
+    : binArrayIndex.sub(BIN_ARRAY_BITMAP_SIZE);
+
+  const bitmapOffset = idx.div(BIN_ARRAY_BITMAP_SIZE);
+
+  const bitmap = binArrayIndex.isNeg()
+    ? state.negativeBinArrayBitmap[bitmapOffset.toNumber()]
+    : state.positiveBinArrayBitmap[bitmapOffset.toNumber()];
+
+  const { div: offsetToU64InBitmap, mod: offsetToBit } = idx.divmod(new BN(64));
+
+  // Each U512 have 8 u64
+  const { mod: offsetToU64InChunkBitmap } = offsetToU64InBitmap.divmod(
+    new BN(8)
+  );
+
+  if (!bitmap) {
+    console.log(binArrayIndex.toString());
+    console.log(bitmapOffset.toString());
+  }
+
+  const chunkedBitmap = bitmap[offsetToU64InChunkBitmap.toNumber()];
+  return chunkedBitmap.testn(offsetToBit.toNumber());
+}
+
+export function getNextBinArrayIndexWithLiquidity(
+  binArrayIndex: BN,
+  pairState: LbPair,
+  swapForY: boolean,
+  state: BinArrayBitmapExtension | null
+): BN | null {
+  const [minBinArrayIndex, maxBinArrayIndex] = BIN_ARRAY_INDEX_BOUND;
+  const step = swapForY ? new BN(-1) : new BN(1);
+  // Start search from the next bin array index
+  while (true) {
+    if (isOverflowDefaultBinArrayBitmap(binArrayIndex)) {
+      // Search in extension
+      if (state) {
+        const isBitSet = getBitFromBinArrayIndexInBitmapExtension(
+          binArrayIndex,
+          state
+        );
+        if (isBitSet) {
+          return binArrayIndex;
+        }
+      } else {
+        break;
+      }
+    } else {
+      // Because bitmap in pair state is continuous, -512 will be index 0. The add will shift to the actual index.
+      const actualIdx = binArrayIndex.add(BIN_ARRAY_BITMAP_SIZE);
+      // FullBitmap = U1024
+      let { div: offsetInFullBitmap, mod: index } = actualIdx.divmod(
+        new BN(64)
+      );
+      if (
+        pairState.binArrayBitmap[offsetInFullBitmap.toNumber()].testn(
+          index.toNumber()
+        )
+      ) {
+        return binArrayIndex;
+      }
+    }
+    binArrayIndex = binArrayIndex.add(step);
+    if (
+      binArrayIndex.gt(maxBinArrayIndex) ||
+      binArrayIndex.lt(minBinArrayIndex)
+    ) {
+      break;
+    }
+  }
+  return null;
+}
+
+export async function getDlmmRemainingAccounts(
+  connection: Connection,
+  lbPair: PublicKey,
+  user: PublicKey,
+  userInputTokenAccount: PublicKey,
+  userTokenOutAccount: PublicKey,
   tokenXProgram: PublicKey,
-  tokenYProgram: PublicKey
-): Array<{
-  isSigner: boolean;
-  isWritable: boolean;
-  pubkey: PublicKey;
+  tokenYProgram: PublicKey,
+  lbPairState: LbPair
+): Promise<{
+  remainingAccounts: AccountMeta[];
+  remainingAccountsInfo: RemainingAccountInfo;
 }> {
-  const swapAccounts = [
+  let [binArrayBitmapExtension] = deriveBinArrayBitmapExtension(
+    lbPair,
+    DLMM_PROGRAM_ID
+  );
+  const binArrayBitmapExtensionState = await connection.getAccountInfo(
+    binArrayBitmapExtension
+  );
+  if (!binArrayBitmapExtensionState) {
+    binArrayBitmapExtension = new PublicKey(DLMM_PROGRAM_ID);
+  }
+
+  const transferHookXAccounts = await getExtraAccountMetasForTransferHook(
+    connection,
+    lbPairState.tokenXMint
+  );
+  const transferHookYAccounts = await getExtraAccountMetasForTransferHook(
+    connection,
+    lbPairState.tokenYMint
+  );
+  let remainingAccountsInfo: RemainingAccountInfo = { slices: [] };
+
+  if (transferHookXAccounts.length > 0) {
+    remainingAccountsInfo.slices.push({
+      accountsType: AccountsType.TransferHookX,
+      length: transferHookXAccounts.length,
+    });
+  }
+
+  if (transferHookYAccounts.length > 0) {
+    remainingAccountsInfo.slices.push({
+      accountsType: AccountsType.TransferHookY,
+      length: transferHookYAccounts.length,
+    });
+  }
+
+  const [oracle] = deriveOracle(lbPair, DLMM_PROGRAM_ID);
+  const [eventAuthority] = deriveEventAuthority(DLMM_PROGRAM_ID);
+
+  const remainingAccounts: AccountMeta[] = [
     {
       isSigner: false,
       isWritable: true,
-      pubkey: poolAddress,
+      pubkey: lbPair,
     },
     {
       isSigner: false,
       isWritable: false,
-      pubkey: binArrayBitmapExtension
-        ? binArrayBitmapExtension.publicKey
-        : dlmmProgramId,
+      pubkey: binArrayBitmapExtension,
     },
     {
       isSigner: false,
@@ -72,12 +202,12 @@ export function getSwapDlmmAccounts(
     {
       isSigner: false,
       isWritable: true,
-      pubkey: inputTokenAccount,
+      pubkey: userInputTokenAccount,
     },
     {
       isSigner: false,
       isWritable: true,
-      pubkey: outputTokenAccount,
+      pubkey: userTokenOutAccount,
     },
     {
       isSigner: false,
@@ -97,12 +227,12 @@ export function getSwapDlmmAccounts(
     {
       isSigner: false,
       isWritable: true,
-      pubkey: dlmmProgramId, // host fee option
+      pubkey: new PublicKey(DLMM_PROGRAM_ID), // host fee option
     },
     {
-      isSigner: false,
+      isSigner: true,
       isWritable: false,
-      pubkey: deriveZapAuthorityAddress(),
+      pubkey: user,
     },
     {
       isSigner: false,
@@ -122,14 +252,94 @@ export function getSwapDlmmAccounts(
     {
       isSigner: false,
       isWritable: false,
-      pubkey: deriveDlmmEventAuthority(dlmmProgramId),
+      pubkey: eventAuthority,
     },
     {
       isSigner: false,
       isWritable: false,
-      pubkey: dlmmProgramId,
+      pubkey: DLMM_PROGRAM_ID,
     },
   ];
 
-  return swapAccounts;
+  const dlmmClient = await DLMM.create(connection, lbPair, {
+    cluster: "mainnet-beta",
+    programId: new PublicKey(DLMM_PROGRAM_ID),
+  });
+  const binArrays = await dlmmClient.getBinArrayForSwap(true, 5);
+
+  const binArraysAccountMeta: AccountMeta[] = binArrays.map((binArray) => {
+    return {
+      isSigner: false,
+      isWritable: true,
+      pubkey: binArray.publicKey,
+    };
+  });
+
+  remainingAccounts.push(
+    ...[...transferHookXAccounts, ...transferHookYAccounts]
+  );
+  remainingAccounts.push(...binArraysAccountMeta);
+
+  return {
+    remainingAccounts,
+    remainingAccountsInfo,
+  };
+}
+
+export function convertAccountTypeToNumber(accountType: object): number {
+  if (JSON.stringify(accountType) === JSON.stringify({ transferHookX: {} })) {
+    return 0;
+  }
+
+  if (JSON.stringify(accountType) === JSON.stringify({ transferHookY: {} })) {
+    return 1;
+  }
+
+  if (
+    JSON.stringify(accountType) === JSON.stringify({ transferHookReward: {} })
+  ) {
+    return 2;
+  }
+
+  throw new Error(`Unknown account type: ${JSON.stringify(accountType)}`);
+}
+
+/**
+ * Creates payload data for DLMM swap instruction
+ * @param amountIn - The input amount for the swap
+ * @param minimumSwapAmountOut - The minimum amount out for the swap
+ * @param remainingAccountsInfo - Information about remaining accounts including slices
+ * @returns Buffer containing the payload data
+ * Discriminator (8 bytes): [65, 75, 63, 76, 235, 91, 91, 136] - identifies this as a DLMM swap2 instruction.
+ * Amount In (8 bytes): u64 little-endian - the swap amount (modified by zap program at runtime).
+ * Minimum Amount Out (8 bytes): u64 little-endian - slippage protection (static value).
+ * Slice Count (4 bytes): u32 little-endian - number of account type slices.
+ * Slices Data (2 bytes per slice): Each slice contains:
+ * -> Account Type (1 byte): enum value (0=TransferHookX, 1=TransferHookY, 2=TransferHookReward).
+ * -> Length (1 byte): number of accounts in this slice.
+ */
+export function createDlmmSwapPayload(
+  amountIn: BN,
+  minimumSwapAmountOut: BN,
+  remainingAccountsInfo: RemainingAccountInfo
+): Buffer {
+  const sliceCount = Buffer.alloc(4);
+  sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
+
+  const slicesData = Buffer.concat(
+    remainingAccountsInfo.slices.map((slice) => {
+      const sliceBuffer = Buffer.alloc(2);
+      sliceBuffer.writeUInt8(convertAccountTypeToNumber(slice.accountsType), 0);
+      sliceBuffer.writeUInt8(slice.length, 1);
+      return sliceBuffer;
+    })
+  );
+
+  return Buffer.concat([
+    Buffer.from(DLMM_SWAP_DISCRIMINATOR),
+    amountIn.toArrayLike(Buffer, "le", 8),
+    minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
+    sliceCount,
+    slicesData,
+  ]);
 }

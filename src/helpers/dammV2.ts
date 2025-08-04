@@ -1,39 +1,33 @@
-import { PublicKey } from "@solana/web3.js";
-import {
-  CpAmm,
-  derivePoolAuthority,
-  PoolState,
-  CP_AMM_PROGRAM_ID,
-  getTokenProgram,
-} from "@meteora-ag/cp-amm-sdk";
-import { deriveZapAuthorityAddress } from "../pda";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { DAMM_V2_PROGRAM_ID, DAMM_V2_SWAP_DISCRIMINATOR } from "../constants";
+import { CpAmm, derivePoolAuthority, PoolState } from "@meteora-ag/cp-amm-sdk";
+import { deriveDammV2EventAuthority } from "./pda";
+import BN from "bn.js";
 
-function deriveDammV2EventAuthority() {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("__event_authority")],
-    CP_AMM_PROGRAM_ID
-  )[0];
+export async function getDammV2Pool(
+  connection: Connection,
+  poolAddress: PublicKey
+): Promise<PoolState> {
+  const cpAmmClient = new CpAmm(connection);
+  return await cpAmmClient.fetchPoolState(poolAddress);
 }
 
-export function deriveDammV2PoolAuthority(): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("pool_authority")],
-    CP_AMM_PROGRAM_ID
-  )[0];
-}
-
-export function getSwapDammV2Accounts(
-  pool: PublicKey,
-  poolState: PoolState,
-  inputTokenAccount: PublicKey,
-  outputTokenAccount: PublicKey
-): Array<{
-  isSigner: boolean;
-  isWritable: boolean;
-  pubkey: PublicKey;
-}> {
-  const tokenAProgram = getTokenProgram(poolState.tokenAFlag);
-  const tokenBProgram = getTokenProgram(poolState.tokenBFlag);
+export async function getDammV2RemainingAccounts(
+  poolAddress: PublicKey,
+  user: PublicKey,
+  userInputTokenAccount: PublicKey,
+  userTokenOutAccount: PublicKey,
+  tokenAProgram = TOKEN_PROGRAM_ID,
+  tokenBProgram = TOKEN_PROGRAM_ID,
+  poolState: PoolState
+): Promise<
+  Array<{
+    isSigner: boolean;
+    isWritable: boolean;
+    pubkey: PublicKey;
+  }>
+> {
   const remainingAccounts = [
     {
       isSigner: false,
@@ -43,17 +37,17 @@ export function getSwapDammV2Accounts(
     {
       isSigner: false,
       isWritable: true,
-      pubkey: pool,
+      pubkey: poolAddress,
     },
     {
       isSigner: false,
       isWritable: true,
-      pubkey: inputTokenAccount,
+      pubkey: userInputTokenAccount,
     },
     {
       isSigner: false,
       isWritable: true,
-      pubkey: outputTokenAccount,
+      pubkey: userTokenOutAccount,
     },
     {
       isSigner: false,
@@ -76,9 +70,9 @@ export function getSwapDammV2Accounts(
       pubkey: poolState.tokenBMint,
     },
     {
-      isSigner: false,
+      isSigner: true,
       isWritable: false,
-      pubkey: deriveZapAuthorityAddress(),
+      pubkey: user,
     },
     {
       isSigner: false,
@@ -93,7 +87,7 @@ export function getSwapDammV2Accounts(
     {
       isSigner: false,
       isWritable: false,
-      pubkey: CP_AMM_PROGRAM_ID, // set default referralTokenAccount to null
+      pubkey: DAMM_V2_PROGRAM_ID,
     },
     {
       isSigner: false,
@@ -103,9 +97,29 @@ export function getSwapDammV2Accounts(
     {
       isSigner: false,
       isWritable: false,
-      pubkey: CP_AMM_PROGRAM_ID,
+      pubkey: DAMM_V2_PROGRAM_ID,
     },
   ];
 
   return remainingAccounts;
+}
+
+/**
+ * Creates payload data for DAMM V2 swap instruction
+ * @param amountIn - The input amount for the swap
+ * @param minimumSwapAmountOut - The minimum amount out for the swap
+ * @returns Buffer containing the payload data
+ * Discriminator (8 bytes): [248, 198, 158, 145, 225, 117, 135, 200] - identifies this as a DAMM V2 swap instruction.
+ * Amount In (8 bytes): u64 little-endian - the swap amount (modified by zap program at runtime).
+ * Minimum Amount Out (8 bytes): u64 little-endian - slippage protection (static value).
+ */
+export function createDammV2SwapPayload(
+  amountIn: BN,
+  minimumSwapAmountOut: BN
+): Buffer {
+  return Buffer.concat([
+    Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),
+    amountIn.toArrayLike(Buffer, "le", 8),
+    minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
+  ]);
 }
