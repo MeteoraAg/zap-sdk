@@ -1,20 +1,15 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { DammV2Pool } from "../types";
-import { createDammV2Program } from "./createProgram";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { deriveDammV2EventAuthority, deriveDammV2PoolAuthority } from "./pda";
 import { DAMM_V2_PROGRAM_ID } from "../constants";
+import { CpAmm, PoolState } from "@meteora-ag/cp-amm-sdk";
 
 export async function getDammV2Pool(
   connection: Connection,
   poolAddress: PublicKey
-): Promise<DammV2Pool> {
-  const program = createDammV2Program(connection);
-  const account = await connection.getAccountInfo(poolAddress);
-  if (!account) {
-    throw new Error(`Pool account not found: ${poolAddress.toString()}`);
-  }
-  return program.coder.accounts.decode("pool", Buffer.from(account.data));
+): Promise<PoolState> {
+  const cpAmmClient = new CpAmm(connection);
+  return await cpAmmClient.fetchPoolState(poolAddress);
 }
 
 export async function getDammV2RemainingAccounts(

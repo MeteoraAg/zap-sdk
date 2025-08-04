@@ -1,6 +1,4 @@
 import { AccountMeta, Connection, PublicKey } from "@solana/web3.js";
-import { DlmmRemainingAccountsInfo, LbPairState } from "../types";
-import { createDlmmProgram } from "./createProgram";
 import {
   deriveBinArray,
   deriveBinArrayBitmapExtension,
@@ -9,42 +7,38 @@ import {
 } from "./pda";
 import {
   AccountsType,
-  BIN_ARRAY_BITMAP_SIZE,
   BIN_ARRAY_INDEX_BOUND,
   DLMM_PROGRAM_ID,
-  MAX_BIN_PER_ARRAY,
   MEMO_PROGRAM_ID,
 } from "../constants";
 import BN from "bn.js";
-import { BinArrayBitmapExtension } from "@meteora-ag/dlmm";
+import DLMM, {
+  BinArrayBitmapExtension,
+  binIdToBinArrayIndex,
+  isOverflowDefaultBinArrayBitmap,
+  BIN_ARRAY_BITMAP_SIZE,
+  LbPair,
+  RemainingAccountInfo,
+  createProgram,
+} from "@meteora-ag/dlmm";
 import { getExtraAccountMetasForTransferHook } from "./token2022";
 
 export async function getLbPairState(
   connection: Connection,
   lbPair: PublicKey
-): Promise<LbPairState> {
-  const program = createDlmmProgram(connection);
-  const account = await connection.getAccountInfo(lbPair);
-  if (!account) {
-    throw new Error(`LbPair account not found: ${lbPair.toString()}`);
-  }
-  return program.coder.accounts.decode("lbPair", Buffer.from(account.data));
-}
-
-export function binIdToBinArrayIndex(binId: BN) {
-  if (binId.isNeg()) {
-    const idx = binId.add(new BN(1)).div(MAX_BIN_PER_ARRAY);
-    return idx.sub(new BN(1));
-  }
-  const idx = binId.div(MAX_BIN_PER_ARRAY);
-  return idx;
+): Promise<LbPair> {
+  const dlmmClient = await DLMM.create(connection, lbPair, {
+    cluster: "mainnet-beta",
+    programId: new PublicKey(DLMM_PROGRAM_ID),
+  });
+  return dlmmClient.lbPair;
 }
 
 export async function getBinArrayBitmapExtension(
   connection: Connection,
   binArray: PublicKey
 ): Promise<BinArrayBitmapExtension | null> {
-  const program = createDlmmProgram(connection);
+  const program = createProgram(connection);
   const account = await connection.getAccountInfo(binArray);
   if (!account) {
     return null;
@@ -109,13 +103,6 @@ export async function getBinArraysForSwap(
   return binArrays;
 }
 
-export function isOverflowDefaultBinArrayBitmap(binArrayIndex: BN) {
-  return (
-    binArrayIndex.gt(BIN_ARRAY_BITMAP_SIZE.sub(new BN(1))) ||
-    binArrayIndex.lt(BIN_ARRAY_BITMAP_SIZE.neg())
-  );
-}
-
 export function getBitFromBinArrayIndexInBitmapExtension(
   binArrayIndex: BN,
   state: BinArrayBitmapExtension
@@ -150,7 +137,7 @@ export function getBitFromBinArrayIndexInBitmapExtension(
 
 export function getNextBinArrayIndexWithLiquidity(
   binArrayIndex: BN,
-  pairState: LbPairState,
+  pairState: LbPair,
   swapForY: boolean,
   state: BinArrayBitmapExtension | null
 ): BN | null {
@@ -207,7 +194,7 @@ export async function getDlmmRemainingAccounts(
   tokenYProgram: PublicKey
 ): Promise<{
   remainingAccounts: AccountMeta[];
-  remainingAccountsInfo: DlmmRemainingAccountsInfo;
+  remainingAccountsInfo: RemainingAccountInfo;
 }> {
   const lbPairState = await getLbPairState(connection, lbPair);
   let binArrayBitmapExtension = deriveBinArrayBitmapExtension(lbPair);
@@ -226,7 +213,7 @@ export async function getDlmmRemainingAccounts(
     connection,
     lbPairState.tokenYMint
   );
-  let remainingAccountsInfo: DlmmRemainingAccountsInfo = { slices: [] };
+  let remainingAccountsInfo: RemainingAccountInfo = { slices: [] };
 
   if (transferHookXAccounts.length > 0) {
     remainingAccountsInfo.slices.push({
@@ -242,7 +229,6 @@ export async function getDlmmRemainingAccounts(
     });
   }
 
-  const oracle = deriveOracle(lbPair);
   const remainingAccounts = [
     {
       isSigner: false,

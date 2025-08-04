@@ -1,37 +1,23 @@
 import { PublicKey } from "@solana/web3.js";
-import JupIDL from "./idl/jupiter/idl.json";
-import CpAmmIDL from "./idl/damm-v2/idl.json";
-import LbClmmIDL from "./idl/dlmm/idl.json";
 import BN from "bn.js";
+import {
+  BIN_ARRAY_BITMAP_SIZE,
+  EXTENSION_BINARRAY_BITMAP_SIZE,
+} from "@meteora-ag/dlmm";
+import ZapIDL from "./idl/zap/idl.json";
 
-export const JUP_V6_PROGRAM_ID = new PublicKey(JupIDL.address);
-export const DAMM_V2_PROGRAM_ID = new PublicKey(CpAmmIDL.address);
-export const DLMM_PROGRAM_ID = new PublicKey(LbClmmIDL.address);
-
+export const ZAP_PROGRAM_ID = new PublicKey(ZapIDL.address);
+export const JUP_V6_PROGRAM_ID = new PublicKey(
+  "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+);
+export const DAMM_V2_PROGRAM_ID = new PublicKey(
+  "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+);
+export const DLMM_PROGRAM_ID = new PublicKey(
+  "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"
+);
 export const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
-);
-
-export const CONSTANTS = LbClmmIDL.constants;
-export const BIN_ARRAY_BITMAP_SIZE = new BN(
-  CONSTANTS.find((constant) => constant.name === "BIN_ARRAY_BITMAP_SIZE")
-    ?.value || "0"
-);
-
-export const MAX_BIN_PER_ARRAY = new BN(
-  CONSTANTS.find((constant) => constant.name === "MAX_BIN_PER_ARRAY")?.value ||
-    "0"
-);
-
-export const DEFAULT_BITMAP_RANGE = [
-  BIN_ARRAY_BITMAP_SIZE.neg(),
-  BIN_ARRAY_BITMAP_SIZE.sub(new BN(1)),
-];
-
-export const EXTENSION_BINARRAY_BITMAP_SIZE = new BN(
-  CONSTANTS.find(
-    (constant) => constant.name === "EXTENSION_BINARRAY_BITMAP_SIZE"
-  )?.value || "0"
 );
 
 export const BIN_ARRAY_INDEX_BOUND = [

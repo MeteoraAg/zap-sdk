@@ -6,8 +6,6 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
-import { CpAmm as CpAmmTypes } from "./idl/damm-v2/idl";
-import { LbClmm as LbClmmTypes } from "./idl/dlmm/idl";
 
 export type ZapProgram = Program<Zap>;
 
@@ -120,12 +118,3 @@ export interface JupiterSwapInstructionResponse {
     };
   };
 }
-
-export type DammV2Pool = IdlAccounts<CpAmmTypes>["pool"];
-export type DammV2Position = IdlAccounts<CpAmmTypes>["position"];
-
-export type LbPairState = IdlAccounts<LbClmmTypes>["lbPair"];
-export type DlmmRemainingAccountsInfo =
-  IdlTypes<LbClmmTypes>["remainingAccountsInfo"];
-export type BinArrayBitmapExtension =
-  IdlTypes<LbClmmTypes>["binArrayBitmapExtension"];

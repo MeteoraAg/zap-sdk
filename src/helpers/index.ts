@@ -3,6 +3,5 @@ export * from "./dammV2";
 export * from "./pda";
 export * from "./common";
 export * from "./token";
-export * from "./createProgram";
 export * from "./dlmm";
 export * from "./token2022";
