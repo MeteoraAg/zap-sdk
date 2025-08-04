@@ -109,6 +109,9 @@ export async function getDammV2RemainingAccounts(
  * @param amountIn - The input amount for the swap
  * @param minimumSwapAmountOut - The minimum amount out for the swap
  * @returns Buffer containing the payload data
+ * Discriminator (8 bytes): [248, 198, 158, 145, 225, 117, 135, 200] - identifies this as a DAMM V2 swap instruction.
+ * Amount In (8 bytes): u64 little-endian - the swap amount (modified by zap program at runtime).
+ * Minimum Amount Out (8 bytes): u64 little-endian - slippage protection (static value).
  */
 export function createDammV2SwapPayload(
   amountIn: BN,

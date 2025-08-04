@@ -71,14 +71,14 @@ async function main() {
       liquidityDelta,
       poolState.sqrtPrice,
       poolState.sqrtMaxPrice,
-      Rounding.Up
+      Rounding.Down
     );
 
     const amountBRemoved = getAmountBFromLiquidityDelta(
       liquidityDelta,
       poolState.sqrtPrice,
       poolState.sqrtMinPrice,
-      Rounding.Up
+      Rounding.Down
     );
 
     console.log({

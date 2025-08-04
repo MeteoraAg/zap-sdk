@@ -310,6 +310,13 @@ export function convertAccountTypeToNumber(accountType: object): number {
  * @param minimumSwapAmountOut - The minimum amount out for the swap
  * @param remainingAccountsInfo - Information about remaining accounts including slices
  * @returns Buffer containing the payload data
+ * Discriminator (8 bytes): [65, 75, 63, 76, 235, 91, 91, 136] - identifies this as a DLMM swap2 instruction.
+ * Amount In (8 bytes): u64 little-endian - the swap amount (modified by zap program at runtime).
+ * Minimum Amount Out (8 bytes): u64 little-endian - slippage protection (static value).
+ * Slice Count (4 bytes): u32 little-endian - number of account type slices.
+ * Slices Data (2 bytes per slice): Each slice contains:
+ * -> Account Type (1 byte): enum value (0=TransferHookX, 1=TransferHookY, 2=TransferHookReward).
+ * -> Length (1 byte): number of accounts in this slice.
  */
 export function createDlmmSwapPayload(
   amountIn: BN,
