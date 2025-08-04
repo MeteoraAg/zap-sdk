@@ -16,8 +16,8 @@ export type ZapOutParams = {
   zapOutParams: ZapOutParameters;
   remainingAccounts: AccountMeta[];
   ammProgram: PublicKey;
-  preInstructions?: TransactionInstruction[];
-  postInstructions?: TransactionInstruction[];
+  preInstructions: TransactionInstruction[];
+  postInstructions: TransactionInstruction[];
 };
 
 export type ZapOutThroughDammV2Params = {

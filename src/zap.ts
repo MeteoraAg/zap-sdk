@@ -27,6 +27,7 @@ import {
   getLbPairState,
   wrapSOLInstruction,
   unwrapSOLInstruction,
+  getTokenProgram,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -43,17 +44,9 @@ import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
 export class Zap {
   private connection: Connection;
   private zapProgram: ZapProgram;
-  private cluster: Cluster;
-  private commitment: Commitment;
-  constructor(
-    connection: Connection,
-    cluster: Cluster = "mainnet-beta",
-    commitment: Commitment = "confirmed"
-  ) {
+  constructor(connection: Connection) {
     this.connection = connection;
-    this.cluster = cluster;
     this.zapProgram = new Program(ZapIDL as ZapTypes, { connection });
-    this.commitment = commitment;
   }
 
   /////// ZAPOUT PROGRAM ///////
@@ -86,8 +79,8 @@ export class Zap {
         ammProgram,
       })
       .remainingAccounts(remainingAccounts)
-      .preInstructions(preInstructions || [])
-      .postInstructions(postInstructions || [])
+      .preInstructions(preInstructions)
+      .postInstructions(postInstructions)
       .transaction();
   }
 
@@ -292,13 +285,13 @@ export class Zap {
     ).value.amount;
 
     const remainingAccounts = await getDammV2RemainingAccounts(
-      this.connection,
       poolAddress,
       user,
       userInputMintAta,
       outputTokenAccountAta,
-      inputTokenProgram,
-      outputTokenProgram
+      getTokenProgram(poolState.tokenAFlag),
+      getTokenProgram(poolState.tokenBFlag),
+      poolState
     );
 
     const payloadData = Buffer.concat([
@@ -418,8 +411,9 @@ export class Zap {
         user,
         userInputMintAta,
         outputTokenAccountAta,
-        inputTokenProgram,
-        outputTokenProgram
+        getTokenProgram(lbPairState.tokenMintXProgramFlag),
+        getTokenProgram(lbPairState.tokenMintYProgramFlag),
+        lbPairState
       );
 
     const sliceCount = Buffer.alloc(4);

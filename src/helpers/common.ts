@@ -1,4 +1,8 @@
-import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
 
 export async function getTokenProgramFromMint(
@@ -31,4 +35,8 @@ export async function getTokenProgramFromMint(
     );
     return TOKEN_PROGRAM_ID;
   }
+}
+
+export function getTokenProgram(flag: number): PublicKey {
+  return flag == 0 ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
 }

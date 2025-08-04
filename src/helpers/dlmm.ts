@@ -1,11 +1,5 @@
 import { AccountMeta, Connection, PublicKey } from "@solana/web3.js";
 import {
-  deriveBinArray,
-  deriveBinArrayBitmapExtension,
-  deriveDlmmEventAuthority,
-  deriveOracle,
-} from "./pda";
-import {
   AccountsType,
   BIN_ARRAY_INDEX_BOUND,
   DLMM_PROGRAM_ID,
@@ -20,6 +14,10 @@ import DLMM, {
   LbPair,
   RemainingAccountInfo,
   createProgram,
+  deriveBinArrayBitmapExtension,
+  deriveOracle,
+  deriveEventAuthority,
+  deriveBinArray,
 } from "@meteora-ag/dlmm";
 import { getExtraAccountMetasForTransferHook } from "./token2022";
 
@@ -61,7 +59,10 @@ export async function getBinArraysForSwap(
   const lbPairState = await getLbPairState(connection, lbPair);
   const activeBinArrayIdx = binIdToBinArrayIndex(new BN(lbPairState.activeId));
 
-  const bitmapExtension = deriveBinArrayBitmapExtension(lbPair);
+  const [bitmapExtension] = deriveBinArrayBitmapExtension(
+    lbPair,
+    DLMM_PROGRAM_ID
+  );
 
   const bitmapExtState = await getBinArrayBitmapExtension(
     connection,
@@ -89,7 +90,11 @@ export async function getBinArraysForSwap(
     if (!nextBinArrayIndex) {
       break;
     } else {
-      const binArray = deriveBinArray(lbPair, nextBinArrayIndex);
+      const [binArray] = deriveBinArray(
+        lbPair,
+        nextBinArrayIndex,
+        DLMM_PROGRAM_ID
+      );
 
       binArrays.push(binArray);
       if (swapForY) {
@@ -191,14 +196,17 @@ export async function getDlmmRemainingAccounts(
   userInputTokenAccount: PublicKey,
   userTokenOutAccount: PublicKey,
   tokenXProgram: PublicKey,
-  tokenYProgram: PublicKey
+  tokenYProgram: PublicKey,
+  lbPairState: LbPair
 ): Promise<{
   remainingAccounts: AccountMeta[];
   remainingAccountsInfo: RemainingAccountInfo;
 }> {
-  const lbPairState = await getLbPairState(connection, lbPair);
-  let binArrayBitmapExtension = deriveBinArrayBitmapExtension(lbPair);
-  let binArrayBitmapExtensionState = await connection.getAccountInfo(
+  let [binArrayBitmapExtension] = deriveBinArrayBitmapExtension(
+    lbPair,
+    DLMM_PROGRAM_ID
+  );
+  const binArrayBitmapExtensionState = await connection.getAccountInfo(
     binArrayBitmapExtension
   );
   if (!binArrayBitmapExtensionState) {
@@ -229,7 +237,10 @@ export async function getDlmmRemainingAccounts(
     });
   }
 
-  const remainingAccounts = [
+  const [oracle] = deriveOracle(lbPair, DLMM_PROGRAM_ID);
+  const [eventAuthority] = deriveEventAuthority(DLMM_PROGRAM_ID);
+
+  const remainingAccounts: AccountMeta[] = [
     {
       isSigner: false,
       isWritable: true,
@@ -273,7 +284,7 @@ export async function getDlmmRemainingAccounts(
     {
       isSigner: false,
       isWritable: true,
-      pubkey: deriveOracle(lbPair),
+      pubkey: oracle,
     },
     {
       isSigner: false,
@@ -303,7 +314,7 @@ export async function getDlmmRemainingAccounts(
     {
       isSigner: false,
       isWritable: false,
-      pubkey: deriveDlmmEventAuthority(),
+      pubkey: eventAuthority,
     },
     {
       isSigner: false,

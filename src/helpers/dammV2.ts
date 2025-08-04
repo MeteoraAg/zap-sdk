@@ -1,8 +1,8 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { deriveDammV2EventAuthority, deriveDammV2PoolAuthority } from "./pda";
 import { DAMM_V2_PROGRAM_ID } from "../constants";
-import { CpAmm, PoolState } from "@meteora-ag/cp-amm-sdk";
+import { CpAmm, derivePoolAuthority, PoolState } from "@meteora-ag/cp-amm-sdk";
+import { deriveDammV2EventAuthority } from "./pda";
 
 export async function getDammV2Pool(
   connection: Connection,
@@ -13,13 +13,13 @@ export async function getDammV2Pool(
 }
 
 export async function getDammV2RemainingAccounts(
-  connection: Connection,
   poolAddress: PublicKey,
   user: PublicKey,
   userInputTokenAccount: PublicKey,
   userTokenOutAccount: PublicKey,
   tokenAProgram = TOKEN_PROGRAM_ID,
-  tokenBProgram = TOKEN_PROGRAM_ID
+  tokenBProgram = TOKEN_PROGRAM_ID,
+  poolState: PoolState
 ): Promise<
   Array<{
     isSigner: boolean;
@@ -27,12 +27,11 @@ export async function getDammV2RemainingAccounts(
     pubkey: PublicKey;
   }>
 > {
-  const poolState = await getDammV2Pool(connection, poolAddress);
   const remainingAccounts = [
     {
       isSigner: false,
       isWritable: false,
-      pubkey: deriveDammV2PoolAuthority(),
+      pubkey: derivePoolAuthority(),
     },
     {
       isSigner: false,
