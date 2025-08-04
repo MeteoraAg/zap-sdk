@@ -1,8 +1,9 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { DAMM_V2_PROGRAM_ID } from "../constants";
+import { DAMM_V2_PROGRAM_ID, DAMM_V2_SWAP_DISCRIMINATOR } from "../constants";
 import { CpAmm, derivePoolAuthority, PoolState } from "@meteora-ag/cp-amm-sdk";
 import { deriveDammV2EventAuthority } from "./pda";
+import BN from "bn.js";
 
 export async function getDammV2Pool(
   connection: Connection,
@@ -101,4 +102,21 @@ export async function getDammV2RemainingAccounts(
   ];
 
   return remainingAccounts;
+}
+
+/**
+ * Creates payload data for DAMM V2 swap instruction
+ * @param amountIn - The input amount for the swap
+ * @param minimumSwapAmountOut - The minimum amount out for the swap
+ * @returns Buffer containing the payload data
+ */
+export function createDammV2SwapPayload(
+  amountIn: BN,
+  minimumSwapAmountOut: BN
+): Buffer {
+  return Buffer.concat([
+    Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),
+    amountIn.toArrayLike(Buffer, "le", 8),
+    minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
+  ]);
 }

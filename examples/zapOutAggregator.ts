@@ -143,7 +143,6 @@ async function main() {
       preInstructions.push(outputTokenAccountIx);
     }
 
-    // Parallel quote fetching for all protocols
     console.log("Fetching quotes from all protocols...");
     const [dammV2Quote, dlmmQuote, jupiterQuote] = await Promise.allSettled([
       cpAmm.getQuote({
@@ -206,7 +205,6 @@ async function main() {
       );
     }
 
-    // Find best quote with improved comparison logic
     let bestQuoteValue: BN | null = null;
     let bestProtocol: string | null = null;
 

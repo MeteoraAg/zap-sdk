@@ -3,12 +3,12 @@ import {
   AccountsType,
   BIN_ARRAY_INDEX_BOUND,
   DLMM_PROGRAM_ID,
+  DLMM_SWAP_DISCRIMINATOR,
   MEMO_PROGRAM_ID,
 } from "../constants";
 import BN from "bn.js";
 import DLMM, {
   BinArrayBitmapExtension,
-  binIdToBinArrayIndex,
   isOverflowDefaultBinArrayBitmap,
   BIN_ARRAY_BITMAP_SIZE,
   LbPair,
@@ -17,7 +17,6 @@ import DLMM, {
   deriveBinArrayBitmapExtension,
   deriveOracle,
   deriveEventAuthority,
-  deriveBinArray,
 } from "@meteora-ag/dlmm";
 import { getExtraAccountMetasForTransferHook } from "./token2022";
 
@@ -303,4 +302,37 @@ export function convertAccountTypeToNumber(accountType: object): number {
   }
 
   throw new Error(`Unknown account type: ${JSON.stringify(accountType)}`);
+}
+
+/**
+ * Creates payload data for DLMM swap instruction
+ * @param amountIn - The input amount for the swap
+ * @param minimumSwapAmountOut - The minimum amount out for the swap
+ * @param remainingAccountsInfo - Information about remaining accounts including slices
+ * @returns Buffer containing the payload data
+ */
+export function createDlmmSwapPayload(
+  amountIn: BN,
+  minimumSwapAmountOut: BN,
+  remainingAccountsInfo: RemainingAccountInfo
+): Buffer {
+  const sliceCount = Buffer.alloc(4);
+  sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
+
+  const slicesData = Buffer.concat(
+    remainingAccountsInfo.slices.map((slice) => {
+      const sliceBuffer = Buffer.alloc(2);
+      sliceBuffer.writeUInt8(convertAccountTypeToNumber(slice.accountsType), 0);
+      sliceBuffer.writeUInt8(slice.length, 1);
+      return sliceBuffer;
+    })
+  );
+
+  return Buffer.concat([
+    Buffer.from(DLMM_SWAP_DISCRIMINATOR),
+    amountIn.toArrayLike(Buffer, "le", 8),
+    minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
+    sliceCount,
+    slicesData,
+  ]);
 }

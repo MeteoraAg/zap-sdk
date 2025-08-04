@@ -13,8 +13,9 @@ import {
 import {
   getDammV2Pool,
   getDammV2RemainingAccounts,
-  convertAccountTypeToNumber,
+  createDammV2SwapPayload,
   getDlmmRemainingAccounts,
+  createDlmmSwapPayload,
   getLbPairState,
 } from "./helpers";
 import {
@@ -22,9 +23,7 @@ import {
   AMOUNT_IN_DLMM_OFFSET,
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   DAMM_V2_PROGRAM_ID,
-  DAMM_V2_SWAP_DISCRIMINATOR,
   DLMM_PROGRAM_ID,
-  DLMM_SWAP_DISCRIMINATOR,
   JUP_V6_PROGRAM_ID,
 } from "./constants";
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
@@ -187,11 +186,7 @@ export class Zap {
       poolState
     );
 
-    const payloadData = Buffer.concat([
-      Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),
-      amountIn.toArrayLike(Buffer, "le", 8),
-      minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
-    ]);
+    const payloadData = createDammV2SwapPayload(amountIn, minimumSwapAmountOut);
 
     const offsetAmountIn = AMOUNT_IN_DAMM_V2_OFFSET;
 
@@ -259,29 +254,11 @@ export class Zap {
         lbPairState
       );
 
-    const sliceCount = Buffer.alloc(4);
-    sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
-
-    // Serialize each slice (accounts_type: u8, length: u8)
-    const slicesData = Buffer.concat(
-      remainingAccountsInfo.slices.map((slice) => {
-        const sliceBuffer = Buffer.alloc(2);
-        sliceBuffer.writeUInt8(
-          convertAccountTypeToNumber(slice.accountsType),
-          0
-        );
-        sliceBuffer.writeUInt8(slice.length, 1);
-        return sliceBuffer;
-      })
+    const payloadData = createDlmmSwapPayload(
+      amountIn,
+      minimumSwapAmountOut,
+      remainingAccountsInfo
     );
-
-    const payloadData = Buffer.concat([
-      Buffer.from(DLMM_SWAP_DISCRIMINATOR),
-      amountIn.toArrayLike(Buffer, "le", 8),
-      minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
-      sliceCount,
-      slicesData,
-    ]);
 
     return await this.zapOut({
       userTokenInAccount: inputTokenAccount,
