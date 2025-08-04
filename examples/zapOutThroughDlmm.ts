@@ -4,6 +4,7 @@ import {
   Keypair,
   Transaction,
   sendAndConfirmTransaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
@@ -12,7 +13,11 @@ import {
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import { getTokenProgramFromMint } from "../src/helpers";
+import {
+  getTokenProgramFromMint,
+  unwrapSOLInstruction,
+  wrapSOLInstruction,
+} from "../src/helpers";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -21,44 +26,28 @@ async function main() {
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const anotherWallet = Keypair.fromSecretKey(Uint8Array.from(""));
-  console.log(`Using wallet: ${anotherWallet.publicKey.toString()}`);
+  console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
   const zap = new Zap(connection);
 
-  const inputMint = NATIVE_MINT;
+  const inputMint = new PublicKey(
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  );
+  const outputMint = new PublicKey(
+    "So11111111111111111111111111111111111111112"
+  );
 
   const lbPairAddress = new PublicKey(
     "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"
   );
 
-  const swapAmount = new BN(10000000);
+  const swapAmount = new BN(1000000);
 
   try {
-    console.log("Getting swap instruction from Dlmm...");
-
-    const { blockhash } = await connection.getLatestBlockhash();
-
-    // Get token programs for input mint
-    console.log("Getting token programs...");
-
     const inputTokenProgram = await getTokenProgramFromMint(
       connection,
       inputMint
     );
-
-    console.log("Building zap transaction...");
-    const zapOutTx = await zap.zapOutThroughDlmm({
-      user: wallet.publicKey,
-      lbPairAddress,
-      inputMint,
-      inputTokenProgram: inputTokenProgram,
-      amountIn: new BN(swapAmount.toString()),
-      minimumSwapAmountOut: new BN(0),
-      maxSwapAmount: new BN(swapAmount.toString()),
-      percentageToZapOut: 100,
-    });
-
-    const transaction = new Transaction();
 
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputMint,
@@ -67,7 +56,27 @@ async function main() {
       inputTokenProgram
     );
 
-    if (!inputMint.equals(NATIVE_MINT)) {
+    const outputTokenAccount = getAssociatedTokenAddressSync(
+      outputMint,
+      wallet.publicKey,
+      true,
+      inputTokenProgram
+    );
+
+    const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    // simulate action (can be claim fee or remove liquidity etc.)
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapInstructions = wrapSOLInstruction(
+        wallet.publicKey,
+        inputTokenAccount,
+        BigInt(swapAmount.toString()),
+        inputTokenProgram
+      );
+
+      preInstructions.push(...wrapInstructions);
+    } else {
       const sourceTokenAccount = getAssociatedTokenAddressSync(
         inputMint,
         anotherWallet.publicKey,
@@ -85,10 +94,40 @@ async function main() {
         [],
         inputTokenProgram
       );
-      transaction.add(transferIx);
+
+      preInstructions.push(transferIx);
     }
 
+    // can unwrap SOL if needed
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(
+        wallet.publicKey,
+        wallet.publicKey
+      );
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
+
+    const zapOutTx = await zap.zapOutThroughDlmm({
+      user: wallet.publicKey,
+      lbPairAddress,
+      inputTokenAccount,
+      outputTokenAccount,
+      amountIn: new BN(swapAmount.toString()),
+      minimumSwapAmountOut: new BN(0),
+      maxSwapAmount: new BN(swapAmount.toString()),
+      percentageToZapOut: 100,
+      preInstructions,
+      postInstructions,
+    });
+
+    const transaction = new Transaction();
+
     transaction.add(zapOutTx);
+
+    const { blockhash } = await connection.getLatestBlockhash();
 
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = wallet.publicKey;

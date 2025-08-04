@@ -23,35 +23,36 @@ export type ZapOutParams = {
 export type ZapOutThroughDammV2Params = {
   user: PublicKey;
   poolAddress: PublicKey;
-  inputMint: PublicKey;
-  inputTokenProgram: PublicKey;
-  amountIn: BN;
-  minimumSwapAmountOut: BN;
-  maxSwapAmount: BN;
-  percentageToZapOut: number;
-};
-
-export type ZapOutThroughDlmmParams = {
-  user: PublicKey;
-  lbPairAddress: PublicKey;
-  inputMint: PublicKey;
-  inputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
   percentageToZapOut: number;
   preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
+};
+
+export type ZapOutThroughDlmmParams = {
+  user: PublicKey;
+  lbPairAddress: PublicKey;
+  inputTokenAccount: PublicKey;
+  outputTokenAccount: PublicKey;
+  amountIn: BN;
+  minimumSwapAmountOut: BN;
+  maxSwapAmount: BN;
+  percentageToZapOut: number;
+  preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
 };
 
 export interface ZapOutThroughJupiterParams {
-  user: PublicKey;
-  inputMint: PublicKey;
-  outputMint: PublicKey;
-  inputTokenProgram: PublicKey;
-  outputTokenProgram: PublicKey;
+  inputTokenAccount: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   maxSwapAmount: BN;
   percentageToZapOut: number;
+  preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
 }
 
 export interface JupiterQuoteResponse {

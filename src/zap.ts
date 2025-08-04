@@ -1,11 +1,4 @@
-import {
-  Cluster,
-  Commitment,
-  Connection,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
@@ -18,15 +11,11 @@ import {
 } from "./types";
 
 import {
-  getOrCreateATAInstruction,
-  getTokenProgramFromMint,
   getDammV2Pool,
   getDammV2RemainingAccounts,
   convertAccountTypeToNumber,
   getDlmmRemainingAccounts,
   getLbPairState,
-  wrapSOLInstruction,
-  unwrapSOLInstruction,
   getTokenProgram,
 } from "./helpers";
 import {
@@ -39,7 +28,6 @@ import {
   DLMM_SWAP_DISCRIMINATOR,
   JUP_V6_PROGRAM_ID,
 } from "./constants";
-import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
 
 export class Zap {
   private connection: Connection;
@@ -103,62 +91,17 @@ export class Zap {
     params: ZapOutThroughJupiterParams
   ): Promise<Transaction> {
     const {
-      user,
-      inputMint,
-      outputMint,
+      inputTokenAccount,
       jupiterSwapResponse,
-      inputTokenProgram,
-      outputTokenProgram,
       maxSwapAmount,
       percentageToZapOut,
+      preInstructions,
+      postInstructions,
     } = params;
 
-    // user inputMint ATA
-    const userInputMintAta = getAssociatedTokenAddressSync(
-      inputMint,
-      user,
-      true,
-      inputTokenProgram
-    );
-
     const preUserTokenBalance = (
-      await this.connection.getTokenAccountBalance(userInputMintAta)
+      await this.connection.getTokenAccountBalance(inputTokenAccount)
     ).value.amount;
-
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
-
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapInstructions = wrapSOLInstruction(
-        user,
-        userInputMintAta,
-        BigInt(maxSwapAmount.toString()),
-        inputTokenProgram
-      );
-
-      preInstructions.push(...wrapInstructions);
-    }
-
-    const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
-      await getOrCreateATAInstruction(
-        this.connection,
-        outputMint,
-        user,
-        user,
-        true,
-        outputTokenProgram
-      );
-
-    if (outputTokenAccountAtaIx) {
-      preInstructions.push(outputTokenAccountAtaIx);
-    }
-
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstruction = unwrapSOLInstruction(user, user);
-      if (unwrapInstruction) {
-        postInstructions.push(unwrapInstruction);
-      }
-    }
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -183,7 +126,7 @@ export class Zap {
     const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
 
     return await this.zapOut({
-      userTokenInAccount: userInputMintAta,
+      userTokenInAccount: inputTokenAccount,
       zapOutParams: {
         percentage: percentageToZapOut,
         offsetAmountIn,
@@ -193,8 +136,8 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
-      preInstructions,
-      postInstructions,
+      preInstructions: preInstructions || [],
+      postInstructions: postInstructions || [],
     });
   }
 
@@ -218,77 +161,27 @@ export class Zap {
     const {
       user,
       poolAddress,
-      inputMint,
-      inputTokenProgram,
+      inputTokenAccount,
+      outputTokenAccount,
       amountIn,
       minimumSwapAmountOut,
       maxSwapAmount,
       percentageToZapOut,
+      preInstructions,
+      postInstructions,
     } = params;
 
     const poolState = await getDammV2Pool(this.connection, poolAddress);
 
-    const outputMint = poolState.tokenAMint.equals(inputMint)
-      ? poolState.tokenBMint
-      : poolState.tokenAMint;
-
-    const outputTokenProgram = await getTokenProgramFromMint(
-      this.connection,
-      outputMint
-    );
-
-    // user inputMint ATA
-    const userInputMintAta = getAssociatedTokenAddressSync(
-      inputMint,
-      user,
-      true,
-      inputTokenProgram
-    );
-
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
-
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapInstructions = wrapSOLInstruction(
-        user,
-        userInputMintAta,
-        BigInt(amountIn.toString()),
-        inputTokenProgram
-      );
-
-      preInstructions.push(...wrapInstructions);
-    }
-
-    const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
-      await getOrCreateATAInstruction(
-        this.connection,
-        outputMint,
-        user,
-        user,
-        true,
-        outputTokenProgram
-      );
-
-    if (outputTokenAccountAtaIx) {
-      preInstructions.push(outputTokenAccountAtaIx);
-    }
-
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstruction = unwrapSOLInstruction(user, user);
-      if (unwrapInstruction) {
-        postInstructions.push(unwrapInstruction);
-      }
-    }
-
     const preUserTokenBalance = (
-      await this.connection.getTokenAccountBalance(userInputMintAta)
+      await this.connection.getTokenAccountBalance(inputTokenAccount)
     ).value.amount;
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
       user,
-      userInputMintAta,
-      outputTokenAccountAta,
+      inputTokenAccount,
+      outputTokenAccount,
       getTokenProgram(poolState.tokenAFlag),
       getTokenProgram(poolState.tokenBFlag),
       poolState
@@ -303,7 +196,7 @@ export class Zap {
     const offsetAmountIn = AMOUNT_IN_DAMM_V2_OFFSET;
 
     return await this.zapOut({
-      userTokenInAccount: userInputMintAta,
+      userTokenInAccount: inputTokenAccount,
       zapOutParams: {
         percentage: percentageToZapOut,
         offsetAmountIn,
@@ -313,8 +206,8 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: DAMM_V2_PROGRAM_ID,
-      preInstructions,
-      postInstructions,
+      preInstructions: preInstructions || [],
+      postInstructions: postInstructions || [],
     });
   }
 
@@ -338,70 +231,20 @@ export class Zap {
     const {
       user,
       lbPairAddress,
-      inputMint,
-      inputTokenProgram,
+      inputTokenAccount,
+      outputTokenAccount,
       amountIn,
       minimumSwapAmountOut,
       maxSwapAmount,
       percentageToZapOut,
+      preInstructions,
+      postInstructions,
     } = params;
 
     const lbPairState = await getLbPairState(this.connection, lbPairAddress);
 
-    const outputMint = lbPairState.tokenXMint.equals(inputMint)
-      ? lbPairState.tokenYMint
-      : lbPairState.tokenXMint;
-
-    const outputTokenProgram = await getTokenProgramFromMint(
-      this.connection,
-      outputMint
-    );
-
-    // user inputMint ATA
-    const userInputMintAta = getAssociatedTokenAddressSync(
-      inputMint,
-      user,
-      true,
-      inputTokenProgram
-    );
-
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
-
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapInstructions = wrapSOLInstruction(
-        user,
-        userInputMintAta,
-        BigInt(amountIn.toString()),
-        inputTokenProgram
-      );
-
-      preInstructions.push(...wrapInstructions);
-    }
-
-    const { ataPubkey: outputTokenAccountAta, ix: outputTokenAccountAtaIx } =
-      await getOrCreateATAInstruction(
-        this.connection,
-        outputMint,
-        user,
-        user,
-        true,
-        outputTokenProgram
-      );
-
-    if (outputTokenAccountAtaIx) {
-      preInstructions.push(outputTokenAccountAtaIx);
-    }
-
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstruction = unwrapSOLInstruction(user, user);
-      if (unwrapInstruction) {
-        postInstructions.push(unwrapInstruction);
-      }
-    }
-
     const preUserTokenBalance = (
-      await this.connection.getTokenAccountBalance(userInputMintAta)
+      await this.connection.getTokenAccountBalance(inputTokenAccount)
     ).value.amount;
 
     const { remainingAccounts, remainingAccountsInfo } =
@@ -409,8 +252,8 @@ export class Zap {
         this.connection,
         lbPairAddress,
         user,
-        userInputMintAta,
-        outputTokenAccountAta,
+        inputTokenAccount,
+        outputTokenAccount,
         getTokenProgram(lbPairState.tokenMintXProgramFlag),
         getTokenProgram(lbPairState.tokenMintYProgramFlag),
         lbPairState
@@ -441,7 +284,7 @@ export class Zap {
     ]);
 
     return await this.zapOut({
-      userTokenInAccount: userInputMintAta,
+      userTokenInAccount: inputTokenAccount,
       zapOutParams: {
         percentage: percentageToZapOut,
         offsetAmountIn: AMOUNT_IN_DLMM_OFFSET,
@@ -451,8 +294,8 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: DLMM_PROGRAM_ID,
-      preInstructions,
-      postInstructions,
+      preInstructions: preInstructions || [],
+      postInstructions: postInstructions || [],
     });
   }
 }
