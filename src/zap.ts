@@ -16,7 +16,6 @@ import {
   convertAccountTypeToNumber,
   getDlmmRemainingAccounts,
   getLbPairState,
-  getTokenProgram,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -28,6 +27,7 @@ import {
   DLMM_SWAP_DISCRIMINATOR,
   JUP_V6_PROGRAM_ID,
 } from "./constants";
+import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
 
 export class Zap {
   private connection: Connection;
