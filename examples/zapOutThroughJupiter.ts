@@ -7,12 +7,10 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
-import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
 import {
   getJupiterQuote,
   getJupiterSwapInstruction,
   getTokenProgramFromMint,
-  wrapSOLInstruction,
 } from "../src/helpers";
 
 async function main() {
@@ -33,7 +31,7 @@ async function main() {
   const swapAmount = new BN(10000000);
 
   try {
-    console.log("\n1. Getting quote from Jupiter API...");
+    console.log("Getting quote from Jupiter API...");
     const quoteResponse = await getJupiterQuote(
       inputMint,
       outputMint,
@@ -46,16 +44,17 @@ async function main() {
       "https://lite-api.jup.ag"
     );
 
-    console.log("2. Getting swap instruction from Jupiter API...");
+    console.log("Getting swap instruction from Jupiter API...");
     const swapInstructionResponse = await getJupiterSwapInstruction(
       wallet.publicKey,
       quoteResponse
     );
+
     // console.log(swapInstructionResponse);
     const { blockhash } = await connection.getLatestBlockhash();
 
     // Get token programs for input and output mints
-    console.log("3. Getting token programs...");
+    console.log("Getting token programs...");
     const outputTokenProgram = await getTokenProgramFromMint(
       connection,
       outputMint
@@ -80,27 +79,6 @@ async function main() {
 
     const transaction = new Transaction();
 
-    // Add wrap SOL instructions if needed - SAME transaction as zap
-    if (inputMint.equals(NATIVE_MINT)) {
-      console.log("4a. Adding wrap SOL instructions to transaction...");
-      const inputTokenAccount = getAssociatedTokenAddressSync(
-        inputMint,
-        wallet.publicKey,
-        true,
-        inputTokenProgram
-      );
-
-      const wrapInstructions = wrapSOLInstruction(
-        wallet.publicKey,
-        inputTokenAccount,
-        BigInt(swapAmount.toString()),
-        inputTokenProgram
-      );
-
-      // Add wrap instructions first, then zap
-      transaction.add(...wrapInstructions);
-    }
-
     transaction.add(zapOutTx);
 
     transaction.recentBlockhash = blockhash;
@@ -109,7 +87,7 @@ async function main() {
     const simulate = await connection.simulateTransaction(transaction);
     console.log(simulate.value.logs);
 
-    console.log("5. Sending combined wrap + zap transaction...");
+    console.log("Sending zap transaction...");
     const signature = await sendAndConfirmTransaction(
       connection,
       transaction,
