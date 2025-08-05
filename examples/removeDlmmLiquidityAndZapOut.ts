@@ -14,20 +14,13 @@ import {
   getOrCreateATAInstruction,
   getTokenProgramFromMint,
 } from "../src/helpers";
-import {
-  CpAmm,
-  getAmountAFromLiquidityDelta,
-  getAmountBFromLiquidityDelta,
-  getTokenProgram,
-  Rounding,
-} from "@meteora-ag/cp-amm-sdk";
 import DLMM from "@meteora-ag/dlmm";
 import { DLMM_PROGRAM_ID } from "../src";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from(""));
+  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const inputMint = new PublicKey(
@@ -37,16 +30,11 @@ async function main() {
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
   );
 
-  const poolAddress = new PublicKey(
-    "7ccKzmrXBpFHwyZGPqPuKL6bEyWAETSnHwnWe3jEneVc"
-  );
-
   const lbPairAddress = new PublicKey(
     "9NRifL3nKQU84hMTbhE7spakkGy5vq4AvNHNQYr8LkW7"
   );
 
   const zap = new Zap(connection);
-  const cpAmm = new CpAmm(connection);
   const dlmm = await DLMM.create(connection, lbPairAddress, {
     cluster: "mainnet-beta",
     programId: new PublicKey(DLMM_PROGRAM_ID),
@@ -56,57 +44,64 @@ async function main() {
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
 
-    const [poolState, position, currentSlot] = await Promise.all([
-      cpAmm.fetchPoolState(poolAddress),
-      cpAmm.getUserPositionByPool(poolAddress, wallet.publicKey),
-      connection.getSlot(),
-    ]);
-
+    const currentSlot = await connection.getSlot();
     const currentTime = await connection.getBlockTime(currentSlot);
 
-    const liquidityDelta =
-      position[0].positionState.unlockedLiquidity.divn(1000000); // remove liquidity with too small amount
-
-    const amountARemoved = getAmountAFromLiquidityDelta(
-      liquidityDelta,
-      poolState.sqrtPrice,
-      poolState.sqrtMaxPrice,
-      Rounding.Down
+    const { userPositions } = await dlmm.getPositionsByUserAndLbPair(
+      wallet.publicKey
     );
 
-    const amountBRemoved = getAmountBFromLiquidityDelta(
-      liquidityDelta,
-      poolState.sqrtPrice,
-      poolState.sqrtMinPrice,
-      Rounding.Down
-    );
+    if (userPositions.length === 0) {
+      throw new Error("No positions found for this user");
+    }
+
+    let totalAmountXRemoved = new BN(0);
+    let totalAmountYRemoved = new BN(0);
+
+    for (const { positionData } of userPositions) {
+      for (const binData of positionData.positionBinData) {
+        totalAmountXRemoved = totalAmountXRemoved.add(
+          new BN(binData.positionXAmount)
+        );
+        totalAmountYRemoved = totalAmountYRemoved.add(
+          new BN(binData.positionYAmount)
+        );
+      }
+    }
+
+    const amountXRemoved = totalAmountXRemoved.mul(new BN(1)).div(new BN(100));
 
     console.log({
-      amountARemoved: amountARemoved.toString(),
-      amountBRemoved: amountBRemoved.toString(),
+      amountXRemoved: amountXRemoved.toString(),
+      amountYRemoved: totalAmountYRemoved
+        .mul(new BN(1))
+        .div(new BN(100))
+        .toString(),
+      totalAmountX: totalAmountXRemoved.toString(),
+      totalAmountY: totalAmountYRemoved.toString(),
     });
+
+    const removeLiquidityTxs = await Promise.all(
+      userPositions.map(({ publicKey, positionData }) => {
+        const binIdsToRemove = positionData.positionBinData.map(
+          (bin) => bin.binId
+        );
+        return dlmm.removeLiquidity({
+          position: publicKey,
+          user: wallet.publicKey,
+          fromBinId: binIdsToRemove[0],
+          toBinId: binIdsToRemove[binIdsToRemove.length - 1],
+          bps: new BN(1 * 100), // Remove 1% of liquidity
+          shouldClaimAndClose: true,
+        });
+      })
+    );
 
     const transaction = new Transaction();
 
-    const removeLiquidityTx = await cpAmm.removeLiquidity({
-      owner: wallet.publicKey,
-      pool: poolAddress,
-      position: position[0].position,
-      positionNftAccount: position[0].positionNftAccount,
-      liquidityDelta,
-      tokenAAmountThreshold: new BN(0),
-      tokenBAmountThreshold: new BN(0),
-      tokenAMint: poolState.tokenAMint,
-      tokenBMint: poolState.tokenBMint,
-      tokenAVault: poolState.tokenAVault,
-      tokenBVault: poolState.tokenBVault,
-      tokenAProgram: getTokenProgram(poolState.tokenAFlag),
-      tokenBProgram: getTokenProgram(poolState.tokenBFlag),
-      vestings: [],
-      currentPoint: new BN(currentTime ?? 0),
+    removeLiquidityTxs.forEach((tx) => {
+      transaction.add(...tx);
     });
-
-    transaction.add(removeLiquidityTx);
 
     const [inputTokenProgram, outputTokenProgram] = await Promise.all([
       getTokenProgramFromMint(connection, inputMint),
@@ -143,25 +138,17 @@ async function main() {
       preInstructions.push(outputTokenAccountIx);
     }
 
-    console.log("Fetching quotes from all protocols...");
-    const [dammV2Quote, dlmmQuote, jupiterQuote] = await Promise.allSettled([
-      cpAmm.getQuote({
-        inAmount: amountARemoved,
-        inputTokenMint: inputMint,
-        slippage: 0.5,
-        poolState: poolState,
-        currentTime: currentTime ?? 0,
-        currentSlot,
-      }),
+    console.log("Fetching quotes from DLMM and Jupiter...");
+    const [dlmmQuote, jupiterQuote] = await Promise.allSettled([
       dlmm
         .getBinArrayForSwap(true, 5)
         .then((binArrays) =>
-          dlmm.swapQuote(amountARemoved, true, new BN(50), binArrays)
+          dlmm.swapQuote(amountXRemoved, true, new BN(50), binArrays)
         ),
       getJupiterQuote(
         inputMint,
         outputMint,
-        amountARemoved,
+        amountXRemoved,
         50,
         50,
         true,
@@ -171,19 +158,9 @@ async function main() {
     ]);
 
     const quotes = {
-      dammV2: dammV2Quote.status === "fulfilled" ? dammV2Quote.value : null,
       dlmm: dlmmQuote.status === "fulfilled" ? dlmmQuote.value : null,
       jupiter: jupiterQuote.status === "fulfilled" ? jupiterQuote.value : null,
     };
-
-    if (quotes.dammV2) {
-      console.log("DAMM v2 quote:", quotes.dammV2.swapOutAmount.toString());
-    } else {
-      console.log(
-        "DAMM v2 quote failed:",
-        dammV2Quote.status === "rejected" ? dammV2Quote.reason : "Unknown error"
-      );
-    }
 
     if (quotes.dlmm) {
       console.log("DLMM quote:", quotes.dlmm.outAmount.toString());
@@ -208,15 +185,7 @@ async function main() {
     let bestQuoteValue: BN | null = null;
     let bestProtocol: string | null = null;
 
-    if (quotes.dammV2?.swapOutAmount) {
-      bestQuoteValue = quotes.dammV2.swapOutAmount;
-      bestProtocol = "dammV2";
-    }
-
-    if (
-      quotes.dlmm?.outAmount &&
-      (!bestQuoteValue || quotes.dlmm.outAmount.gt(bestQuoteValue))
-    ) {
+    if (quotes.dlmm?.outAmount) {
       bestQuoteValue = quotes.dlmm.outAmount;
       bestProtocol = "dlmm";
     }
@@ -240,28 +209,15 @@ async function main() {
 
     let zapOutTx;
 
-    if (bestProtocol === "dammV2") {
-      zapOutTx = await zap.zapOutThroughDammV2({
-        user: wallet.publicKey,
-        poolAddress,
-        inputTokenAccount,
-        outputTokenAccount,
-        amountIn: amountARemoved,
-        minimumSwapAmountOut: new BN(0),
-        maxSwapAmount: amountARemoved,
-        percentageToZapOut: 100,
-        preInstructions,
-        postInstructions,
-      });
-    } else if (bestProtocol === "dlmm") {
+    if (bestProtocol === "dlmm") {
       zapOutTx = await zap.zapOutThroughDlmm({
         user: wallet.publicKey,
         lbPairAddress,
         inputTokenAccount,
         outputTokenAccount,
-        amountIn: amountARemoved,
+        amountIn: amountXRemoved,
         minimumSwapAmountOut: new BN(0),
-        maxSwapAmount: amountARemoved,
+        maxSwapAmount: amountXRemoved,
         percentageToZapOut: 100,
         preInstructions,
         postInstructions,
