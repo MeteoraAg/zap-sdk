@@ -63,11 +63,7 @@ const remainingAccounts = await getDammV2RemainingAccounts(
   outputTokenProgram
 );
 
-const payloadData = Buffer.concat([
-  Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),
-  amountIn.toArrayLike(Buffer, "le", 8),
-  minimumSwapAmountOut.toArrayLike(Buffer, "le", 8),
-]);
+const payloadData = createDammV2SwapPayload(amountIn, minimumSwapAmountOut);
 
 const transaction = await client.zap.zapOut({
   userTokenInAccount: new PublicKey(
@@ -105,12 +101,12 @@ async zapOutThroughJupiter(params: ZapOutThroughJupiterParams): Promise<Transact
 
 ```typescript
 interface ZapOutThroughJupiterParams {
-  inputTokenAccount: PublicKey;
+  user: PublicKey;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   maxSwapAmount: BN;
   percentageToZapOut: number;
-  preInstructions?: TransactionInstruction[];
-  postInstructions?: TransactionInstruction[];
 }
 ```
 
@@ -140,15 +136,10 @@ const swapInstructionResponse = await getJupiterSwapInstruction(
 
 const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
-const inputTokenAccount = getAssociatedTokenAddressSync(
-  inputMint,
-  wallet.publicKey,
-  true,
-  inputTokenProgram
-);
-
 const zapOutTx = await zap.zapOutThroughJupiter({
-  inputTokenAccount: inputTokenAccount,
+  user: wallet.publicKey,
+  inputMint,
+  outputMint,
   jupiterSwapResponse: swapInstructionResponse,
   maxSwapAmount: new BN(1000000000),
   percentageToZapOut: 100,
@@ -183,14 +174,12 @@ async zapOutThroughDammV2(params: ZapOutThroughDammV2Params): Promise<Transactio
 interface ZapOutThroughDammV2Params {
   user: PublicKey;
   poolAddress: PublicKey;
-  inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
   percentageToZapOut: number;
-  preInstructions?: TransactionInstruction[];
-  postInstructions?: TransactionInstruction[];
 }
 ```
 
@@ -204,25 +193,11 @@ A transaction that can be signed and sent to the network.
 const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const outputMint = new PublicKey("So11111111111111111111111111111111111111112");
 
-const inputTokenAccount = getAssociatedTokenAddressSync(
-  inputMint,
-  wallet.publicKey,
-  true,
-  inputTokenProgram
-);
-
-const outputTokenAccount = getAssociatedTokenAddressSync(
-  outputMint,
-  wallet.publicKey,
-  true,
-  outputTokenProgram
-);
-
 const zapOutTx = await zap.zapOutThroughDlmm({
   user: wallet.publicKey,
   poolAddress: new PublicKey("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"),
-  inputTokenAccount: inputTokenAccount,
-  outputTokenAccount: outputTokenAccount,
+  inputMint,
+  outputMint,
   amountIn: new BN(1000000000),
   minimumSwapAmountOut: new BN(0),
   maxSwapAmount: new BN(1000000000),
@@ -256,14 +231,12 @@ async zapOutThroughDlmm(params: ZapOutThroughDlmmParams): Promise<Transaction>
 interface ZapOutThroughDlmmParams {
   user: PublicKey;
   lbPairAddress: PublicKey;
-  inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
   percentageToZapOut: number;
-  preInstructions?: TransactionInstruction[];
-  postInstructions?: TransactionInstruction[];
 }
 ```
 
@@ -277,25 +250,11 @@ A transaction that can be signed and sent to the network.
 const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const outputMint = new PublicKey("So11111111111111111111111111111111111111112");
 
-const inputTokenAccount = getAssociatedTokenAddressSync(
-  inputMint,
-  wallet.publicKey,
-  true,
-  inputTokenProgram
-);
-
-const outputTokenAccount = getAssociatedTokenAddressSync(
-  outputMint,
-  wallet.publicKey,
-  true,
-  outputTokenProgram
-);
-
 const zapOutTx = await zap.zapOutThroughDlmm({
   user: wallet.publicKey,
   lbPairAddress: new PublicKey("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"),
-  inputTokenAccount: inputTokenAccount,
-  outputTokenAccount: outputTokenAccount,
+  inputMint,
+  outputMint,
   amountIn: new BN(1000000000),
   minimumSwapAmountOut: new BN(0),
   maxSwapAmount: new BN(1000000000),
