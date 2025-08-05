@@ -140,14 +140,6 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstructions = unwrapSOLInstruction(user, user);
-
-      if (unwrapInstructions) {
-        postInstructions.push(unwrapInstructions);
-      }
-    }
-
     const preUserTokenBalance = (
       await this.connection.getTokenAccountBalance(inputTokenAccount)
     ).value.amount;
@@ -173,6 +165,14 @@ export class Zap {
     );
 
     const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
+
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(user, user);
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
 
     return await this.zapOut({
       userTokenInAccount: inputTokenAccount,
@@ -358,14 +358,6 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstructions = unwrapSOLInstruction(user, user);
-
-      if (unwrapInstructions) {
-        postInstructions.push(unwrapInstructions);
-      }
-    }
-
     const preUserTokenBalance = (
       await this.connection.getTokenAccountBalance(inputTokenAccount)
     ).value.amount;
@@ -387,6 +379,14 @@ export class Zap {
       minimumSwapAmountOut,
       remainingAccountsInfo
     );
+
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(user, user);
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
 
     return await this.zapOut({
       userTokenInAccount: inputTokenAccount,
