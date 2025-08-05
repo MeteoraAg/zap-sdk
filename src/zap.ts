@@ -1,4 +1,9 @@
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
@@ -17,6 +22,9 @@ import {
   getDlmmRemainingAccounts,
   createDlmmSwapPayload,
   getLbPairState,
+  getTokenProgramFromMint,
+  getOrCreateATAInstruction,
+  unwrapSOLInstruction,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -27,6 +35,7 @@ import {
   JUP_V6_PROGRAM_ID,
 } from "./constants";
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
+import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
 
 export class Zap {
   private connection: Connection;
@@ -90,13 +99,54 @@ export class Zap {
     params: ZapOutThroughJupiterParams
   ): Promise<Transaction> {
     const {
-      inputTokenAccount,
+      user,
+      inputMint,
+      outputMint,
       jupiterSwapResponse,
       maxSwapAmount,
       percentageToZapOut,
-      preInstructions,
-      postInstructions,
     } = params;
+
+    const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
+      getTokenProgramFromMint(this.connection, inputMint),
+      getTokenProgramFromMint(this.connection, outputMint),
+    ]);
+
+    const [
+      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
+      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
+    ] = await Promise.all([
+      getOrCreateATAInstruction(
+        this.connection,
+        inputMint,
+        user,
+        user,
+        true,
+        inputTokenProgram
+      ),
+      getOrCreateATAInstruction(
+        this.connection,
+        outputMint,
+        user,
+        user,
+        true,
+        outputTokenProgram
+      ),
+    ]);
+
+    inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
+    outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(user, user);
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
 
     const preUserTokenBalance = (
       await this.connection.getTokenAccountBalance(inputTokenAccount)
@@ -135,8 +185,8 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: JUP_V6_PROGRAM_ID,
-      preInstructions: preInstructions || [],
-      postInstructions: postInstructions || [],
+      preInstructions,
+      postInstructions,
     });
   }
 
@@ -160,17 +210,48 @@ export class Zap {
     const {
       user,
       poolAddress,
-      inputTokenAccount,
-      outputTokenAccount,
+      inputMint,
+      outputMint,
       amountIn,
       minimumSwapAmountOut,
       maxSwapAmount,
       percentageToZapOut,
-      preInstructions,
-      postInstructions,
     } = params;
 
     const poolState = await getDammV2Pool(this.connection, poolAddress);
+
+    const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
+      getTokenProgramFromMint(this.connection, inputMint),
+      getTokenProgramFromMint(this.connection, outputMint),
+    ]);
+
+    const [
+      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
+      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
+    ] = await Promise.all([
+      getOrCreateATAInstruction(
+        this.connection,
+        inputMint,
+        user,
+        user,
+        true,
+        inputTokenProgram
+      ),
+      getOrCreateATAInstruction(
+        this.connection,
+        outputMint,
+        user,
+        user,
+        true,
+        outputTokenProgram
+      ),
+    ]);
+
+    inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
+    outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
     const preUserTokenBalance = (
       await this.connection.getTokenAccountBalance(inputTokenAccount)
@@ -190,6 +271,14 @@ export class Zap {
 
     const offsetAmountIn = AMOUNT_IN_DAMM_V2_OFFSET;
 
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(user, user);
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
+
     return await this.zapOut({
       userTokenInAccount: inputTokenAccount,
       zapOutParams: {
@@ -201,8 +290,8 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: DAMM_V2_PROGRAM_ID,
-      preInstructions: preInstructions || [],
-      postInstructions: postInstructions || [],
+      preInstructions,
+      postInstructions,
     });
   }
 
@@ -226,17 +315,56 @@ export class Zap {
     const {
       user,
       lbPairAddress,
-      inputTokenAccount,
-      outputTokenAccount,
+      inputMint,
+      outputMint,
       amountIn,
       minimumSwapAmountOut,
       maxSwapAmount,
       percentageToZapOut,
-      preInstructions,
-      postInstructions,
     } = params;
 
     const lbPairState = await getLbPairState(this.connection, lbPairAddress);
+
+    const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
+      getTokenProgramFromMint(this.connection, inputMint),
+      getTokenProgramFromMint(this.connection, outputMint),
+    ]);
+
+    const [
+      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
+      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
+    ] = await Promise.all([
+      getOrCreateATAInstruction(
+        this.connection,
+        inputMint,
+        user,
+        user,
+        true,
+        inputTokenProgram
+      ),
+      getOrCreateATAInstruction(
+        this.connection,
+        outputMint,
+        user,
+        user,
+        true,
+        outputTokenProgram
+      ),
+    ]);
+
+    inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
+    outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+
+    if (outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(user, user);
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
 
     const preUserTokenBalance = (
       await this.connection.getTokenAccountBalance(inputTokenAccount)
@@ -271,8 +399,8 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: DLMM_PROGRAM_ID,
-      preInstructions: preInstructions || [],
-      postInstructions: postInstructions || [],
+      preInstructions,
+      postInstructions,
     });
   }
 }

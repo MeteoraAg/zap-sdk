@@ -8,12 +8,7 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
-import {
-  getJupiterQuote,
-  getJupiterSwapInstruction,
-  getOrCreateATAInstruction,
-  getTokenProgramFromMint,
-} from "../src/helpers";
+import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
 import DLMM from "@meteora-ag/dlmm";
 import { DLMM_PROGRAM_ID } from "../src";
 
@@ -41,9 +36,6 @@ async function main() {
   });
 
   try {
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
-
     const currentSlot = await connection.getSlot();
     const currentTime = await connection.getBlockTime(currentSlot);
 
@@ -103,41 +95,6 @@ async function main() {
       transaction.add(...tx);
     });
 
-    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
-      getTokenProgramFromMint(connection, inputMint),
-      getTokenProgramFromMint(connection, outputMint),
-    ]);
-
-    const [
-      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
-      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        connection,
-        inputMint,
-        wallet.publicKey,
-        wallet.publicKey,
-        true,
-        inputTokenProgram
-      ),
-      getOrCreateATAInstruction(
-        connection,
-        outputMint,
-        wallet.publicKey,
-        wallet.publicKey,
-        true,
-        outputTokenProgram
-      ),
-    ]);
-
-    if (inputTokenAccountIx) {
-      preInstructions.push(inputTokenAccountIx);
-    }
-
-    if (outputTokenAccountIx) {
-      preInstructions.push(outputTokenAccountIx);
-    }
-
     console.log("Fetching quotes from DLMM and Jupiter...");
     const [dlmmQuote, jupiterQuote] = await Promise.allSettled([
       dlmm
@@ -150,7 +107,7 @@ async function main() {
         outputMint,
         amountXRemoved,
         50,
-        50,
+        20,
         true,
         true,
         "https://lite-api.jup.ag"
@@ -213,14 +170,12 @@ async function main() {
       zapOutTx = await zap.zapOutThroughDlmm({
         user: wallet.publicKey,
         lbPairAddress,
-        inputTokenAccount,
-        outputTokenAccount,
+        inputMint,
+        outputMint,
         amountIn: amountXRemoved,
         minimumSwapAmountOut: new BN(0),
         maxSwapAmount: amountXRemoved,
         percentageToZapOut: 100,
-        preInstructions,
-        postInstructions,
       });
     } else if (bestProtocol === "jupiter" && quotes.jupiter) {
       const swapInstructionResponse = await getJupiterSwapInstruction(
@@ -229,12 +184,12 @@ async function main() {
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({
-        inputTokenAccount,
+        user: wallet.publicKey,
+        inputMint,
+        outputMint,
         jupiterSwapResponse: swapInstructionResponse,
         maxSwapAmount: new BN(quotes.jupiter.inAmount),
         percentageToZapOut: 100,
-        preInstructions,
-        postInstructions,
       });
     } else {
       throw new Error(`Invalid protocol selected: ${bestProtocol}`);
