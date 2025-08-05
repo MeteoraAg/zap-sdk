@@ -4,16 +4,10 @@ import {
   Keypair,
   Transaction,
   sendAndConfirmTransaction,
-  TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
-import {
-  getJupiterQuote,
-  getJupiterSwapInstruction,
-  getOrCreateATAInstruction,
-  getTokenProgramFromMint,
-} from "../src/helpers";
+import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
 import {
   CpAmm,
   getAmountAFromLiquidityDelta,
@@ -43,9 +37,6 @@ async function main() {
   const cpAmm = new CpAmm(connection);
 
   try {
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
-
     const [poolState, position, currentSlot] = await Promise.all([
       cpAmm.fetchPoolState(poolAddress),
       cpAmm.getUserPositionByPool(poolAddress, wallet.publicKey),
@@ -97,41 +88,6 @@ async function main() {
     });
 
     transaction.add(removeLiquidityTx);
-
-    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
-      getTokenProgramFromMint(connection, inputMint),
-      getTokenProgramFromMint(connection, outputMint),
-    ]);
-
-    const [
-      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
-      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        connection,
-        inputMint,
-        wallet.publicKey,
-        wallet.publicKey,
-        true,
-        inputTokenProgram
-      ),
-      getOrCreateATAInstruction(
-        connection,
-        outputMint,
-        wallet.publicKey,
-        wallet.publicKey,
-        true,
-        outputTokenProgram
-      ),
-    ]);
-
-    if (inputTokenAccountIx) {
-      preInstructions.push(inputTokenAccountIx);
-    }
-
-    if (outputTokenAccountIx) {
-      preInstructions.push(outputTokenAccountIx);
-    }
 
     console.log("Fetching quotes from DAMM v2 and Jupiter...");
     const [dammV2Quote, jupiterQuote] = await Promise.allSettled([
@@ -211,14 +167,12 @@ async function main() {
       zapOutTx = await zap.zapOutThroughDammV2({
         user: wallet.publicKey,
         poolAddress,
-        inputTokenAccount,
-        outputTokenAccount,
+        inputMint,
+        outputMint,
         amountIn: amountARemoved,
         minimumSwapAmountOut: new BN(0),
         maxSwapAmount: amountARemoved,
         percentageToZapOut: 100,
-        preInstructions,
-        postInstructions,
       });
     } else if (bestProtocol === "jupiter" && quotes.jupiter) {
       const swapInstructionResponse = await getJupiterSwapInstruction(
@@ -227,12 +181,12 @@ async function main() {
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({
-        inputTokenAccount,
+        user: wallet.publicKey,
+        inputMint,
+        outputMint,
         jupiterSwapResponse: swapInstructionResponse,
         maxSwapAmount: new BN(quotes.jupiter.inAmount),
         percentageToZapOut: 100,
-        preInstructions,
-        postInstructions,
       });
     } else {
       throw new Error(`Invalid protocol selected: ${bestProtocol}`);

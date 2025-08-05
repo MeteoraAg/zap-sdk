@@ -1,10 +1,9 @@
 import {
   Connection,
-  PublicKey,
   Keypair,
+  PublicKey,
   Transaction,
   sendAndConfirmTransaction,
-  TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
@@ -12,8 +11,6 @@ import {
   getJupiterQuote,
   getJupiterSwapInstruction,
   getTokenProgramFromMint,
-  unwrapSOLInstruction,
-  wrapSOLInstruction,
 } from "../src/helpers";
 import {
   createTransferCheckedInstruction,
@@ -24,10 +21,10 @@ import {
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from(""));
+  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
-  const anotherWallet = Keypair.fromSecretKey(Uint8Array.from(""));
+  const anotherWallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
   const zap = new Zap(connection);
@@ -59,6 +56,8 @@ async function main() {
       wallet.publicKey,
       quoteResponse
     );
+    // console.log(swapInstructionResponse);
+    const { blockhash } = await connection.getLatestBlockhash();
 
     const inputTokenProgram = await getTokenProgramFromMint(
       connection,
@@ -72,20 +71,10 @@ async function main() {
       inputTokenProgram
     );
 
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
+    const transaction = new Transaction();
 
     // simulate action (can be claim fee or remove liquidity etc.)
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapInstructions = wrapSOLInstruction(
-        wallet.publicKey,
-        inputTokenAccount,
-        BigInt(swapAmount.toString()),
-        inputTokenProgram
-      );
-
-      preInstructions.push(...wrapInstructions);
-    } else {
+    if (!inputMint.equals(NATIVE_MINT)) {
       const sourceTokenAccount = getAssociatedTokenAddressSync(
         inputMint,
         anotherWallet.publicKey,
@@ -104,35 +93,19 @@ async function main() {
         inputTokenProgram
       );
 
-      preInstructions.push(transferIx);
+      transaction.add(transferIx);
     }
-
-    // can unwrap SOL if needed
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstructions = unwrapSOLInstruction(
-        wallet.publicKey,
-        wallet.publicKey
-      );
-
-      if (unwrapInstructions) {
-        postInstructions.push(unwrapInstructions);
-      }
-    }
-
-    const transaction = new Transaction();
 
     const zapOutTx = await zap.zapOutThroughJupiter({
-      inputTokenAccount,
+      user: wallet.publicKey,
+      inputMint,
+      outputMint,
       jupiterSwapResponse: swapInstructionResponse,
       maxSwapAmount: new BN(swapAmount.toString()),
       percentageToZapOut: 100,
-      preInstructions,
-      postInstructions,
     });
 
     transaction.add(zapOutTx);
-
-    const { blockhash } = await connection.getLatestBlockhash();
 
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = wallet.publicKey;

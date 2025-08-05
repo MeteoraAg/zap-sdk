@@ -13,19 +13,15 @@ import {
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import {
-  getTokenProgramFromMint,
-  unwrapSOLInstruction,
-  wrapSOLInstruction,
-} from "../src/helpers";
+import { getTokenProgramFromMint } from "../src/helpers";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from(""));
+  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
-  const anotherWallet = Keypair.fromSecretKey(Uint8Array.from(""));
+  const anotherWallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
   const zap = new Zap(connection);
@@ -36,7 +32,6 @@ async function main() {
   const outputMint = new PublicKey(
     "So11111111111111111111111111111111111111112"
   );
-
   const lbPairAddress = new PublicKey(
     "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"
   );
@@ -44,6 +39,8 @@ async function main() {
   const swapAmount = new BN(1000000);
 
   try {
+    const { blockhash } = await connection.getLatestBlockhash();
+
     const inputTokenProgram = await getTokenProgramFromMint(
       connection,
       inputMint
@@ -56,27 +53,10 @@ async function main() {
       inputTokenProgram
     );
 
-    const outputTokenAccount = getAssociatedTokenAddressSync(
-      outputMint,
-      wallet.publicKey,
-      true,
-      inputTokenProgram
-    );
-
-    const preInstructions: TransactionInstruction[] = [];
-    const postInstructions: TransactionInstruction[] = [];
+    const transaction = new Transaction();
 
     // simulate action (can be claim fee or remove liquidity etc.)
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapInstructions = wrapSOLInstruction(
-        wallet.publicKey,
-        inputTokenAccount,
-        BigInt(swapAmount.toString()),
-        inputTokenProgram
-      );
-
-      preInstructions.push(...wrapInstructions);
-    } else {
+    if (!inputMint.equals(NATIVE_MINT)) {
       const sourceTokenAccount = getAssociatedTokenAddressSync(
         inputMint,
         anotherWallet.publicKey,
@@ -95,39 +75,21 @@ async function main() {
         inputTokenProgram
       );
 
-      preInstructions.push(transferIx);
-    }
-
-    // can unwrap SOL if needed
-    if (outputMint.equals(NATIVE_MINT)) {
-      const unwrapInstructions = unwrapSOLInstruction(
-        wallet.publicKey,
-        wallet.publicKey
-      );
-
-      if (unwrapInstructions) {
-        postInstructions.push(unwrapInstructions);
-      }
+      transaction.add(transferIx);
     }
 
     const zapOutTx = await zap.zapOutThroughDlmm({
       user: wallet.publicKey,
       lbPairAddress,
-      inputTokenAccount,
-      outputTokenAccount,
+      inputMint,
+      outputMint,
       amountIn: new BN(swapAmount.toString()),
       minimumSwapAmountOut: new BN(0),
       maxSwapAmount: new BN(swapAmount.toString()),
       percentageToZapOut: 100,
-      preInstructions,
-      postInstructions,
     });
 
-    const transaction = new Transaction();
-
     transaction.add(zapOutTx);
-
-    const { blockhash } = await connection.getLatestBlockhash();
 
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = wallet.publicKey;
@@ -139,7 +101,7 @@ async function main() {
     const signature = await sendAndConfirmTransaction(
       connection,
       transaction,
-      [wallet /*anotherWallet*/],
+      [wallet, anotherWallet],
       { commitment: "confirmed" }
     );
 
