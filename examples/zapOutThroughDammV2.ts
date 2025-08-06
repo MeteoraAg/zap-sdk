@@ -11,8 +11,9 @@ import {
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { getTokenProgramFromMint } from "../src/helpers";
+import { getTokenProgramFromMint, wrapSOLInstruction } from "../src/helpers";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -46,6 +47,11 @@ async function main() {
       inputMint
     );
 
+    const outputTokenProgram = await getTokenProgramFromMint(
+      connection,
+      outputMint
+    );
+
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputMint,
       wallet.publicKey,
@@ -76,6 +82,15 @@ async function main() {
       );
 
       transaction.add(transferIx);
+    } else {
+      const wrapInstructions = wrapSOLInstruction(
+        wallet.publicKey,
+        inputTokenAccount,
+        BigInt(swapAmount.toString()),
+        TOKEN_PROGRAM_ID
+      );
+
+      transaction.add(...wrapInstructions);
     }
 
     const zapOutTx = await zap.zapOutThroughDammV2({
@@ -83,6 +98,8 @@ async function main() {
       poolAddress,
       inputMint,
       outputMint,
+      inputTokenProgram,
+      outputTokenProgram,
       amountIn: new BN(swapAmount.toString()),
       minimumSwapAmountOut: new BN(0),
       maxSwapAmount: new BN(swapAmount.toString()),

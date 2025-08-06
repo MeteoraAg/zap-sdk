@@ -4,7 +4,6 @@ import {
   Keypair,
   Transaction,
   sendAndConfirmTransaction,
-  TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
