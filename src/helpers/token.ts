@@ -96,20 +96,16 @@ export function unwrapSOLInstruction(
 }
 
 /**
- * Get token account balance with fallback for newly created accounts
+ * Get token account balance
  * @param connection - Solana connection
  * @param tokenAccount - The token account address
- * @param accountCreationIx - The instruction that creates the account (if any)
- * @returns The token account balance as a string, or "0" if the account is being created
+ * @returns The token account balance as a string
  */
 export async function getTokenAccountBalance(
   connection: Connection,
-  tokenAccount: PublicKey,
-  accountCreationIx?: TransactionInstruction
+  tokenAccount: PublicKey
 ): Promise<string> {
-  return accountCreationIx
-    ? "0"
-    : (await connection.getTokenAccountBalance(tokenAccount)).value.amount;
+  return (await connection.getTokenAccountBalance(tokenAccount)).value.amount;
 }
 
 /**
