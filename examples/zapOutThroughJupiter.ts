@@ -11,11 +11,13 @@ import {
   getJupiterQuote,
   getJupiterSwapInstruction,
   getTokenProgramFromMint,
+  wrapSOLInstruction,
 } from "../src/helpers";
 import {
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
 async function main() {
@@ -64,6 +66,11 @@ async function main() {
       inputMint
     );
 
+    const outputTokenProgram = await getTokenProgramFromMint(
+      connection,
+      outputMint
+    );
+
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputMint,
       wallet.publicKey,
@@ -94,12 +101,23 @@ async function main() {
       );
 
       transaction.add(transferIx);
+    } else {
+      const wrapInstructions = wrapSOLInstruction(
+        wallet.publicKey,
+        inputTokenAccount,
+        BigInt(swapAmount.toString()),
+        TOKEN_PROGRAM_ID
+      );
+
+      transaction.add(...wrapInstructions);
     }
 
     const zapOutTx = await zap.zapOutThroughJupiter({
       user: wallet.publicKey,
       inputMint,
       outputMint,
+      inputTokenProgram,
+      outputTokenProgram,
       jupiterSwapResponse: swapInstructionResponse,
       maxSwapAmount: new BN(swapAmount.toString()),
       percentageToZapOut: 100,

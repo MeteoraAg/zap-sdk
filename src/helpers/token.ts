@@ -96,6 +96,19 @@ export function unwrapSOLInstruction(
 }
 
 /**
+ * Get token account balance
+ * @param connection - Solana connection
+ * @param tokenAccount - The token account address
+ * @returns The token account balance as a string
+ */
+export async function getTokenAccountBalance(
+  connection: Connection,
+  tokenAccount: PublicKey
+): Promise<string> {
+  return (await connection.getTokenAccountBalance(tokenAccount)).value.amount;
+}
+
+/**
  * Wrap SOL instruction
  * @param from - The from address
  * @param to - The to address
