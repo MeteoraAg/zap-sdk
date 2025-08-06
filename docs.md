@@ -104,6 +104,8 @@ interface ZapOutThroughJupiterParams {
   user: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   maxSwapAmount: BN;
   percentageToZapOut: number;
@@ -140,6 +142,8 @@ const zapOutTx = await zap.zapOutThroughJupiter({
   user: wallet.publicKey,
   inputMint,
   outputMint,
+  inputTokenProgram,
+  outputTokenProgram,
   jupiterSwapResponse: swapInstructionResponse,
   maxSwapAmount: new BN(1000000000),
   percentageToZapOut: 100,
@@ -176,6 +180,8 @@ interface ZapOutThroughDammV2Params {
   poolAddress: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
@@ -198,6 +204,8 @@ const zapOutTx = await zap.zapOutThroughDlmm({
   poolAddress: new PublicKey("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"),
   inputMint,
   outputMint,
+  inputTokenProgram,
+  outputTokenProgram,
   amountIn: new BN(1000000000),
   minimumSwapAmountOut: new BN(0),
   maxSwapAmount: new BN(1000000000),
@@ -233,6 +241,8 @@ interface ZapOutThroughDlmmParams {
   lbPairAddress: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
@@ -255,6 +265,8 @@ const zapOutTx = await zap.zapOutThroughDlmm({
   lbPairAddress: new PublicKey("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"),
   inputMint,
   outputMint,
+  inputTokenProgram,
+  outputTokenProgram,
   amountIn: new BN(1000000000),
   minimumSwapAmountOut: new BN(0),
   maxSwapAmount: new BN(1000000000),

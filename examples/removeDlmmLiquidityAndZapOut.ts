@@ -9,8 +9,9 @@ import {
 import BN from "bn.js";
 import { Zap } from "../src/zap";
 import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
-import DLMM from "@meteora-ag/dlmm";
+import DLMM, { getTokenProgramId } from "@meteora-ag/dlmm";
 import { DLMM_PROGRAM_ID } from "../src";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -95,6 +96,19 @@ async function main() {
       transaction.add(...tx);
     });
 
+    let inputTokenProgram = TOKEN_PROGRAM_ID;
+    let outputTokenProgram = TOKEN_PROGRAM_ID;
+
+    if (dlmm.lbPair.tokenXMint.equals(inputMint)) {
+      const tokenPrograms = getTokenProgramId(dlmm.lbPair);
+      inputTokenProgram = tokenPrograms.tokenXProgram;
+      outputTokenProgram = tokenPrograms.tokenYProgram;
+    } else {
+      const tokenPrograms = getTokenProgramId(dlmm.lbPair);
+      inputTokenProgram = tokenPrograms.tokenYProgram;
+      outputTokenProgram = tokenPrograms.tokenXProgram;
+    }
+
     console.log("Fetching quotes from DLMM and Jupiter...");
     const [dlmmQuote, jupiterQuote] = await Promise.allSettled([
       dlmm
@@ -172,6 +186,8 @@ async function main() {
         lbPairAddress,
         inputMint,
         outputMint,
+        inputTokenProgram,
+        outputTokenProgram,
         amountIn: amountXRemoved,
         minimumSwapAmountOut: new BN(0),
         maxSwapAmount: amountXRemoved,
@@ -187,6 +203,8 @@ async function main() {
         user: wallet.publicKey,
         inputMint,
         outputMint,
+        inputTokenProgram,
+        outputTokenProgram,
         jupiterSwapResponse: swapInstructionResponse,
         maxSwapAmount: new BN(quotes.jupiter.inAmount),
         percentageToZapOut: 100,
