@@ -102,6 +102,8 @@ export class Zap {
       user,
       inputMint,
       outputMint,
+      inputTokenProgram,
+      outputTokenProgram,
       jupiterSwapResponse,
       maxSwapAmount,
       percentageToZapOut,
@@ -109,11 +111,6 @@ export class Zap {
 
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
-
-    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
-      getTokenProgramFromMint(this.connection, inputMint),
-      getTokenProgramFromMint(this.connection, outputMint),
-    ]);
 
     const [
       { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
@@ -212,6 +209,8 @@ export class Zap {
       poolAddress,
       inputMint,
       outputMint,
+      inputTokenProgram,
+      outputTokenProgram,
       amountIn,
       minimumSwapAmountOut,
       maxSwapAmount,
@@ -222,11 +221,6 @@ export class Zap {
 
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
-
-    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
-      getTokenProgramFromMint(this.connection, inputMint),
-      getTokenProgramFromMint(this.connection, outputMint),
-    ]);
 
     const [
       { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
@@ -317,6 +311,8 @@ export class Zap {
       lbPairAddress,
       inputMint,
       outputMint,
+      inputTokenProgram,
+      outputTokenProgram,
       amountIn,
       minimumSwapAmountOut,
       maxSwapAmount,
@@ -327,11 +323,6 @@ export class Zap {
 
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
-
-    const [inputTokenProgram, outputTokenProgram] = await Promise.all([
-      getTokenProgramFromMint(this.connection, inputMint),
-      getTokenProgramFromMint(this.connection, outputMint),
-    ]);
 
     const [
       { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },

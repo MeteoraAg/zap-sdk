@@ -25,6 +25,8 @@ export type ZapOutThroughDammV2Params = {
   poolAddress: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
@@ -36,6 +38,8 @@ export type ZapOutThroughDlmmParams = {
   lbPairAddress: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
   amountIn: BN;
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
@@ -46,6 +50,8 @@ export interface ZapOutThroughJupiterParams {
   user: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   maxSwapAmount: BN;
   percentageToZapOut: number;

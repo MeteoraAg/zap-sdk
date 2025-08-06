@@ -15,6 +15,7 @@ import {
   getTokenProgram,
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -88,6 +89,17 @@ async function main() {
     });
 
     transaction.add(removeLiquidityTx);
+
+    let inputTokenProgram = TOKEN_PROGRAM_ID;
+    let outputTokenProgram = TOKEN_PROGRAM_ID;
+
+    if (poolState.tokenAMint.equals(inputMint)) {
+      inputTokenProgram = getTokenProgram(poolState.tokenAFlag);
+      outputTokenProgram = getTokenProgram(poolState.tokenBFlag);
+    } else {
+      inputTokenProgram = getTokenProgram(poolState.tokenBFlag);
+      outputTokenProgram = getTokenProgram(poolState.tokenAFlag);
+    }
 
     console.log("Fetching quotes from DAMM v2 and Jupiter...");
     const [dammV2Quote, jupiterQuote] = await Promise.allSettled([
@@ -169,6 +181,8 @@ async function main() {
         poolAddress,
         inputMint,
         outputMint,
+        inputTokenProgram,
+        outputTokenProgram,
         amountIn: amountARemoved,
         minimumSwapAmountOut: new BN(0),
         maxSwapAmount: amountARemoved,
@@ -184,6 +198,8 @@ async function main() {
         user: wallet.publicKey,
         inputMint,
         outputMint,
+        inputTokenProgram,
+        outputTokenProgram,
         jupiterSwapResponse: swapInstructionResponse,
         maxSwapAmount: new BN(quotes.jupiter.inAmount),
         percentageToZapOut: 100,
