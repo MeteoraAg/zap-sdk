@@ -22,8 +22,8 @@ import {
   getDlmmRemainingAccounts,
   createDlmmSwapPayload,
   getLbPairState,
-  getTokenProgramFromMint,
   getOrCreateATAInstruction,
+  getTokenAccountBalance,
   unwrapSOLInstruction,
 } from "./helpers";
 import {
@@ -137,9 +137,11 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    const preUserTokenBalance = (
-      await this.connection.getTokenAccountBalance(inputTokenAccount)
-    ).value.amount;
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+      inputTokenAccountIx
+    );
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -247,9 +249,11 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    const preUserTokenBalance = (
-      await this.connection.getTokenAccountBalance(inputTokenAccount)
-    ).value.amount;
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+      inputTokenAccountIx
+    );
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
@@ -349,9 +353,11 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    const preUserTokenBalance = (
-      await this.connection.getTokenAccountBalance(inputTokenAccount)
-    ).value.amount;
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+      inputTokenAccountIx
+    );
 
     const { remainingAccounts, remainingAccountsInfo } =
       await getDlmmRemainingAccounts(
