@@ -137,10 +137,9 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    const ataExists = !inputTokenAccountIx;
-    const preUserTokenBalance = ataExists
-      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
-      : "0";
+    const preUserTokenBalance = inputTokenAccountIx
+      ? "0"
+      : await getTokenAccountBalance(this.connection, inputTokenAccount);
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -248,10 +247,9 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    const ataExists = !inputTokenAccountIx;
-    const preUserTokenBalance = ataExists
-      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
-      : "0";
+    const preUserTokenBalance = inputTokenAccountIx
+      ? "0"
+      : await getTokenAccountBalance(this.connection, inputTokenAccount);
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
@@ -351,10 +349,9 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    const ataExists = !inputTokenAccountIx;
-    const preUserTokenBalance = ataExists
-      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
-      : "0";
+    const preUserTokenBalance = inputTokenAccountIx
+      ? "0"
+      : await getTokenAccountBalance(this.connection, inputTokenAccount);
 
     const { remainingAccounts, remainingAccountsInfo } =
       await getDlmmRemainingAccounts(
