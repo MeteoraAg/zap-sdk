@@ -31,8 +31,8 @@
 	"devDependencies": {
 		"@types/bn.js": "^5.1.0",
 		"@types/bun": "latest",
-		"tsx": "^4.20.3",
-		"tsup": "^8.4.0"
+		"tsup": "^8.4.0",
+		"tsx": "^4.20.3"
 	},
 	"peerDependencies": {
 		"typescript": "^5"
@@ -44,6 +44,7 @@
 		"@solana/spl-token": "^0.4.13",
 		"@solana/web3.js": "^1.98.2",
 		"bn.js": "^5.2.2",
-		"decimal.js": "^10.4.2"
+		"decimal.js": "^10.4.2",
+		"jito-ts": "^4.2.0"
 	}
 }
