@@ -39,6 +39,9 @@ importers:
       '@types/bun':
         specifier: latest
         version: 1.2.19(@types/react@19.1.9)
+      dotenv:
+        specifier: ^17.2.1
+        version: 17.2.1
       tsup:
         specifier: ^8.4.0
         version: 8.5.0(tsx@4.20.3)(typescript@5.9.2)
@@ -820,6 +823,10 @@ packages:
   diff@5.0.0:
     resolution: {integrity: sha512-/VTCrvm5Z0JGty/BWHljh+BAiw3IK+2j87NGMu8Nwc/f48WoDAC395uomO9ZD117ZOBaHmkX1oyLvkVM/aIT3w==}
     engines: {node: '>=0.3.1'}
+
+  dotenv@17.2.1:
+    resolution: {integrity: sha512-kQhDYKZecqnM0fCnzI5eIv5L4cAe/iRI+HqMbO/hbRdTAeXDG+M9FjipUxNfbARuEg4iHIbhnhs78BCHNbSxEQ==}
+    engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -2512,6 +2519,8 @@ snapshots:
   diff@4.0.2: {}
 
   diff@5.0.0: {}
+
+  dotenv@17.2.1: {}
 
   dunder-proto@1.0.1:
     dependencies:
