@@ -24,6 +24,7 @@ import {
   getLbPairState,
   getOrCreateATAInstruction,
   getTokenAccountBalance,
+  wrapSOLInstruction,
   unwrapSOLInstruction,
 } from "./helpers";
 import {
@@ -35,7 +36,7 @@ import {
   JUP_V6_PROGRAM_ID,
 } from "./constants";
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
-import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
+import { NATIVE_MINT } from "@solana/spl-token";
 
 export class Zap {
   private connection: Connection;
@@ -136,6 +137,16 @@ export class Zap {
 
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapIxs = wrapSOLInstruction(
+        user,
+        inputTokenAccount,
+        BigInt(maxSwapAmount.toString())
+      );
+      if (wrapIxs) {
+        preInstructions.push(...wrapIxs);
+      }
+    }
 
     const preUserTokenBalance = inputTokenAccountIx
       ? "0"
@@ -247,6 +258,17 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapIxs = wrapSOLInstruction(
+        user,
+        inputTokenAccount,
+        BigInt(maxSwapAmount.toString())
+      );
+      if (wrapIxs) {
+        preInstructions.push(...wrapIxs);
+      }
+    }
+
     const preUserTokenBalance = inputTokenAccountIx
       ? "0"
       : await getTokenAccountBalance(this.connection, inputTokenAccount);
@@ -348,6 +370,17 @@ export class Zap {
 
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+
+    if (inputMint.equals(NATIVE_MINT)) {
+      const wrapIxs = wrapSOLInstruction(
+        user,
+        inputTokenAccount,
+        BigInt(maxSwapAmount.toString())
+      );
+      if (wrapIxs) {
+        preInstructions.push(...wrapIxs);
+      }
+    }
 
     const preUserTokenBalance = inputTokenAccountIx
       ? "0"
