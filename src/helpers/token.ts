@@ -40,29 +40,14 @@ export const getOrCreateATAInstruction = async (
     tokenProgram
   );
 
-  try {
-    await getAccount(connection, toAccount);
-    return { ataPubkey: toAccount, ix: undefined };
-  } catch (e) {
-    if (
-      e instanceof TokenAccountNotFoundError ||
-      e instanceof TokenInvalidAccountOwnerError
-    ) {
-      const ix = createAssociatedTokenAccountIdempotentInstruction(
-        payer,
-        toAccount,
-        owner,
-        tokenMint,
-        tokenProgram
-      );
-
-      return { ataPubkey: toAccount, ix };
-    } else {
-      /* handle error */
-      console.error("Error::getOrCreateATAInstruction", e);
-      throw e;
-    }
-  }
+  const ix = createAssociatedTokenAccountIdempotentInstruction(
+    payer,
+    toAccount,
+    owner,
+    tokenMint,
+    tokenProgram
+  );
+  return { ataPubkey: toAccount, ix };
 };
 
 /**
