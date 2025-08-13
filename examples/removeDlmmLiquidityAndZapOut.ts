@@ -121,6 +121,7 @@ async function main() {
         amountXRemoved,
         50,
         20,
+        false,
         true,
         true,
         "https://lite-api.jup.ag"
