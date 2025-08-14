@@ -337,6 +337,7 @@ async getJupiterQuote(
   amount: BN,
   maxAccounts: number,
   slippageBps: number,
+  dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
   apiUrl: string = "https://lite-api.jup.ag",
@@ -353,6 +354,7 @@ interface GetJupiterQuoteParams {
   amount: BN;
   maxAccounts: number;
   slippageBps: number;
+  dynamicSlippage: boolean = false;
   onlyDirectRoutes: boolean;
   restrictIntermediateTokens: boolean;
   apiUrl: string = "https://lite-api.jup.ag";
