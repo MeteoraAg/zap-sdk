@@ -8,6 +8,7 @@ export async function getJupiterQuote(
   amount: BN,
   maxAccounts: number,
   slippageBps: number,
+  dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
   apiUrl: string = "https://lite-api.jup.ag",
@@ -21,6 +22,7 @@ export async function getJupiterQuote(
     maxAccounts: maxAccounts.toString(),
     onlyDirectRoutes: onlyDirectRoutes.toString(),
     restrictIntermediateTokens: restrictIntermediateTokens.toString(),
+    dynamicSlippage: dynamicSlippage.toString(),
   });
 
   const url = `${apiUrl}/swap/v1/quote?${params.toString()}`;
