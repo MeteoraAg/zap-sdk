@@ -148,9 +148,19 @@ export class Zap {
       }
     }
 
-    const preUserTokenBalance = inputTokenAccountIx
-      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
-      : "0";
+    let preUserTokenBalance;
+
+    try {
+      preUserTokenBalance = await getTokenAccountBalance(
+        this.connection,
+        inputTokenAccount
+      );
+    } catch {
+      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
+      // maxSwapAmount is > the actual in token amonut
+
+      preUserTokenBalance = "0";
+    }
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -269,9 +279,19 @@ export class Zap {
       }
     }
 
-    const preUserTokenBalance = inputTokenAccountIx
-      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
-      : "0";
+    let preUserTokenBalance;
+
+    try {
+      preUserTokenBalance = await getTokenAccountBalance(
+        this.connection,
+        inputTokenAccount
+      );
+    } catch {
+      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
+      // maxSwapAmount is > the actual in token amonut
+
+      preUserTokenBalance = "0";
+    }
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
@@ -382,9 +402,19 @@ export class Zap {
       }
     }
 
-    const preUserTokenBalance = inputTokenAccountIx
-      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
-      : "0";
+    let preUserTokenBalance;
+
+    try {
+      preUserTokenBalance = await getTokenAccountBalance(
+        this.connection,
+        inputTokenAccount
+      );
+    } catch {
+      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
+      // maxSwapAmount is > the actual in token amonut
+
+      preUserTokenBalance = "0";
+    }
 
     const { remainingAccounts, remainingAccountsInfo } =
       await getDlmmRemainingAccounts(
