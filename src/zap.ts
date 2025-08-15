@@ -149,8 +149,8 @@ export class Zap {
     }
 
     const preUserTokenBalance = inputTokenAccountIx
-      ? "0"
-      : await getTokenAccountBalance(this.connection, inputTokenAccount);
+      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
+      : "0";
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -270,8 +270,8 @@ export class Zap {
     }
 
     const preUserTokenBalance = inputTokenAccountIx
-      ? "0"
-      : await getTokenAccountBalance(this.connection, inputTokenAccount);
+      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
+      : "0";
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
@@ -383,8 +383,8 @@ export class Zap {
     }
 
     const preUserTokenBalance = inputTokenAccountIx
-      ? "0"
-      : await getTokenAccountBalance(this.connection, inputTokenAccount);
+      ? await getTokenAccountBalance(this.connection, inputTokenAccount)
+      : "0";
 
     const { remainingAccounts, remainingAccountsInfo } =
       await getDlmmRemainingAccounts(
