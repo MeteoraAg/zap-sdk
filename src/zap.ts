@@ -137,16 +137,8 @@ export class Zap {
 
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapIxs = wrapSOLInstruction(
-        user,
-        inputTokenAccount,
-        BigInt(maxSwapAmount.toString())
-      );
-      if (wrapIxs) {
-        preInstructions.push(...wrapIxs);
-      }
-    }
+
+    // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
     let preUserTokenBalance;
 
@@ -184,7 +176,8 @@ export class Zap {
 
     const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
 
-    if (outputMint.equals(NATIVE_MINT)) {
+    // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
+    if ([inputMint, outputMint].includes(NATIVE_MINT)) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
@@ -268,16 +261,7 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapIxs = wrapSOLInstruction(
-        user,
-        inputTokenAccount,
-        BigInt(maxSwapAmount.toString())
-      );
-      if (wrapIxs) {
-        preInstructions.push(...wrapIxs);
-      }
-    }
+    // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
     let preUserTokenBalance;
 
@@ -307,7 +291,8 @@ export class Zap {
 
     const offsetAmountIn = AMOUNT_IN_DAMM_V2_OFFSET;
 
-    if (outputMint.equals(NATIVE_MINT)) {
+    // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
+    if ([inputMint, outputMint].includes(NATIVE_MINT)) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
@@ -391,16 +376,7 @@ export class Zap {
     inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
     outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
 
-    if (inputMint.equals(NATIVE_MINT)) {
-      const wrapIxs = wrapSOLInstruction(
-        user,
-        inputTokenAccount,
-        BigInt(maxSwapAmount.toString())
-      );
-      if (wrapIxs) {
-        preInstructions.push(...wrapIxs);
-      }
-    }
+    // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
     let preUserTokenBalance;
 
@@ -434,7 +410,8 @@ export class Zap {
       remainingAccountsInfo
     );
 
-    if (outputMint.equals(NATIVE_MINT)) {
+    // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
+    if ([inputMint, outputMint].includes(NATIVE_MINT)) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
