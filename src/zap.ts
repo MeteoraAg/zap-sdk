@@ -177,7 +177,7 @@ export class Zap {
     const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
 
     // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
-    if ([inputMint, outputMint].includes(NATIVE_MINT)) {
+    if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
@@ -292,7 +292,7 @@ export class Zap {
     const offsetAmountIn = AMOUNT_IN_DAMM_V2_OFFSET;
 
     // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
-    if ([inputMint, outputMint].includes(NATIVE_MINT)) {
+    if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
@@ -411,7 +411,7 @@ export class Zap {
     );
 
     // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
-    if ([inputMint, outputMint].includes(NATIVE_MINT)) {
+    if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
