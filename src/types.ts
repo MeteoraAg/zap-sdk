@@ -1,4 +1,4 @@
-import { Program, IdlTypes, IdlAccounts } from "@coral-xyz/anchor";
+import { Program, IdlTypes } from "@coral-xyz/anchor";
 import {
   AccountMeta,
   PublicKey,
@@ -9,6 +9,7 @@ import { Zap } from "./idl/zap/idl";
 
 export type ZapProgram = Program<Zap>;
 
+///// ZAPOUT TYPES /////
 export type ZapOutParameters = IdlTypes<Zap>["zapOutParameters"];
 
 export type ZapOutParams = {
@@ -121,3 +122,11 @@ export interface JupiterSwapInstructionResponse {
     };
   };
 }
+
+export const StrategyType = {
+  spot: { spot: {} },
+  curve: { curve: {} },
+  bidAsk: { bidAsk: {} },
+} as const;
+
+export type DlmmStrategyType = (typeof StrategyType)[keyof typeof StrategyType];

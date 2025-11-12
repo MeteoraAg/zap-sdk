@@ -1,6 +1,8 @@
 import {
+  AccountMeta,
   Connection,
   PublicKey,
+  SystemProgram,
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
@@ -8,6 +10,7 @@ import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
 import {
+  DlmmStrategyType,
   ZapOutParams,
   ZapOutThroughDammV2Params,
   ZapOutThroughDlmmParams,
@@ -24,8 +27,11 @@ import {
   getLbPairState,
   getOrCreateATAInstruction,
   getTokenAccountBalance,
-  wrapSOLInstruction,
   unwrapSOLInstruction,
+  deriveLedgerAccount,
+  deriveDammV2EventAuthority,
+  deriveDammV2PoolAuthority,
+  deriveDlmmEventAuthority,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -34,9 +40,11 @@ import {
   DAMM_V2_PROGRAM_ID,
   DLMM_PROGRAM_ID,
   JUP_V6_PROGRAM_ID,
+  MEMO_PROGRAM_ID,
 } from "./constants";
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
-import { NATIVE_MINT } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
+import { getTokenProgramId } from "@meteora-ag/dlmm";
 
 export class Zap {
   private connection: Connection;
@@ -46,7 +54,317 @@ export class Zap {
     this.zapProgram = new Program(ZapIDL as ZapTypes, { connection });
   }
 
-  /////// ZAPOUT PROGRAM ///////
+  /////// PRIVATE FUNDTIONS //////
+  private async initializeLedgerAccount(
+    owner: PublicKey,
+    payer: PublicKey
+  ): Promise<Transaction> {
+    return await this.zapProgram.methods
+      .initializeLedgerAccount()
+      .accountsPartial({
+        ledger: deriveLedgerAccount(owner),
+        owner,
+        payer,
+      })
+      .transaction();
+  }
+
+  private async closeLedgerAccount(
+    owner: PublicKey,
+    rentReceiver: PublicKey
+  ): Promise<Transaction> {
+    return await this.zapProgram.methods
+      .closeLedgerAccount()
+      .accountsPartial({
+        ledger: deriveLedgerAccount(owner),
+        owner,
+        rentReceiver,
+      })
+      .transaction();
+  }
+
+  private async setLedgerBalance(
+    owner: PublicKey,
+    amount: BN,
+    isTokenA: boolean
+  ): Promise<Transaction> {
+    return await this.zapProgram.methods
+      .setLedgerBalance(amount, isTokenA)
+      .accountsPartial({
+        ledger: deriveLedgerAccount(owner),
+        owner,
+      })
+      .transaction();
+  }
+
+  private async updateLedgerBalanceAfterSwap(
+    owner: PublicKey,
+    tokenAccount: PublicKey,
+    preSourceTokenAccount: BN,
+    maxTransferAmount: BN,
+    isTokenA: boolean
+  ): Promise<Transaction> {
+    return this.zapProgram.methods
+      .updateLedgerBalanceAfterSwap(
+        preSourceTokenAccount,
+        maxTransferAmount,
+        isTokenA
+      )
+      .accountsPartial({
+        ledger: deriveLedgerAccount(owner),
+        tokenAccount,
+        owner,
+      })
+      .transaction();
+  }
+
+  private async zapInDammV2(params: {
+    user: PublicKey;
+    pool: PublicKey;
+    position: PublicKey;
+    positionNftAccount: PublicKey;
+    preSqrtPrice: BN;
+    maxSqrtPriceChangeBps: number;
+  }): Promise<Transaction> {
+    const {
+      user,
+      pool,
+      position,
+      positionNftAccount,
+      preSqrtPrice,
+      maxSqrtPriceChangeBps,
+    } = params;
+    const dammV2PoolState = await getDammV2Pool(this.connection, pool);
+    const {
+      tokenAMint,
+      tokenBMint,
+      tokenAVault,
+      tokenBVault,
+      tokenAFlag,
+      tokenBFlag,
+    } = dammV2PoolState;
+
+    const tokenAProgram = getTokenProgram(tokenAFlag);
+    const tokenBProgram = getTokenProgram(tokenBFlag);
+
+    // we don't need to handle init ata account if not exist here
+    // because it already initialized in swap tx
+    const tokenAAccount = getAssociatedTokenAddressSync(
+      tokenAMint,
+      user,
+      false,
+      tokenAProgram
+    );
+    const tokenBAccount = getAssociatedTokenAddressSync(
+      tokenBMint,
+      user,
+      false,
+      tokenAProgram
+    );
+
+    return await this.zapProgram.methods
+      .zapInDammV2(preSqrtPrice, maxSqrtPriceChangeBps)
+      .accountsPartial({
+        ledger: deriveLedgerAccount(user),
+        pool,
+        poolAuthority: deriveDammV2PoolAuthority(),
+        position,
+        positionNftAccount,
+        tokenAAccount,
+        tokenBAccount,
+        tokenAVault,
+        tokenBVault,
+        tokenAMint,
+        tokenBMint,
+        owner: user,
+        tokenAProgram,
+        tokenBProgram,
+        dammProgram: DAMM_V2_PROGRAM_ID,
+        dammEventAuthority: deriveDammV2EventAuthority(),
+      })
+      .transaction();
+  }
+
+  private async zapInDlmmForInitializedPosition(params: {
+    user: PublicKey;
+    lbPair: PublicKey;
+    position: PublicKey;
+    activeId: number;
+    minDeltaId: number;
+    maxDeltaId: number;
+    maxActiveBinSlippage: number;
+    favorXInActiveId: boolean;
+    binArrayBitmapExtension: PublicKey;
+    binArrays: AccountMeta[];
+    strategy: DlmmStrategyType;
+    remainingAccountInfo: any;
+  }): Promise<Transaction> {
+    const {
+      user,
+      lbPair,
+      position,
+      activeId,
+      minDeltaId,
+      maxDeltaId,
+      maxActiveBinSlippage,
+      favorXInActiveId,
+      binArrayBitmapExtension,
+      binArrays,
+      strategy,
+      remainingAccountInfo,
+    } = params;
+
+    const lbPairState = await getLbPairState(this.connection, lbPair);
+
+    const { tokenXMint, tokenYMint, reserveX, reserveY } = lbPairState;
+
+    const binArrayBitmapExtensionData = await this.connection.getAccountInfo(
+      binArrayBitmapExtension
+    );
+
+    const { tokenXProgram, tokenYProgram } = getTokenProgramId(lbPairState);
+
+    // we don't need to handle init ata account if not exist here
+    // because it already initialized in swap tx
+    const userTokenX = getAssociatedTokenAddressSync(
+      tokenXMint,
+      user,
+      false,
+      tokenXProgram
+    );
+    const userTokenY = getAssociatedTokenAddressSync(
+      tokenYMint,
+      user,
+      false,
+      tokenYProgram
+    );
+
+    return await this.zapProgram.methods
+      .zapInDlmmForInitializedPosition(
+        activeId,
+        minDeltaId,
+        maxDeltaId,
+        maxActiveBinSlippage,
+        favorXInActiveId,
+        strategy,
+        remainingAccountInfo
+      )
+      .accountsPartial({
+        ledger: deriveLedgerAccount(user),
+        lbPair,
+        position,
+        binArrayBitmapExtension: binArrayBitmapExtensionData
+          ? binArrayBitmapExtension
+          : null,
+        userTokenX,
+        userTokenY,
+        reserveX,
+        reserveY,
+        tokenXMint,
+        tokenYMint,
+        tokenXProgram,
+        tokenYProgram,
+        dlmmProgram: DLMM_PROGRAM_ID,
+        owner: user,
+        rentPayer: user,
+        memoProgram: MEMO_PROGRAM_ID,
+        dlmmEventAuthority: deriveDlmmEventAuthority(),
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(binArrays)
+      .transaction();
+  }
+
+  private async zapInDlmmForUnInitializedPosition(params: {
+    user: PublicKey;
+    lbPair: PublicKey;
+    position: PublicKey;
+    activeId: number;
+    binDelta: number;
+    maxActiveBinSlippage: number;
+    favorXInActiveId: boolean;
+    binArrayBitmapExtension: PublicKey;
+    binArrays: AccountMeta[];
+    strategy: DlmmStrategyType;
+    remainingAccountInfo: any;
+  }): Promise<Transaction> {
+    const {
+      user,
+      lbPair,
+      position,
+      activeId,
+      binDelta,
+      maxActiveBinSlippage,
+      favorXInActiveId,
+      binArrayBitmapExtension,
+      binArrays,
+      strategy,
+      remainingAccountInfo,
+    } = params;
+
+    const lbPairState = await getLbPairState(this.connection, lbPair);
+
+    const { tokenXMint, tokenYMint, reserveX, reserveY } = lbPairState;
+
+    const binArrayBitmapExtensionData = await this.connection.getAccountInfo(
+      binArrayBitmapExtension
+    );
+
+    const { tokenXProgram, tokenYProgram } = getTokenProgramId(lbPairState);
+
+    // we don't need to handle init ata account if not exist here
+    // because it already initialized in swap tx
+    const userTokenX = getAssociatedTokenAddressSync(
+      tokenXMint,
+      user,
+      false,
+      tokenXProgram
+    );
+    const userTokenY = getAssociatedTokenAddressSync(
+      tokenYMint,
+      user,
+      false,
+      tokenYProgram
+    );
+
+    return await this.zapProgram.methods
+      .zapInDlmmForUninitializedPosition(
+        binDelta,
+        activeId,
+        maxActiveBinSlippage,
+        favorXInActiveId,
+        strategy,
+        remainingAccountInfo
+      )
+      .accountsPartial({
+        ledger: deriveLedgerAccount(user),
+        lbPair,
+        position,
+        binArrayBitmapExtension: binArrayBitmapExtensionData
+          ? binArrayBitmapExtension
+          : null,
+        userTokenX,
+        userTokenY,
+        reserveX,
+        reserveY,
+        tokenXMint,
+        tokenYMint,
+        tokenXProgram,
+        tokenYProgram,
+        dlmmProgram: DLMM_PROGRAM_ID,
+        owner: user,
+        rentPayer: user,
+        memoProgram: MEMO_PROGRAM_ID,
+        dlmmEventAuthority: deriveDlmmEventAuthority(),
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(binArrays)
+      .transaction();
+  }
+
+  /////// ZAPIN FUNCTION ////////
+
+  /////// ZAPOUT FUNTIONS ///////
 
   /**
    * Executes a generic zap out operation with custom parameters.
