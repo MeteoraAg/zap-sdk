@@ -44,7 +44,7 @@ import {
 } from "./constants";
 import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
 import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
-import { getTokenProgramId } from "@meteora-ag/dlmm";
+import { getTokenProgramId, RemainingAccountInfo } from "@meteora-ag/dlmm";
 
 export class Zap {
   private connection: Connection;
@@ -197,7 +197,7 @@ export class Zap {
     binArrayBitmapExtension: PublicKey;
     binArrays: AccountMeta[];
     strategy: DlmmStrategyType;
-    remainingAccountInfo: any;
+    remainingAccountInfo: RemainingAccountInfo;
   }): Promise<Transaction> {
     const {
       user,
@@ -286,7 +286,7 @@ export class Zap {
     binArrayBitmapExtension: PublicKey;
     binArrays: AccountMeta[];
     strategy: DlmmStrategyType;
-    remainingAccountInfo: any;
+    remainingAccountInfo: RemainingAccountInfo;
   }): Promise<Transaction> {
     const {
       user,
