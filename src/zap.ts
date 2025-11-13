@@ -24,6 +24,7 @@ import {
   ZapOutThroughDlmmParams,
   ZapOutThroughJupiterParams,
   ZapProgram,
+  SwapEstimate,
 } from "./types";
 
 import {
@@ -45,6 +46,7 @@ import {
   convertLamportsToUiAmount,
   getJupiterQuote,
   buildJupiterSwapTransaction,
+  estimateBalancedSwap,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -68,7 +70,10 @@ import {
   NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { getTokenProgramId, RemainingAccountInfo } from "@meteora-ag/dlmm";
+import DLMM, {
+  getTokenProgramId,
+  RemainingAccountInfo,
+} from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
   calculateDirectPoolSwapAmount,
@@ -79,7 +84,7 @@ import {
 
 export class Zap {
   private connection: Connection;
-  private zapProgram: ZapProgram;
+  public zapProgram: ZapProgram;
   constructor(connection: Connection) {
     this.connection = connection;
     this.zapProgram = new Program(ZapIDL as ZapTypes, { connection });
@@ -1401,5 +1406,38 @@ export class Zap {
       preInstructions,
       postInstructions,
     });
+  }
+
+  /**
+   * Estimates a balanced swap operation to find the optimal swap route between Jupiter and DLMM.
+   * This method calculates the optimal swap amount to achieve equal value (1:1 ratio) between token X and token Y amounts.
+   *
+   * @param params - Estimation parameters
+   * @param params.lbPairAddress - Address of the DLMM pair to estimate against
+   * @param params.tokenXAmount - Amount of token X available
+   * @param params.tokenYAmount - Amount of token Y available
+   * @param params.slippage - Slippage tolerance as a decimal (e.g., 0.01 for 1%)
+   * @returns Swap calculation result with optimal routing information
+   */
+  async estimateBalancedSwapThroughJupiterAndDlmm(params: {
+    lbPairAddress: PublicKey;
+    tokenXAmount: BN;
+    tokenYAmount: BN;
+    slippage: number;
+  }): Promise<SwapEstimate> {
+    const { lbPairAddress, tokenXAmount, tokenYAmount, slippage } = params;
+
+    const dlmm = await DLMM.create(this.connection, lbPairAddress);
+    const activeBin = await dlmm.getActiveBin();
+
+    const swapEstimate = await estimateBalancedSwap(
+      tokenXAmount,
+      tokenYAmount,
+      dlmm,
+      activeBin,
+      slippage
+    );
+
+    return swapEstimate;
   }
 }

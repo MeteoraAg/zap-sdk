@@ -8,6 +8,7 @@ import {
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
+import { SwapQuote } from "@meteora-ag/dlmm";
 
 export type ZapProgram = Program<Zap>;
 
@@ -215,3 +216,19 @@ export type ZapInDammV2Response = {
   closeLedgerTx: Transaction;
   cleanUpTransaction: Transaction;
 };
+export interface SwapQuoteResult {
+  inAmount: BN;
+  outAmount: BN;
+  minOutAmount: BN;
+  route: "jupiter" | "dlmm";
+  originalQuote: JupiterQuoteResponse | SwapQuote;
+}
+
+export interface SwapEstimate {
+  swapDirection: "xToY" | "yToX" | "noSwap";
+  swapAmount: BN;
+  expectedOutput: BN;
+  postSwapX: BN;
+  postSwapY: BN;
+  quote: SwapQuoteResult | null;
+}
