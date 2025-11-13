@@ -715,7 +715,6 @@ export class Zap {
       .add(swapTransaction ?? new Transaction())
       .add(initializeLedgerTx)
       .add(ledgerTransaction)
-      .add(new Transaction().add(...preInstructions))
       .add(zapInTx)
       .add(closeLedgerTx);
   }
