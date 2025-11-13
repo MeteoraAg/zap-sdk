@@ -390,7 +390,6 @@ export class Zap {
     pool: PublicKey
   ): Promise<{
     amount: BN;
-    externalSwapAmount: BN;
     isDirectPool: boolean;
     tokenAMint: PublicKey;
     tokenBMint: PublicKey;
@@ -457,7 +456,7 @@ export class Zap {
       let maxTransferAmount;
 
       if (!jupPrice || jupPrice > currentPoolPrice) {
-        amount = new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString());
+        amount = amountIn;
         maxTransferAmount = U64_MAX; // TODO check this
       } else {
         const poolBalanceTokenA = getAmountAFromLiquidityDelta(
@@ -484,6 +483,8 @@ export class Zap {
             tokenBDecimal
           )
         );
+
+        amount = amountIn.sub(swapAmount);
 
         const swapAmountInLamports = new BN(
           convertUiAmountToLamports(swapAmount, tokenADecimal)
@@ -524,8 +525,7 @@ export class Zap {
       }
 
       return {
-        amount: new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
-        externalSwapAmount: new BN(0),
+        amount: new BN(amount.mul(LAMPORTS_PER_SOL).floor().toString()),
         isDirectPool: true,
         tokenAMint,
         tokenBMint,
@@ -547,7 +547,6 @@ export class Zap {
 
       return {
         amount: new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
-        externalSwapAmount: new BN(0),
         isDirectPool: false,
         tokenAMint,
         tokenBMint,
