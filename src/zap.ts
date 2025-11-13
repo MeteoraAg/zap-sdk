@@ -1,6 +1,7 @@
 import {
   AccountMeta,
   Connection,
+  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -32,6 +33,12 @@ import {
   deriveDammV2EventAuthority,
   deriveDammV2PoolAuthority,
   deriveDlmmEventAuthority,
+  wrapSOLInstruction,
+  convertUiAmountToLamports,
+  getJupiterPrice,
+  convertLamportsToUiAmount,
+  getJupiterQuote,
+  getJupiterSwapInstruction,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -42,9 +49,22 @@ import {
   JUP_V6_PROGRAM_ID,
   MEMO_PROGRAM_ID,
 } from "./constants";
-import { getTokenProgram } from "@meteora-ag/cp-amm-sdk";
+import {
+  getAmountAFromLiquidityDelta,
+  getAmountBFromLiquidityDelta,
+  getPriceFromSqrtPrice,
+  getTokenDecimals,
+  getTokenProgram,
+  Rounding,
+} from "@meteora-ag/cp-amm-sdk";
 import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
-import { getTokenProgramId, RemainingAccountInfo } from "@meteora-ag/dlmm";
+import {
+  getTokenProgramId,
+  RemainingAccountInfo,
+  U64_MAX,
+} from "@meteora-ag/dlmm";
+import Decimal from "decimal.js";
+import { calculateSwapAmountDirectPool } from "./helpers/zapin";
 
 export class Zap {
   private connection: Connection;
@@ -125,6 +145,12 @@ export class Zap {
     positionNftAccount: PublicKey;
     preSqrtPrice: BN;
     maxSqrtPriceChangeBps: number;
+    tokenAMint: PublicKey;
+    tokenBMint: PublicKey;
+    tokenAVault: PublicKey;
+    tokenBVault: PublicKey;
+    tokenAProgram: PublicKey;
+    tokenBProgram: PublicKey;
   }): Promise<Transaction> {
     const {
       user,
@@ -133,19 +159,13 @@ export class Zap {
       positionNftAccount,
       preSqrtPrice,
       maxSqrtPriceChangeBps,
-    } = params;
-    const dammV2PoolState = await getDammV2Pool(this.connection, pool);
-    const {
       tokenAMint,
       tokenBMint,
       tokenAVault,
       tokenBVault,
-      tokenAFlag,
-      tokenBFlag,
-    } = dammV2PoolState;
-
-    const tokenAProgram = getTokenProgram(tokenAFlag);
-    const tokenBProgram = getTokenProgram(tokenBFlag);
+      tokenAProgram,
+      tokenBProgram,
+    } = params;
 
     // we don't need to handle init ata account if not exist here
     // because it already initialized in swap tx
@@ -363,6 +383,342 @@ export class Zap {
   }
 
   /////// ZAPIN FUNCTION ////////
+
+  async getZapInDammV2Params(
+    user: PublicKey,
+    amountIn: Decimal,
+    pool: PublicKey
+  ): Promise<{
+    amount: BN;
+    externalSwapAmount: BN;
+    isDirectPool: boolean;
+    tokenAMint: PublicKey;
+    tokenBMint: PublicKey;
+    tokenAVault: PublicKey;
+    tokenBVault: PublicKey;
+    tokenAProgram: PublicKey;
+    tokenBProgram: PublicKey;
+    preInstructions: TransactionInstruction[];
+    maxTransferAmount: BN;
+    preSqrtPrice: BN;
+    swapTransaction: Transaction | null;
+  }> {
+    const poolState = await getDammV2Pool(this.connection, pool);
+    const {
+      tokenAMint,
+      tokenBMint,
+      tokenAVault,
+      tokenBVault,
+      tokenAFlag,
+      tokenBFlag,
+      sqrtPrice,
+    } = poolState;
+
+    const tokenAProgram = getTokenProgram(tokenAFlag);
+    const tokenBProgram = getTokenProgram(tokenBFlag);
+
+    const preInstructions: TransactionInstruction[] = [];
+
+    const userWrapSolAcc = getAssociatedTokenAddressSync(NATIVE_MINT, user);
+    const warpSOL = wrapSOLInstruction(
+      user,
+      userWrapSolAcc,
+      BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
+    );
+    preInstructions.push(...warpSOL);
+
+    const tokenADecimal = await getTokenDecimals(
+      this.connection,
+      tokenAMint,
+      tokenAProgram
+    );
+
+    const tokenBDecimal = await getTokenDecimals(
+      this.connection,
+      tokenBMint,
+      tokenBProgram
+    );
+
+    const currentPoolPrice = getPriceFromSqrtPrice(
+      sqrtPrice,
+      tokenADecimal,
+      tokenADecimal
+    ).toNumber();
+
+    if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
+      let jupPrice;
+      if (tokenAMint.equals(NATIVE_MINT)) {
+        // TODO: Token B is native
+        jupPrice = await getJupiterPrice(tokenAMint);
+      }
+
+      let amount;
+      let swapTransaction: Transaction | null = null;
+      let maxTransferAmount;
+
+      if (!jupPrice || jupPrice > currentPoolPrice) {
+        amount = new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString());
+        maxTransferAmount = U64_MAX; // TODO check this
+      } else {
+        const poolBalanceTokenA = getAmountAFromLiquidityDelta(
+          poolState.sqrtPrice,
+          poolState.sqrtMaxPrice,
+          poolState.liquidity,
+          Rounding.Down
+        );
+        const poolBalanceTokenB = getAmountBFromLiquidityDelta(
+          poolState.sqrtMinPrice,
+          poolState.sqrtPrice,
+          poolState.liquidity,
+          Rounding.Down
+        );
+        const swapAmount = calculateSwapAmountDirectPool(
+          amountIn,
+          new Decimal(jupPrice),
+          convertLamportsToUiAmount(
+            new Decimal(poolBalanceTokenA.toString()),
+            tokenADecimal
+          ),
+          convertLamportsToUiAmount(
+            new Decimal(poolBalanceTokenB.toString()),
+            tokenBDecimal
+          )
+        );
+
+        const swapAmountInLamports = new BN(
+          convertUiAmountToLamports(swapAmount, tokenADecimal)
+            .floor()
+            .toString()
+        );
+
+        // TODO: fix these params dynamic customize
+        const quoteResponse = await getJupiterQuote(
+          tokenAMint,
+          tokenBMint,
+          swapAmountInLamports,
+          40,
+          50,
+          false,
+          true,
+          true,
+          "https://lite-api.jup.ag"
+        );
+
+        const swapInstructionResponse = await getJupiterSwapInstruction(
+          user,
+          quoteResponse
+        );
+
+        const swapInstruction = new TransactionInstruction({
+          keys: swapInstructionResponse.swapInstruction.accounts,
+          programId: new PublicKey(
+            swapInstructionResponse.swapInstruction.programId
+          ),
+          data: Buffer.from(
+            swapInstructionResponse.swapInstruction.data,
+            "base64"
+          ),
+        });
+        swapTransaction = new Transaction().add(swapInstruction);
+        maxTransferAmount = new BN(quoteResponse.outAmount).muln(6).divn(5); // larger than 20% with out amount, TODO: fix as dynamic threshold
+      }
+
+      return {
+        amount: new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
+        externalSwapAmount: new BN(0),
+        isDirectPool: true,
+        tokenAMint,
+        tokenBMint,
+        tokenAVault,
+        tokenBVault,
+        tokenAProgram: getTokenProgram(tokenAFlag),
+        tokenBProgram: getTokenProgram(tokenBFlag),
+        maxTransferAmount, // TODO calculate from quotes
+        preSqrtPrice: poolState.sqrtPrice,
+        preInstructions,
+        swapTransaction,
+      };
+    } else {
+      ///  fetch price SOL. -> token A, SOL -> token B
+      ///  if p1 & p2 null -> return error
+      /// p1 => swap all amount -> token A -> zap in
+      /// p2 => swap all amount -> token b -> zap in
+      // p1 & p2 => calculateSwapAmountForIndirectPool
+
+      return {
+        amount: new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
+        externalSwapAmount: new BN(0),
+        isDirectPool: false,
+        tokenAMint,
+        tokenBMint,
+        tokenAVault,
+        tokenBVault,
+        tokenAProgram: getTokenProgram(tokenAFlag),
+        tokenBProgram: getTokenProgram(tokenBFlag),
+        preInstructions,
+        maxTransferAmount: U64_MAX, // TODO calculate from quotes
+        preSqrtPrice: poolState.sqrtPrice,
+        swapTransaction: null,
+      };
+    }
+  }
+
+  async buildZapInDammV2Transaction(params: {
+    user: PublicKey;
+    pool: PublicKey;
+    position: PublicKey;
+    positionNftAccount: PublicKey;
+    tokenAMint: PublicKey;
+    tokenBMint: PublicKey;
+    tokenAVault: PublicKey;
+    tokenBVault: PublicKey;
+    tokenAProgram: PublicKey;
+    tokenBProgram: PublicKey;
+    isDirectPool: boolean;
+    maxTransferAmount: BN;
+    preSqrtPrice: BN;
+    maxSqrtPriceChangeBps: number;
+    amount: BN;
+    preInstruction: TransactionInstruction[];
+    swapTransaction: Transaction | null;
+  }): Promise<Transaction> {
+    const {
+      user,
+      pool,
+      position,
+      positionNftAccount,
+      tokenAMint,
+      tokenBMint,
+      tokenAVault,
+      tokenBVault,
+      tokenAProgram,
+      tokenBProgram,
+      isDirectPool,
+      amount,
+      maxTransferAmount,
+      preSqrtPrice,
+      maxSqrtPriceChangeBps,
+      preInstruction,
+      swapTransaction,
+    } = params;
+
+    const preInstructions: TransactionInstruction[] = [];
+
+    const [
+      { ataPubkey: tokenAAccount, ix: initializeTokenAIx },
+      { ataPubkey: tokenBAccount, ix: initializeTokenBIx },
+    ] = await Promise.all([
+      getOrCreateATAInstruction(
+        this.connection,
+        tokenAMint,
+        user,
+        user,
+        false,
+        tokenAProgram
+      ),
+      getOrCreateATAInstruction(
+        this.connection,
+        tokenBMint,
+        user,
+        user,
+        false,
+        tokenBProgram
+      ),
+    ]);
+
+    initializeTokenAIx && preInstructions.push(initializeTokenAIx);
+    initializeTokenBIx && preInstructions.push(initializeTokenBIx);
+    preInstructions.push(...preInstruction);
+
+    // initialize ledger tx
+    const initializeLedgerTx = await this.initializeLedgerAccount(user, user);
+
+    // ledger transaction included: setLedgerBalanceTx and updateLedgerBalanceAfterSwap
+    const ledgerTransaction = new Transaction();
+    if (isDirectPool) {
+      const isTokenA = tokenAMint.equals(NATIVE_MINT);
+      const setLedgerBalanceTx = await this.setLedgerBalance(
+        user,
+        amount,
+        isTokenA
+      );
+
+      ledgerTransaction.add(setLedgerBalanceTx);
+      if (swapTransaction) {
+        const preTokenBalance = await getTokenAccountBalance(
+          this.connection,
+          isTokenA ? tokenBAccount : tokenAAccount
+        );
+
+        const updateLedgerBalanceAfterSwapTx =
+          await this.updateLedgerBalanceAfterSwap(
+            user,
+            tokenBAccount,
+            new BN(preTokenBalance),
+            maxTransferAmount,
+            !isTokenA
+          );
+        ledgerTransaction.add(updateLedgerBalanceAfterSwapTx);
+      }
+    } else {
+      const preTokenABalance = await getTokenAccountBalance(
+        this.connection,
+        tokenAAccount
+      );
+
+      const preTokenBBalance = await getTokenAccountBalance(
+        this.connection,
+        tokenAAccount
+      );
+
+      const updateLedgerBalanceTokenAAfterSwapTx =
+        await this.updateLedgerBalanceAfterSwap(
+          user,
+          tokenAAccount,
+          new BN(preTokenABalance),
+          maxTransferAmount,
+          true // is token A
+        );
+
+      const updateLedgerBalanceTokenBAfterSwapTx =
+        await this.updateLedgerBalanceAfterSwap(
+          user,
+          tokenBAccount,
+          new BN(preTokenBBalance),
+          maxTransferAmount,
+          false // isn't token A
+        );
+      ledgerTransaction
+        .add(updateLedgerBalanceTokenAAfterSwapTx)
+        .add(updateLedgerBalanceTokenBAfterSwapTx);
+    }
+
+    const zapInTx = await this.zapInDammV2({
+      user,
+      pool,
+      position,
+      positionNftAccount,
+      preSqrtPrice,
+      maxSqrtPriceChangeBps,
+      tokenAMint,
+      tokenBMint,
+      tokenAVault,
+      tokenBVault,
+      tokenAProgram,
+      tokenBProgram,
+    });
+
+    const closeLedgerTx = await this.closeLedgerAccount(user, user);
+
+    return new Transaction()
+      .add(...preInstructions)
+      .add(swapTransaction ?? new Transaction())
+      .add(initializeLedgerTx)
+      .add(ledgerTransaction)
+      .add(new Transaction().add(...preInstructions))
+      .add(zapInTx)
+      .add(closeLedgerTx);
+  }
 
   /////// ZAPOUT FUNTIONS ///////
 

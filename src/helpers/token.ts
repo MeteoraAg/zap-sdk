@@ -90,7 +90,15 @@ export async function getTokenAccountBalance(
   connection: Connection,
   tokenAccount: PublicKey
 ): Promise<string> {
-  return (await connection.getTokenAccountBalance(tokenAccount)).value.amount;
+  let balance: string;
+  try {
+    balance = (await connection.getTokenAccountBalance(tokenAccount)).value
+      .amount;
+  } catch {
+    balance = "0";
+  }
+
+  return balance;
 }
 
 /**

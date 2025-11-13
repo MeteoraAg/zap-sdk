@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/zap.json`.
  */
 export type Zap = {
-  address: "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz";
+  address: "TzaptpzVczx3Q3rwujjXdhx1HFBXLP7UApACiqWujtA";
   metadata: {
     name: "zap";
     version: "0.2.0";

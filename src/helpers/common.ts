@@ -4,6 +4,7 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
+import Decimal from "decimal.js";
 
 export async function getTokenProgramFromMint(
   connection: Connection,
@@ -35,4 +36,18 @@ export async function getTokenProgramFromMint(
     );
     return TOKEN_PROGRAM_ID;
   }
+}
+
+export function convertLamportsToUiAmount(
+  amount: Decimal,
+  decimals: number
+): Decimal {
+  return amount.div(Decimal.pow(10, decimals));
+}
+
+export function convertUiAmountToLamports(
+  amount: Decimal,
+  decimals: number
+): Decimal {
+  return amount.mul(Decimal.pow(10, decimals));
 }
