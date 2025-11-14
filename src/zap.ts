@@ -35,7 +35,6 @@ import {
   deriveDlmmEventAuthority,
   wrapSOLInstruction,
   convertUiAmountToLamports,
-  getJupiterPrice,
   convertLamportsToUiAmount,
   getJupiterQuote,
   getJupiterSwapInstruction,
@@ -50,6 +49,7 @@ import {
   MEMO_PROGRAM_ID,
 } from "./constants";
 import {
+  CpAmm,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
   getPriceFromSqrtPrice,
@@ -403,6 +403,7 @@ export class Zap {
     swapTransaction: Transaction | null;
   }> {
     const poolState = await getDammV2Pool(this.connection, pool);
+    const dammV2 = new CpAmm(this.connection);
     const {
       tokenAMint,
       tokenBMint,
@@ -441,24 +442,55 @@ export class Zap {
     const currentPoolPrice = getPriceFromSqrtPrice(
       sqrtPrice,
       tokenADecimal,
-      tokenADecimal
+      tokenBDecimal
     ).toNumber();
 
     if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
-      let jupPrice;
-      if (tokenAMint.equals(NATIVE_MINT)) {
-        // TODO: Token B is native
-        jupPrice = await getJupiterPrice(tokenAMint);
-      }
+      const currentSlot = await this.connection.getSlot();
+      const currentTime =
+        (await this.connection.getBlockTime(currentSlot)) ??
+        new Date().getTime() / 1000;
+      const dammV2Quote = dammV2.getQuote({
+        inAmount: new BN(LAMPORTS_PER_SOL),
+        inputTokenMint: tokenAMint,
+        slippage: 50,
+        poolState,
+        currentSlot,
+        currentTime,
+        tokenADecimal,
+        tokenBDecimal,
+      });
+
+      const jupiterQuote = await getJupiterQuote(
+        tokenAMint,
+        tokenBMint,
+        new BN(LAMPORTS_PER_SOL),
+        40,
+        50,
+        false,
+        true,
+        true,
+        "https://lite-api.jup.ag"
+      );
 
       let amount;
       let swapTransaction: Transaction | null = null;
       let maxTransferAmount;
 
-      if (!jupPrice || jupPrice > currentPoolPrice) {
+      console.log("jup out: ", jupiterQuote?.outAmount.toString());
+      console.log("damm v2", dammV2Quote.minSwapOutAmount.toString());
+
+      if (
+        !jupiterQuote ||
+        new BN(jupiterQuote.outAmount).lt(dammV2Quote.minSwapOutAmount)
+      ) {
         amount = amountIn;
         maxTransferAmount = U64_MAX; // TODO check this
       } else {
+        const price = convertLamportsToUiAmount(
+          new Decimal(jupiterQuote.outAmount),
+          6
+        );
         const poolBalanceTokenA = getAmountAFromLiquidityDelta(
           poolState.sqrtPrice,
           poolState.sqrtMaxPrice,
@@ -473,7 +505,7 @@ export class Zap {
         );
         const swapAmount = calculateSwapAmountDirectPool(
           amountIn,
-          new Decimal(jupPrice),
+          new Decimal(price),
           convertLamportsToUiAmount(
             new Decimal(poolBalanceTokenA.toString()),
             tokenADecimal
@@ -511,7 +543,13 @@ export class Zap {
         );
 
         const swapInstruction = new TransactionInstruction({
-          keys: swapInstructionResponse.swapInstruction.accounts,
+          keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {
+            return {
+              pubkey: new PublicKey(item.pubkey),
+              isSigner: item.isSigner,
+              isWritable: item.isWritable,
+            };
+          }),
           programId: new PublicKey(
             swapInstructionResponse.swapInstruction.programId
           ),
@@ -521,7 +559,7 @@ export class Zap {
           ),
         });
         swapTransaction = new Transaction().add(swapInstruction);
-        maxTransferAmount = new BN(quoteResponse.outAmount).muln(6).divn(5); // larger than 20% with out amount, TODO: fix as dynamic threshold
+        maxTransferAmount = new BN(quoteResponse!.outAmount).muln(6).divn(5); // larger than 20% with out amount, TODO: fix as dynamic threshold
       }
 
       return {
@@ -580,7 +618,14 @@ export class Zap {
     amount: BN;
     preInstruction: TransactionInstruction[];
     swapTransaction: Transaction | null;
-  }): Promise<Transaction> {
+  }): Promise<{
+    preInstructionTx: Transaction;
+    swapTransaction: Transaction;
+    initializeLedgerTx: Transaction;
+    ledgerTransaction: Transaction;
+    zapInTx: Transaction;
+    closeLedgerTx: Transaction;
+  }> {
     const {
       user,
       pool,
@@ -627,6 +672,7 @@ export class Zap {
 
     initializeTokenAIx && preInstructions.push(initializeTokenAIx);
     initializeTokenBIx && preInstructions.push(initializeTokenBIx);
+
     preInstructions.push(...preInstruction);
 
     // initialize ledger tx
@@ -644,15 +690,16 @@ export class Zap {
 
       ledgerTransaction.add(setLedgerBalanceTx);
       if (swapTransaction) {
+        const tokenAccount = isTokenA ? tokenBAccount : tokenAAccount;
         const preTokenBalance = await getTokenAccountBalance(
           this.connection,
-          isTokenA ? tokenBAccount : tokenAAccount
+          tokenAccount
         );
 
         const updateLedgerBalanceAfterSwapTx =
           await this.updateLedgerBalanceAfterSwap(
             user,
-            tokenBAccount,
+            tokenAccount,
             new BN(preTokenBalance),
             maxTransferAmount,
             !isTokenA
@@ -709,13 +756,14 @@ export class Zap {
 
     const closeLedgerTx = await this.closeLedgerAccount(user, user);
 
-    return new Transaction()
-      .add(...preInstructions)
-      .add(swapTransaction ?? new Transaction())
-      .add(initializeLedgerTx)
-      .add(ledgerTransaction)
-      .add(zapInTx)
-      .add(closeLedgerTx);
+    return {
+      preInstructionTx: new Transaction().add(...preInstructions),
+      swapTransaction: swapTransaction ?? new Transaction(),
+      initializeLedgerTx,
+      ledgerTransaction,
+      zapInTx,
+      closeLedgerTx,
+    };
   }
 
   /////// ZAPOUT FUNTIONS ///////

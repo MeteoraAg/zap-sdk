@@ -13,7 +13,7 @@ export async function getJupiterQuote(
   restrictIntermediateTokens: boolean,
   apiUrl: string = "https://lite-api.jup.ag",
   apiKey?: string
-): Promise<JupiterQuoteResponse> {
+): Promise<JupiterQuoteResponse | null> {
   const params = new URLSearchParams({
     inputMint: inputMint.toString(),
     outputMint: outputMint.toString(),
@@ -38,8 +38,9 @@ export async function getJupiterQuote(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
+    // const errorText = await response.text();
+    // throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
+    return null;
   }
 
   const result = (await response.json()) as JupiterQuoteResponse;
@@ -80,26 +81,4 @@ export async function getJupiterSwapInstruction(
   const result = (await response.json()) as JupiterSwapInstructionResponse;
 
   return result;
-}
-
-export async function getJupiterPrice(
-  tokenMint: PublicKey
-): Promise<number | null> {
-  let initPrice = null;
-  try {
-    const baseTokenMintStr: string = tokenMint.toString();
-    const apiUrl = `https://lite-api.jup.ag/price/v3?ids=${baseTokenMintStr}`;
-    const res = await fetch(apiUrl);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch price from Jupiter: ${res.statusText}`);
-    }
-    const data = (await res.json()) as Record<string, { usdPrice: number }>;
-    const priceObj = data[baseTokenMintStr];
-    initPrice = priceObj.usdPrice;
-    console.log(`Fetched initPrice from Jupiter API: ${initPrice}`);
-  } catch (e) {
-    console.error("Failed to fetch initPrice from Jupiter API.", e);
-  }
-
-  return initPrice;
 }
