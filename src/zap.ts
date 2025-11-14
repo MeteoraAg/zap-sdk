@@ -1237,7 +1237,7 @@ export class Zap {
     transactions.push(closeLedgerTx);
 
     return {
-      transactions,
+      transactions, // TODO: optimize to reduce # of transactions
       estimation: {
         currentBalances: {
           tokenX: tokenXAmount,
