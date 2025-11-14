@@ -238,8 +238,8 @@ export interface RebalanceDlmmPositionParams {
   maxDeltaId: number;
   swapSlippagePercentage: number;
   liquiditySlippagePercentage: number;
-  strategy?: StrategyType;
-  favorXInActiveId?: boolean;
+  strategy: StrategyType;
+  favorXInActiveId: boolean;
 }
 
 export interface RebalanceDlmmPositionResponse {

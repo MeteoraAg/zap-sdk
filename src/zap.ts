@@ -1059,8 +1059,8 @@ export class Zap {
       maxDeltaId,
       swapSlippagePercentage,
       liquiditySlippagePercentage,
-      strategy = StrategyType.Spot,
-      favorXInActiveId = true,
+      strategy,
+      favorXInActiveId,
     } = params;
 
     const dlmm = await DLMM.create(this.connection, lbPairAddress);
