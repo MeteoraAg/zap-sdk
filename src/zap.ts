@@ -1170,8 +1170,17 @@ export class Zap {
       new BN(preTokenYBalance.value.amount)
     );
 
-    // initialize ledger and update balances
-    const initLedgerTx = await this.initializeLedgerAccount(user, user);
+    // initialize ledger if needed and update balances
+    const ledgerAddress = deriveLedgerAccount(user);
+    const ledgerAccountInfo = await this.connection.getAccountInfo(
+      ledgerAddress
+    );
+    const ledgerTx = new Transaction();
+    if (!ledgerAccountInfo) {
+      // initialize ledger account when it already exists will cause an error
+      const initLedgerTx = await this.initializeLedgerAccount(user, user);
+      ledgerTx.add(...initLedgerTx.instructions);
+    }
     const updateLedgerXTx = await this.updateLedgerBalanceAfterSwap(
       user,
       userTokenX,
@@ -1179,6 +1188,7 @@ export class Zap {
       tokenXAmountAfterSwap,
       true
     );
+    ledgerTx.add(...updateLedgerXTx.instructions);
     const updateLedgerYTx = await this.updateLedgerBalanceAfterSwap(
       user,
       userTokenY,
@@ -1186,12 +1196,7 @@ export class Zap {
       tokenYAmountAfterSwap,
       false
     );
-    const ledgerTx = new Transaction();
-    ledgerTx.add(
-      ...initLedgerTx.instructions,
-      ...updateLedgerXTx.instructions,
-      ...updateLedgerYTx.instructions
-    );
+    ledgerTx.add(...updateLedgerYTx.instructions);
     transactions.push(ledgerTx);
 
     const maxActiveBinSlippage = getAndCapMaxActiveBinSlippage(
