@@ -1,6 +1,14 @@
-import { PublicKey } from "@solana/web3.js";
+import {
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import BN from "bn.js";
-import { JupiterQuoteResponse, JupiterSwapInstructionResponse } from "../types";
+import {
+  JupiterInstruction,
+  JupiterQuoteResponse,
+  JupiterSwapInstructionResponse,
+} from "../types";
 
 export async function getJupiterQuote(
   inputMint: PublicKey,
@@ -81,4 +89,46 @@ export async function getJupiterSwapInstruction(
   const result = (await response.json()) as JupiterSwapInstructionResponse;
 
   return result;
+}
+
+export async function buildJupiterSwapTransaction(
+  user: PublicKey,
+  inputMint: PublicKey,
+  outputMint: PublicKey,
+  amount: BN,
+  maxAccounts: number,
+  slippageBps: number
+): Promise<{
+  transaction: Transaction;
+  quoteResponse: JupiterQuoteResponse | null;
+}> {
+  const quoteResponse = await getJupiterQuote(
+    inputMint,
+    outputMint,
+    amount,
+    maxAccounts,
+    slippageBps,
+    false,
+    true,
+    true,
+    "https://lite-api.jup.ag"
+  );
+
+  const swapInstructionResponse = await getJupiterSwapInstruction(
+    user,
+    quoteResponse
+  );
+  const instruction = new TransactionInstruction({
+    keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {
+      return {
+        pubkey: new PublicKey(item.pubkey),
+        isSigner: item.isSigner,
+        isWritable: item.isWritable,
+      };
+    }),
+    programId: new PublicKey(swapInstructionResponse.swapInstruction.programId),
+    data: Buffer.from(swapInstructionResponse.swapInstruction.data, "base64"),
+  });
+
+  return { transaction: new Transaction().add(instruction), quoteResponse };
 }

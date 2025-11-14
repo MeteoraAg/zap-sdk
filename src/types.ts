@@ -2,6 +2,7 @@ import { Program, IdlTypes } from "@coral-xyz/anchor";
 import {
   AccountMeta,
   PublicKey,
+  Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
@@ -130,3 +131,47 @@ export const StrategyType = {
 } as const;
 
 export type DlmmStrategyType = (typeof StrategyType)[keyof typeof StrategyType];
+
+export type ZapInDammV2DirectPoolParam = {
+  user: PublicKey;
+  pool: PublicKey;
+  position: PublicKey;
+  positionNftAccount: PublicKey;
+  tokenAMint: PublicKey;
+  tokenBMint: PublicKey;
+  tokenAVault: PublicKey;
+  tokenBVault: PublicKey;
+  tokenAProgram: PublicKey;
+  tokenBProgram: PublicKey;
+  isDirectPool: boolean;
+  maxTransferAmount: BN;
+  preSqrtPrice: BN;
+  maxSqrtPriceChangeBps: number;
+  amount: BN;
+  preInstructions: TransactionInstruction[];
+  swapTransaction: Transaction | null;
+};
+
+export enum SwapExternalType {
+  swapToA,
+  swapToB,
+  swapToBoth,
+}
+
+export type ZapInDammV2InDirectPoolParam = Omit<
+  ZapInDammV2DirectPoolParam,
+  "maxTransferAmount"
+> & {
+  swapType: SwapExternalType;
+  maxTransferAmountA: BN;
+  maxTransferAmountB: BN;
+};
+
+export type ZapInDammV2Response = {
+  setupTransaction: Transaction;
+  swapTransaction: Transaction;
+  initializeLedgerTx: Transaction;
+  ledgerTransaction: Transaction;
+  zapInTx: Transaction;
+  closeLedgerTx: Transaction;
+};
