@@ -219,7 +219,6 @@ export type ZapInDammV2Response = {
 export interface SwapQuoteResult {
   inAmount: BN;
   outAmount: BN;
-  minOutAmount: BN;
   route: "jupiter" | "dlmm";
   originalQuote: JupiterQuoteResponse | SwapQuote;
 }

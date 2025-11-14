@@ -1,8 +1,9 @@
-import DLMM, { BinLiquidity } from "@meteora-ag/dlmm";
-import { JupiterQuoteResponse, SwapEstimate, SwapQuoteResult } from "../types";
+import DLMM, { BinLiquidity, SwapQuote } from "@meteora-ag/dlmm";
+import { SwapEstimate, SwapQuoteResult } from "../types";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
+import { getJupiterQuote } from "./jupiter";
 
 const TOLERANCE = new Decimal(0.0001); // 0.01%
 
@@ -21,77 +22,18 @@ async function getDlmmSwapQuote(
   dlmm: DLMM,
   inMint: PublicKey,
   inAmount: BN,
-  slippage: number
-): Promise<SwapQuoteResult | null> {
-  try {
-    const swapForY = dlmm.lbPair.tokenXMint.equals(inMint);
-    const binArrays = await dlmm.getBinArrayForSwap(swapForY);
-    const quotation = dlmm.swapQuote(
-      inAmount,
-      swapForY,
-      new BN(slippage * 100),
-      binArrays
-    );
+  slippageBps: number
+): Promise<SwapQuote | null> {
+  const swapForY = dlmm.lbPair.tokenXMint.equals(inMint);
+  const binArrays = await dlmm.getBinArrayForSwap(swapForY);
+  const quotation = dlmm.swapQuote(
+    inAmount,
+    swapForY,
+    new BN(slippageBps),
+    binArrays
+  );
 
-    return {
-      inAmount: quotation.consumedInAmount,
-      outAmount: quotation.outAmount,
-      minOutAmount: quotation.minOutAmount,
-      route: "dlmm",
-      originalQuote: quotation,
-    };
-  } catch (error) {
-    console.error("DLMM swap quote failed:", error);
-    return null;
-  }
-}
-
-// TODO: use the existing jupiter quote function
-async function getJupiterSwapQuote(
-  inMint: string,
-  outMint: string,
-  inAmount: BN,
-  inTokenDecimals: number,
-  slippage: number
-): Promise<SwapQuoteResult | null> {
-  try {
-    const params = new URLSearchParams({
-      inputMint: inMint,
-      outputMint: outMint,
-      amount: inAmount.toString(),
-      slippageBps: (slippage * 100).toString(),
-      maxAccounts: "50",
-      onlyDirectRoutes: "true",
-      restrictIntermediateTokens: "true",
-    });
-
-    const response = await fetch(
-      `https://lite-api.jup.ag/swap/v1/quote?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      }
-    );
-
-    const data = (await response.json()) as JupiterQuoteResponse;
-
-    if ("error" in data || !data.inAmount || !data.outAmount) {
-      return null;
-    }
-
-    return {
-      inAmount: new BN(data.inAmount),
-      outAmount: new BN(data.outAmount),
-      minOutAmount: new BN(data.outAmount), // Jupiter already includes slippage
-      route: "jupiter",
-      originalQuote: data,
-    };
-  } catch (error) {
-    console.error("Jupiter swap quote failed:", error);
-    return null;
-  }
+  return quotation;
 }
 
 async function getBestSwapQuoteJupiterDlmm(
@@ -99,27 +41,48 @@ async function getBestSwapQuoteJupiterDlmm(
   inMint: PublicKey,
   outMint: PublicKey,
   inAmount: BN,
-  inTokenDecimals: number,
   slippage: number
 ): Promise<SwapQuoteResult | null> {
-  const [dlmmQuote, jupiterQuote] = await Promise.all([
-    getDlmmSwapQuote(dlmm, inMint, inAmount, slippage),
-    getJupiterSwapQuote(
-      inMint.toBase58(),
-      outMint.toBase58(),
+  const slippageBps = slippage * 100;
+  const [dlmmQuoteResult, jupiterQuoteResult] = await Promise.allSettled([
+    getDlmmSwapQuote(dlmm, inMint, inAmount, slippageBps),
+    getJupiterQuote(
+      inMint,
+      outMint,
       inAmount,
-      inTokenDecimals,
-      slippage
+      50,
+      slippageBps,
+      false,
+      true,
+      true,
+      "https://lite-api.jup.ag"
     ),
   ]);
 
-  // Choose the quote with better output
+  const jupiterQuote =
+    jupiterQuoteResult.status === "fulfilled" && jupiterQuoteResult.value
+      ? {
+          inAmount: new BN(jupiterQuoteResult.value.inAmount),
+          outAmount: new BN(jupiterQuoteResult.value.outAmount),
+          route: "jupiter" as const,
+          originalQuote: jupiterQuoteResult.value,
+        }
+      : null;
+  const dlmmQuote =
+    dlmmQuoteResult.status === "fulfilled" && dlmmQuoteResult.value
+      ? {
+          inAmount: dlmmQuoteResult.value.consumedInAmount,
+          outAmount: dlmmQuoteResult.value.minOutAmount,
+          route: "dlmm" as const,
+          originalQuote: dlmmQuoteResult.value,
+        }
+      : null;
+
   if (!dlmmQuote && !jupiterQuote) return null;
   if (!dlmmQuote) return jupiterQuote;
   if (!jupiterQuote) return dlmmQuote;
 
-  // Compare minimum output amounts
-  return dlmmQuote.minOutAmount.gt(jupiterQuote.minOutAmount)
+  return jupiterQuote.outAmount.gt(dlmmQuote.outAmount)
     ? dlmmQuote
     : jupiterQuote;
 }
@@ -286,7 +249,6 @@ export async function estimateBalancedSwap(
     inMint,
     outMint,
     initialSwapAmount,
-    inTokenDecimals,
     swapSlippage
   );
 
@@ -303,17 +265,17 @@ export async function estimateBalancedSwap(
   }
 
   // calculate effective rate from initialQuote
-  const effectiveRate = new Decimal(initialQuote.minOutAmount.toString()).div(
+  const effectiveRate = new Decimal(initialQuote.outAmount.toString()).div(
     new Decimal(initialQuote.inAmount.toString())
   );
 
   const postSwapX =
     swapDirection === "xToY"
       ? tokenXAmount.sub(initialSwapAmount) // Spent X
-      : tokenXAmount.add(initialQuote.minOutAmount); // Received X
+      : tokenXAmount.add(initialQuote.outAmount); // Received X
   const postSwapY =
     swapDirection === "xToY"
-      ? tokenYAmount.add(initialQuote.minOutAmount) // Received Y
+      ? tokenYAmount.add(initialQuote.outAmount) // Received Y
       : tokenYAmount.sub(initialSwapAmount); // Spent Y
   const testValueX = new Decimal(postSwapX.toString()).mul(activeBinPrice);
   const testValueY = new Decimal(postSwapY.toString());
@@ -324,7 +286,7 @@ export async function estimateBalancedSwap(
     return {
       swapAmount: initialSwapAmount,
       swapDirection,
-      expectedOutput: initialQuote.minOutAmount,
+      expectedOutput: initialQuote.outAmount,
       postSwapX,
       postSwapY,
       quote: initialQuote,
@@ -353,7 +315,6 @@ export async function estimateBalancedSwap(
     inMint,
     outMint,
     refinedAmount,
-    inTokenDecimals,
     swapSlippage
   );
 
@@ -362,7 +323,7 @@ export async function estimateBalancedSwap(
     return {
       swapAmount: initialSwapAmount,
       swapDirection,
-      expectedOutput: initialQuote.minOutAmount,
+      expectedOutput: initialQuote.outAmount,
       postSwapX,
       postSwapY,
       quote: initialQuote,
@@ -372,16 +333,16 @@ export async function estimateBalancedSwap(
   const finalPostSwapX =
     swapDirection === "xToY"
       ? tokenXAmount.sub(refinedAmount) // Spent X
-      : tokenXAmount.add(finalQuote.minOutAmount); // Received X
+      : tokenXAmount.add(finalQuote.outAmount); // Received X
   const finalPostSwapY =
     swapDirection === "xToY"
-      ? tokenYAmount.add(finalQuote.minOutAmount) // Received Y
+      ? tokenYAmount.add(finalQuote.outAmount) // Received Y
       : tokenYAmount.sub(refinedAmount); // Spent Y
 
   return {
     swapAmount: refinedAmount,
     swapDirection,
-    expectedOutput: finalQuote.minOutAmount,
+    expectedOutput: finalQuote.outAmount,
     postSwapX: finalPostSwapX,
     postSwapY: finalPostSwapY,
     quote: finalQuote,
