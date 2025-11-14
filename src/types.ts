@@ -223,11 +223,47 @@ export interface SwapQuoteResult {
   originalQuote: JupiterQuoteResponse | SwapQuote;
 }
 
+type SwapDirection = "xToY" | "yToX" | "noSwap";
+type DlmmSwapRoute = "jupiter" | "dlmm";
+
 export interface SwapEstimate {
-  swapDirection: "xToY" | "yToX" | "noSwap";
+  swapDirection: SwapDirection;
   swapAmount: BN;
   expectedOutput: BN;
   postSwapX: BN;
   postSwapY: BN;
   quote: SwapQuoteResult | null;
+}
+
+///// ZAPIN TYPES /////
+export interface RebalanceDlmmPositionParams {
+  lbPairAddress: PublicKey;
+  positionAddress: PublicKey;
+  user: PublicKey;
+  minDeltaId: number;
+  maxDeltaId: number;
+  swapSlippagePercentage: number;
+  liquiditySlippagePercentage: number;
+  strategy?: DlmmStrategyType;
+  favorXInActiveId?: boolean;
+}
+
+export interface RebalanceDlmmPositionResponse {
+  transactions: Transaction[];
+  estimation: {
+    currentBalances: {
+      tokenX: BN;
+      tokenY: BN;
+    };
+    afterSwap: {
+      tokenX: BN;
+      tokenY: BN;
+    };
+    swap: {
+      direction: SwapDirection;
+      amount: BN;
+      expectedOutput: BN;
+      route: DlmmSwapRoute | null;
+    };
+  };
 }

@@ -1,5 +1,6 @@
 import {
   AccountMeta,
+  ComputeBudgetProgram,
   Connection,
   LAMPORTS_PER_SOL,
   PublicKey,
@@ -25,6 +26,8 @@ import {
   ZapOutThroughJupiterParams,
   ZapProgram,
   SwapEstimate,
+  RebalanceDlmmPositionParams,
+  RebalanceDlmmPositionResponse,
 } from "./types";
 
 import {
@@ -47,6 +50,7 @@ import {
   getJupiterQuote,
   buildJupiterSwapTransaction,
   estimateBalancedSwap,
+  getJupiterSwapInstruction,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -73,6 +77,11 @@ import {
 import DLMM, {
   getTokenProgramId,
   RemainingAccountInfo,
+  getAndCapMaxActiveBinSlippage,
+  BASIS_POINT_MAX,
+  getBinArraysRequiredByPositionRange,
+  deriveBinArrayBitmapExtension,
+  MAX_ACTIVE_BIN_SLIPPAGE,
 } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
@@ -244,7 +253,6 @@ export class Zap {
     maxDeltaId: number;
     maxActiveBinSlippage: number;
     favorXInActiveId: boolean;
-    binArrayBitmapExtension: PublicKey;
     binArrays: AccountMeta[];
     strategy: DlmmStrategyType;
     remainingAccountInfo: RemainingAccountInfo;
@@ -258,7 +266,6 @@ export class Zap {
       maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
-      binArrayBitmapExtension,
       binArrays,
       strategy,
       remainingAccountInfo,
@@ -267,6 +274,11 @@ export class Zap {
     const lbPairState = await getLbPairState(this.connection, lbPair);
 
     const { tokenXMint, tokenYMint, reserveX, reserveY } = lbPairState;
+
+    const [binArrayBitmapExtension] = deriveBinArrayBitmapExtension(
+      lbPair,
+      DLMM_PROGRAM_ID
+    );
 
     const binArrayBitmapExtensionData = await this.connection.getAccountInfo(
       binArrayBitmapExtension
@@ -1016,6 +1028,231 @@ export class Zap {
         cleanUpInstructions.length > 0
           ? new Transaction().add(...cleanUpInstructions)
           : new Transaction(),
+    };
+  }
+
+  /**
+   * High level method for DLMM position rebalancing
+   * Consist of remove liquidity, zap out through Jupiter or DLMM, and zap back in to rebalance the position
+   *
+   * @param params - Rebalancing DLMM position parameters
+   * @param params.lbPairAddress - The DLMM pool address
+   * @param params.positionAddress - The position address
+   * @param params.user - Public key of the user performing the rebalance
+   * @param params.minDeltaId - The delta between the id of the rebalanced min bin id and the active bin id (relative to active bin)
+   * @param params.maxDeltaId - The delta between the id of the rebalanced max bin id and the active bin id (relative to active bin)
+   * @param params.swapSlippagePercentage - The maximum slippage percentage for the swap operation
+   * @param params.liquiditySlippagePercentage - The maximum slippage percentage for the rebalance liquidity operation
+   * @param params.strategy - The strategy to use for the rebalance
+   * @param params.favorXInActiveId - Whether to favor token X in the active bin
+   * @returns Response containing transactions and estimation details
+   */
+  async rebalanceDlmmPosition(
+    params: RebalanceDlmmPositionParams
+  ): Promise<RebalanceDlmmPositionResponse> {
+    const {
+      lbPairAddress,
+      positionAddress,
+      user,
+      minDeltaId,
+      maxDeltaId,
+      swapSlippagePercentage,
+      liquiditySlippagePercentage,
+      strategy = { spot: {} },
+      favorXInActiveId = true,
+    } = params;
+
+    const dlmm = await DLMM.create(this.connection, lbPairAddress);
+    const position = await dlmm.getPosition(positionAddress);
+    const transactions: Transaction[] = [];
+
+    // remove liquidity from existing position
+    const removeLiquidityTxs = await dlmm.removeLiquidity({
+      user,
+      position: positionAddress,
+      fromBinId: position.positionData.lowerBinId,
+      toBinId: position.positionData.upperBinId,
+      bps: new BN(BASIS_POINT_MAX), // remove all liquidity
+      shouldClaimAndClose: false,
+    });
+    transactions.push(...removeLiquidityTxs);
+
+    // swap tokens to balance if needed
+    const tokenXAmount = new BN(position.positionData.totalXAmount);
+    const tokenYAmount = new BN(position.positionData.totalYAmount);
+    const swapEstimate = await this.estimateBalancedSwapThroughJupiterAndDlmm({
+      lbPairAddress,
+      tokenXAmount,
+      tokenYAmount,
+      slippage: swapSlippagePercentage,
+    });
+    const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
+    if (swapEstimate.swapDirection !== "noSwap") {
+      const isXToY = swapEstimate.swapDirection === "xToY";
+      const inputMint = isXToY
+        ? dlmm.lbPair.tokenXMint
+        : dlmm.lbPair.tokenYMint;
+      const outputMint = isXToY
+        ? dlmm.lbPair.tokenYMint
+        : dlmm.lbPair.tokenXMint;
+      const inputTokenProgram = isXToY ? tokenXProgram : tokenYProgram;
+      const outputTokenProgram = isXToY ? tokenYProgram : tokenXProgram;
+
+      let zapOutTx: Transaction;
+      if (swapEstimate.quote?.route === "jupiter") {
+        const jupiterQuote = swapEstimate.quote.originalQuote;
+        const jupiterSwapResponse = await getJupiterSwapInstruction(
+          user,
+          jupiterQuote
+        );
+
+        zapOutTx = await this.zapOutThroughJupiter({
+          user,
+          inputMint,
+          outputMint,
+          inputTokenProgram,
+          outputTokenProgram,
+          jupiterSwapResponse,
+          maxSwapAmount: swapEstimate.swapAmount,
+          percentageToZapOut: 100,
+        });
+      } else {
+        zapOutTx = await this.zapOutThroughDlmm({
+          user,
+          lbPairAddress,
+          inputMint,
+          outputMint,
+          inputTokenProgram,
+          outputTokenProgram,
+          amountIn: swapEstimate.swapAmount,
+          minimumSwapAmountOut: swapEstimate.expectedOutput,
+          maxSwapAmount: swapEstimate.swapAmount,
+          percentageToZapOut: 100,
+        });
+      }
+      transactions.push(zapOutTx);
+    }
+
+    const userTokenX = getAssociatedTokenAddressSync(
+      dlmm.lbPair.tokenXMint,
+      user,
+      false,
+      tokenXProgram
+    );
+    const userTokenY = getAssociatedTokenAddressSync(
+      dlmm.lbPair.tokenYMint,
+      user,
+      false,
+      tokenYProgram
+    );
+    const preTokenXBalance = await this.connection.getTokenAccountBalance(
+      userTokenX
+    );
+    const preTokenYBalance = await this.connection.getTokenAccountBalance(
+      userTokenY
+    );
+
+    const tokenXAmountAfterSwap = BN.min(
+      swapEstimate.swapDirection === "xToY"
+        ? tokenXAmount.sub(swapEstimate.swapAmount)
+        : swapEstimate.swapDirection === "yToX"
+        ? tokenXAmount.add(swapEstimate.expectedOutput)
+        : tokenXAmount,
+      new BN(preTokenXBalance.value.amount)
+    );
+    const tokenYAmountAfterSwap = BN.min(
+      swapEstimate.swapDirection === "xToY"
+        ? tokenYAmount.add(swapEstimate.expectedOutput)
+        : swapEstimate.swapDirection === "yToX"
+        ? tokenYAmount.sub(swapEstimate.swapAmount)
+        : tokenYAmount,
+      new BN(preTokenYBalance.value.amount)
+    );
+
+    // initialize ledger and update balances
+    const initLedgerTx = await this.initializeLedgerAccount(user, user);
+    const updateLedgerXTx = await this.updateLedgerBalanceAfterSwap(
+      user,
+      userTokenX,
+      tokenXAmountAfterSwap,
+      tokenXAmountAfterSwap,
+      true
+    );
+    const updateLedgerYTx = await this.updateLedgerBalanceAfterSwap(
+      user,
+      userTokenY,
+      tokenYAmountAfterSwap,
+      tokenYAmountAfterSwap,
+      false
+    );
+    const ledgerTx = new Transaction();
+    ledgerTx.add(
+      ...initLedgerTx.instructions,
+      ...updateLedgerXTx.instructions,
+      ...updateLedgerYTx.instructions
+    );
+    transactions.push(ledgerTx);
+
+    const maxActiveBinSlippage = getAndCapMaxActiveBinSlippage(
+      liquiditySlippagePercentage * 100,
+      dlmm.lbPair.binStep,
+      MAX_ACTIVE_BIN_SLIPPAGE
+    );
+    // should we move this into zapInDlmmForInitializedPosition method instead?
+    const binArrays = getBinArraysRequiredByPositionRange(
+      lbPairAddress,
+      new BN(dlmm.lbPair.activeId + minDeltaId), // minBinId
+      new BN(dlmm.lbPair.activeId + maxDeltaId), // maxBinId
+      DLMM_PROGRAM_ID
+    ).map((item) => ({
+      pubkey: item.key,
+      isSigner: false,
+      isWritable: true,
+    }));
+    // build zap in transaction with compute budget
+    const zapInTx = await this.zapInDlmmForInitializedPosition({
+      user,
+      lbPair: lbPairAddress,
+      position: positionAddress,
+      activeId: dlmm.lbPair.activeId,
+      minDeltaId,
+      maxDeltaId,
+      maxActiveBinSlippage,
+      favorXInActiveId,
+      binArrays,
+      strategy,
+      remainingAccountInfo: { slices: [] },
+    });
+    // TODO: Set proper compute unit limit using more accurate calculation
+    zapInTx.instructions.unshift(
+      // based on 1 tx that consumed 462_610. Add 20% for safety and round up to nearest 100,000
+      // 462_610 * 1.2 = 555_132 => 600_000
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })
+    );
+    transactions.push(zapInTx);
+
+    // close ledger account
+    const closeLedgerTx = await this.closeLedgerAccount(user, user);
+    transactions.push(closeLedgerTx);
+
+    return {
+      transactions,
+      estimation: {
+        currentBalances: {
+          tokenX: tokenXAmount,
+          tokenY: tokenYAmount,
+        },
+        afterSwap: {
+          tokenX: tokenXAmountAfterSwap,
+          tokenY: tokenYAmountAfterSwap,
+        },
+        swap: {
+          direction: swapEstimate.swapDirection,
+          amount: swapEstimate.swapAmount,
+          expectedOutput: swapEstimate.expectedOutput,
+          route: swapEstimate.quote?.route ?? null,
+        },
+      },
     };
   }
 
