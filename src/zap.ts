@@ -41,7 +41,6 @@ import {
   convertUiAmountToLamports,
   convertLamportsToUiAmount,
   getJupiterQuote,
-  getJupiterSwapInstruction,
   buildJupiterSwapTransaction,
 } from "./helpers";
 import {
@@ -57,17 +56,12 @@ import {
   CpAmm,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
-  getPriceFromSqrtPrice,
   getTokenDecimals,
   getTokenProgram,
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
 import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
-import {
-  getTokenProgramId,
-  RemainingAccountInfo,
-  U64_MAX,
-} from "@meteora-ag/dlmm";
+import { getTokenProgramId, RemainingAccountInfo } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
   calculateDirectPoolSwapAmount,
@@ -728,16 +722,14 @@ export class Zap {
 
       const swapAmountToB = amountIn.sub(swapAmountToA);
 
+      console.log({ swapAmountToA, swapAmountToB });
+
       const swapAmountToAInLamports = new BN(
-        convertUiAmountToLamports(swapAmountToA, tokenADecimal)
-          .floor()
-          .toString()
+        convertUiAmountToLamports(swapAmountToA, 9).floor().toString()
       );
 
       const swapAmountToBInLamports = new BN(
-        convertUiAmountToLamports(swapAmountToB, tokenBDecimal)
-          .floor()
-          .toString()
+        convertUiAmountToLamports(swapAmountToB, 9).floor().toString()
       );
 
       const { transaction: swapToATransaction, quoteResponse: swapToAQuote } =
