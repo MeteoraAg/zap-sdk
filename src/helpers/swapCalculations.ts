@@ -59,6 +59,7 @@ async function getBestSwapQuoteJupiterDlmm(
     ),
   ]);
 
+  // normalizing the quotes
   const jupiterQuote =
     jupiterQuoteResult.status === "fulfilled" && jupiterQuoteResult.value
       ? {
