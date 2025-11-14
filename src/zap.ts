@@ -13,7 +13,6 @@ import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
 import {
-  DlmmStrategyType,
   GetZapInDammV2DirectPoolParams,
   GetZapInDammV2InDirectPoolParams,
   SwapExternalType,
@@ -51,6 +50,7 @@ import {
   buildJupiterSwapTransaction,
   estimateBalancedSwap,
   getJupiterSwapInstruction,
+  toProgramStrategyType,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -82,6 +82,7 @@ import DLMM, {
   getBinArraysRequiredByPositionRange,
   deriveBinArrayBitmapExtension,
   MAX_ACTIVE_BIN_SLIPPAGE,
+  StrategyType,
 } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
@@ -254,7 +255,7 @@ export class Zap {
     maxActiveBinSlippage: number;
     favorXInActiveId: boolean;
     binArrays: AccountMeta[];
-    strategy: DlmmStrategyType;
+    strategy: StrategyType;
     remainingAccountInfo: RemainingAccountInfo;
   }): Promise<Transaction> {
     const {
@@ -308,7 +309,7 @@ export class Zap {
         maxDeltaId,
         maxActiveBinSlippage,
         favorXInActiveId,
-        strategy,
+        toProgramStrategyType(strategy),
         remainingAccountInfo
       )
       .accountsPartial({
@@ -347,7 +348,7 @@ export class Zap {
     favorXInActiveId: boolean;
     binArrayBitmapExtension: PublicKey;
     binArrays: AccountMeta[];
-    strategy: DlmmStrategyType;
+    strategy: StrategyType;
     remainingAccountInfo: RemainingAccountInfo;
   }): Promise<Transaction> {
     const {
@@ -395,7 +396,7 @@ export class Zap {
         activeId,
         maxActiveBinSlippage,
         favorXInActiveId,
-        strategy,
+        toProgramStrategyType(strategy),
         remainingAccountInfo
       )
       .accountsPartial({
@@ -1058,7 +1059,7 @@ export class Zap {
       maxDeltaId,
       swapSlippagePercentage,
       liquiditySlippagePercentage,
-      strategy = { spot: {} },
+      strategy = StrategyType.Spot,
       favorXInActiveId = true,
     } = params;
 

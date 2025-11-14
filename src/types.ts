@@ -8,7 +8,7 @@ import {
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
-import { SwapQuote } from "@meteora-ag/dlmm";
+import { SwapQuote, StrategyType } from "@meteora-ag/dlmm";
 
 export type ZapProgram = Program<Zap>;
 
@@ -126,13 +126,7 @@ export interface JupiterSwapInstructionResponse {
   };
 }
 
-export const StrategyType = {
-  spot: { spot: {} },
-  curve: { curve: {} },
-  bidAsk: { bidAsk: {} },
-} as const;
-
-export type DlmmStrategyType = (typeof StrategyType)[keyof typeof StrategyType];
+export type ProgramStrategyType = IdlTypes<Zap>["strategyType"];
 
 export type GetZapInDammV2DirectPoolParams = {
   user: PublicKey;
@@ -244,7 +238,7 @@ export interface RebalanceDlmmPositionParams {
   maxDeltaId: number;
   swapSlippagePercentage: number;
   liquiditySlippagePercentage: number;
-  strategy?: DlmmStrategyType;
+  strategy?: StrategyType;
   favorXInActiveId?: boolean;
 }
 
