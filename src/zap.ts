@@ -415,12 +415,12 @@ export class Zap {
     const preInstructions: TransactionInstruction[] = [];
 
     const userWrapSolAcc = getAssociatedTokenAddressSync(NATIVE_MINT, user);
-    const warpSOL = wrapSOLInstruction(
+    const wrapSOL = wrapSOLInstruction(
       user,
       userWrapSolAcc,
       BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
     );
-    preInstructions.push(...warpSOL);
+    preInstructions.push(...wrapSOL);
 
     const tokenADecimal = await getTokenDecimals(
       this.connection,
@@ -567,7 +567,7 @@ export class Zap {
 
     const preInstructions: TransactionInstruction[] = [];
 
-    const { ataPubkey: userWrapSolAcc, ix: initializeWarpSOLAta } =
+    const { ataPubkey: userWrapSolAcc, ix: initializeWrapSOLAta } =
       await getOrCreateATAInstruction(
         this.connection,
         NATIVE_MINT,
@@ -576,13 +576,13 @@ export class Zap {
         false,
         tokenAProgram
       );
-    const warpSOL = wrapSOLInstruction(
+    const wrapSOL = wrapSOLInstruction(
       user,
       userWrapSolAcc,
       BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
     );
-    initializeWarpSOLAta && preInstructions.push(initializeWarpSOLAta);
-    preInstructions.push(...warpSOL);
+    initializeWrapSOLAta && preInstructions.push(initializeWrapSOLAta);
+    preInstructions.push(...wrapSOL);
 
     const poolBalanceTokenA = getAmountAFromLiquidityDelta(
       poolState.sqrtPrice,
