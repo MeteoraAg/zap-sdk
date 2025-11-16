@@ -146,9 +146,6 @@ function binarySearchRefineSwapAmount(
 
     // Stop if within tolerance
     if (ratio.sub(1).abs().lt(TOLERANCE)) {
-      console.log(
-        `✓ Converged in ${i + 1} iterations (ratio: ${ratio.toFixed(6)})`
-      );
       best = mid;
       break;
     }

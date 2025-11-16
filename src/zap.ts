@@ -39,6 +39,7 @@ import {
   getOrCreateATAInstruction,
   getTokenAccountBalance,
   unwrapSOLInstruction,
+  wrapSOLInstruction,
   deriveLedgerAccount,
   deriveDammV2EventAuthority,
   deriveDammV2PoolAuthority,
@@ -1146,12 +1147,12 @@ export class Zap {
       false,
       tokenYProgram
     );
-    const preTokenXBalance = await this.connection.getTokenAccountBalance(
-      userTokenX
-    );
-    const preTokenYBalance = await this.connection.getTokenAccountBalance(
-      userTokenY
-    );
+    const preTokenXBalance = dlmm.lbPair.tokenXMint.equals(NATIVE_MINT)
+      ? await this.connection.getBalance(user)
+      : await getTokenAccountBalance(this.connection, userTokenX);
+    const preTokenYBalance = dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)
+      ? await this.connection.getBalance(user)
+      : await getTokenAccountBalance(this.connection, userTokenY);
 
     const tokenXAmountAfterSwap = BN.min(
       swapEstimate.swapDirection === "xToY"
@@ -1159,7 +1160,7 @@ export class Zap {
         : swapEstimate.swapDirection === "yToX"
         ? tokenXAmount.add(swapEstimate.expectedOutput)
         : tokenXAmount,
-      new BN(preTokenXBalance.value.amount)
+      new BN(preTokenXBalance)
     );
     const tokenYAmountAfterSwap = BN.min(
       swapEstimate.swapDirection === "xToY"
@@ -1167,7 +1168,7 @@ export class Zap {
         : swapEstimate.swapDirection === "yToX"
         ? tokenYAmount.sub(swapEstimate.swapAmount)
         : tokenYAmount,
-      new BN(preTokenYBalance.value.amount)
+      new BN(preTokenYBalance)
     );
 
     // initialize ledger if needed and update balances
@@ -1181,10 +1182,37 @@ export class Zap {
       const initLedgerTx = await this.initializeLedgerAccount(user, user);
       ledgerTx.add(...initLedgerTx.instructions);
     }
+    // Wrap SOL if needed before updating ledger
+    if (
+      dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) &&
+      tokenXAmountAfterSwap.gt(new BN(0))
+    ) {
+      const wrapAmount = BigInt(tokenXAmountAfterSwap.toString());
+      const wrapIxs = wrapSOLInstruction(
+        user,
+        userTokenX,
+        wrapAmount,
+        tokenXProgram
+      );
+      ledgerTx.add(...wrapIxs);
+    }
+    if (
+      dlmm.lbPair.tokenYMint.equals(NATIVE_MINT) &&
+      tokenYAmountAfterSwap.gt(new BN(0))
+    ) {
+      const wrapAmount = BigInt(tokenYAmountAfterSwap.toString());
+      const wrapIxs = wrapSOLInstruction(
+        user,
+        userTokenY,
+        wrapAmount,
+        tokenYProgram
+      );
+      ledgerTx.add(...wrapIxs);
+    }
     const updateLedgerXTx = await this.updateLedgerBalanceAfterSwap(
       user,
       userTokenX,
-      tokenXAmountAfterSwap,
+      new BN(preTokenXBalance),
       tokenXAmountAfterSwap,
       true
     );
@@ -1192,7 +1220,7 @@ export class Zap {
     const updateLedgerYTx = await this.updateLedgerBalanceAfterSwap(
       user,
       userTokenY,
-      tokenYAmountAfterSwap,
+      new BN(preTokenYBalance),
       tokenYAmountAfterSwap,
       false
     );
@@ -1236,6 +1264,24 @@ export class Zap {
       ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })
     );
     transactions.push(zapInTx);
+
+    // unwrap any remaining WSOL back to native SOL
+    const unwrapTx = new Transaction();
+    if (dlmm.lbPair.tokenXMint.equals(NATIVE_MINT)) {
+      const unwrapIx = unwrapSOLInstruction(user, user);
+      if (unwrapIx) {
+        unwrapTx.add(unwrapIx);
+      }
+    }
+    if (dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)) {
+      const unwrapIx = unwrapSOLInstruction(user, user);
+      if (unwrapIx) {
+        unwrapTx.add(unwrapIx);
+      }
+    }
+    if (unwrapTx.instructions.length > 0) {
+      transactions.push(unwrapTx);
+    }
 
     // close ledger account
     const closeLedgerTx = await this.closeLedgerAccount(user, user);
