@@ -27,6 +27,7 @@ import {
   SwapEstimate,
   RebalanceDlmmPositionParams,
   RebalanceDlmmPositionResponse,
+  EstimateBalancedSwapThroughJupiterAndDlmmParams,
 } from "./types";
 
 import {
@@ -1708,12 +1709,9 @@ export class Zap {
    * @param params.slippage - Slippage tolerance as a decimal (e.g., 0.01 for 1%)
    * @returns Swap calculation result with optimal routing information
    */
-  async estimateBalancedSwapThroughJupiterAndDlmm(params: {
-    lbPairAddress: PublicKey;
-    tokenXAmount: BN;
-    tokenYAmount: BN;
-    slippage: number;
-  }): Promise<SwapEstimate> {
+  async estimateBalancedSwapThroughJupiterAndDlmm(
+    params: EstimateBalancedSwapThroughJupiterAndDlmmParams
+  ): Promise<SwapEstimate> {
     const { lbPairAddress, tokenXAmount, tokenYAmount, slippage } = params;
 
     const dlmm = await DLMM.create(this.connection, lbPairAddress);

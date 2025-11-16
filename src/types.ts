@@ -261,3 +261,10 @@ export interface RebalanceDlmmPositionResponse {
     };
   };
 }
+
+export interface EstimateBalancedSwapThroughJupiterAndDlmmParams {
+  lbPairAddress: PublicKey;
+  tokenXAmount: BN;
+  tokenYAmount: BN;
+  slippage: number;
+}
