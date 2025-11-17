@@ -7,6 +7,7 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
+import Decimal from "decimal.js";
 
 export type ZapProgram = Program<Zap>;
 
@@ -131,6 +132,43 @@ export const StrategyType = {
 } as const;
 
 export type DlmmStrategyType = (typeof StrategyType)[keyof typeof StrategyType];
+
+export type GetZapInDammV2DirectPoolParams = {
+  user: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: Decimal;
+  pool: PublicKey;
+  position: PublicKey;
+  positionNftAccount: PublicKey;
+  maxSqrtPriceChangeBps: number;
+  maxTransferAmountExtendPercentage: number;
+  maxAccounts: number;
+  slippageBps: number;
+  dammV2Quote: {
+    swapInAmount: BN;
+    consumedInAmount: BN;
+    swapOutAmount: BN;
+    minSwapOutAmount: BN;
+    totalFee: BN;
+    priceImpact: Decimal;
+  };
+  jupiterQuote: JupiterQuoteResponse | null;
+};
+
+export type GetZapInDammV2InDirectPoolParams = {
+  user: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: Decimal;
+  pool: PublicKey;
+  position: PublicKey;
+  positionNftAccount: PublicKey;
+  maxSqrtPriceChangeBps: number;
+  maxTransferAmountExtendPercentage: number;
+  maxAccounts: number;
+  slippageBps: number;
+  jupiterQuoteToA: JupiterQuoteResponse | null;
+  jupiterQuoteToB: JupiterQuoteResponse | null;
+};
 
 export type ZapInDammV2DirectPoolParam = {
   user: PublicKey;

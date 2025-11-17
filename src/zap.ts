@@ -13,6 +13,8 @@ import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
 import {
   DlmmStrategyType,
+  GetZapInDammV2DirectPoolParams,
+  GetZapInDammV2InDirectPoolParams,
   SwapExternalType,
   ZapInDammV2DirectPoolParam,
   ZapInDammV2InDirectPoolParam,
@@ -408,18 +410,22 @@ export class Zap {
   /////// ZAPIN FUNCTION ////////
 
   async getZapInDammV2DirectPoolParams(
-    user: PublicKey,
-    inputTokenMint: PublicKey,
-    amountIn: Decimal,
-    pool: PublicKey,
-    position: PublicKey,
-    positionNftAccount: PublicKey,
-    maxSqrtPriceChangeBps: number,
-    maxTransferAmountExtendPercentage: number = 20,
-    maxAccounts: number = 40,
-    slippageBps: number = 300,
-    dammV2SlippageBps: number = 300
+    params: GetZapInDammV2DirectPoolParams
   ): Promise<ZapInDammV2DirectPoolParam> {
+    const {
+      user,
+      pool,
+      inputTokenMint,
+      amountIn,
+      position,
+      positionNftAccount,
+      maxAccounts,
+      maxSqrtPriceChangeBps,
+      slippageBps,
+      dammV2Quote,
+      jupiterQuote,
+      maxTransferAmountExtendPercentage,
+    } = params;
     const poolState = await getDammV2Pool(this.connection, pool);
     const {
       tokenAMint,
@@ -482,17 +488,6 @@ export class Zap {
     let amount;
     let swapTransaction: Transaction | null = null;
     let maxTransferAmount;
-
-    const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes(
-      this.connection,
-      inputTokenMint,
-      poolState,
-      tokenADecimal,
-      tokenBDecimal,
-      dammV2SlippageBps,
-      slippageBps,
-      maxAccounts
-    );
 
     if (
       jupiterQuote !== null &&
@@ -580,17 +575,22 @@ export class Zap {
   }
 
   async getZapInDammV2IndirectPoolParams(
-    user: PublicKey,
-    inputTokenMint: PublicKey,
-    amountIn: Decimal,
-    pool: PublicKey,
-    position: PublicKey,
-    positionNftAccount: PublicKey,
-    maxSqrtPriceChangeBps: number,
-    maxTransferAmountExtendPercentage: number = 20,
-    maxAccounts: number = 40,
-    slippageBps: number = 300
+    params: GetZapInDammV2InDirectPoolParams
   ): Promise<ZapInDammV2InDirectPoolParam | null> {
+    const {
+      user,
+      inputTokenMint,
+      pool,
+      position,
+      positionNftAccount,
+      amountIn,
+      maxAccounts,
+      maxSqrtPriceChangeBps,
+      maxTransferAmountExtendPercentage,
+      slippageBps,
+      jupiterQuoteToA,
+      jupiterQuoteToB,
+    } = params;
     const poolState = await getDammV2Pool(this.connection, pool);
     const {
       tokenAMint,
@@ -671,31 +671,7 @@ export class Zap {
       Rounding.Down
     );
 
-    const jupiterQuoteTokenA = await getJupiterQuote(
-      inputTokenMint,
-      poolState.tokenAMint,
-      new BN(LAMPORTS_PER_SOL),
-      maxAccounts,
-      slippageBps,
-      false,
-      true,
-      true,
-      "https://lite-api.jup.ag"
-    );
-
-    const jupiterQuoteTokenB = await getJupiterQuote(
-      inputTokenMint,
-      poolState.tokenBMint,
-      new BN(LAMPORTS_PER_SOL),
-      maxAccounts,
-      slippageBps,
-      false,
-      true,
-      true,
-      "https://lite-api.jup.ag"
-    );
-
-    if (jupiterQuoteTokenA && jupiterQuoteTokenB === null) {
+    if (jupiterQuoteToA && jupiterQuoteToB === null) {
       const amountInLamports = convertUiAmountToLamports(
         amountIn,
         inputTokenDecimal
@@ -725,7 +701,7 @@ export class Zap {
         tokenAProgram,
         tokenBProgram,
         maxTransferAmountA: getExtendMaxAmountTransfer(
-          jupiterQuoteTokenA.outAmount,
+          jupiterQuoteToA.outAmount,
           maxTransferAmountExtendPercentage
         ),
         swapType: SwapExternalType.swapToA,
@@ -737,7 +713,7 @@ export class Zap {
       };
     }
 
-    if (jupiterQuoteTokenB && jupiterQuoteTokenA === null) {
+    if (jupiterQuoteToB && jupiterQuoteToA === null) {
       const amountInLamports = convertUiAmountToLamports(
         amountIn,
         inputTokenDecimal
@@ -768,7 +744,7 @@ export class Zap {
         tokenBProgram,
         maxTransferAmountA: new BN(0),
         maxTransferAmountB: getExtendMaxAmountTransfer(
-          jupiterQuoteTokenB.outAmount,
+          jupiterQuoteToB.outAmount,
           maxTransferAmountExtendPercentage
         ),
         swapType: SwapExternalType.swapToB,
@@ -779,14 +755,14 @@ export class Zap {
       };
     }
 
-    if (jupiterQuoteTokenA && jupiterQuoteTokenB) {
+    if (jupiterQuoteToA && jupiterQuoteToB) {
       const priceA = convertLamportsToUiAmount(
-        new Decimal(jupiterQuoteTokenA.outAmount),
+        new Decimal(jupiterQuoteToA.outAmount),
         tokenADecimal
       );
 
       const priceB = convertLamportsToUiAmount(
-        new Decimal(jupiterQuoteTokenB.outAmount),
+        new Decimal(jupiterQuoteToB.outAmount),
         tokenBDecimal
       );
 

@@ -1,4 +1,8 @@
-import { CpAmm, derivePositionAddress } from "@meteora-ag/cp-amm-sdk";
+import {
+  CpAmm,
+  derivePositionAddress,
+  getTokenDecimals,
+} from "@meteora-ag/cp-amm-sdk";
 import {
   Keypair,
   PublicKey,
@@ -9,6 +13,8 @@ import { Connection } from "@solana/web3.js";
 import { Zap } from "../src";
 import Decimal from "decimal.js";
 import { derivePosition } from "@meteora-ag/dlmm";
+import { getJupAndDammV2Quotes } from "../src/helpers/zapin";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const MAINNET_RPC_URL = "";
 
@@ -73,52 +79,49 @@ async function main() {
   const amountUseToAddLiquidity = new Decimal(5); // 5 USDC
 
   const zap = new Zap(connection);
+  const poolState = await dammV2Instance.fetchPoolState(pool);
 
-  const {
-    amount,
+  const { tokenAMint, tokenBMint } = poolState;
+
+  const tokenADecimal = await getTokenDecimals(
+    connection,
     tokenAMint,
-    tokenBMint,
-    tokenAVault,
-    tokenBVault,
-    tokenAProgram,
-    tokenBProgram,
-    preInstructions,
-    isDirectPool,
-    maxTransferAmount,
-    swapTransaction,
-    maxSqrtPriceChangeBps,
-    preSqrtPrice,
-    cleanUpInstructions,
-  } = await zap.getZapInDammV2DirectPoolParams(
-    user.publicKey,
-    usdcMint,
-    amountUseToAddLiquidity,
-    pool,
-    position,
-    positionNftAccount,
-    1000 // maxSqrtPriceChangeBps
+    TOKEN_PROGRAM_ID
   );
 
-  const zapInDammV2Tx = await zap.buildZapInDammV2Transaction({
+  const tokenBDecimal = await getTokenDecimals(
+    connection,
+    tokenBMint,
+    TOKEN_PROGRAM_ID
+  );
+
+  const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes(
+    connection,
+    usdcMint,
+    poolState,
+    tokenADecimal,
+    tokenBDecimal,
+    300, //dammV2SlippageBps: 300,
+    300, // jup slippageBps:
+    40 // maxAccounts
+  );
+
+  const result = await zap.getZapInDammV2DirectPoolParams({
     user: user.publicKey,
+    inputTokenMint: usdcMint,
+    amountIn: amountUseToAddLiquidity,
     pool,
     position,
     positionNftAccount,
-    tokenAMint,
-    tokenBMint,
-    tokenAVault,
-    tokenBVault,
-    tokenAProgram,
-    tokenBProgram,
-    maxTransferAmount, // increase 20%
-    preSqrtPrice,
-    maxSqrtPriceChangeBps,
-    amount,
-    isDirectPool,
-    preInstructions,
-    swapTransaction,
-    cleanUpInstructions,
+    maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps
+    maxAccounts: 40,
+    maxTransferAmountExtendPercentage: 20,
+    slippageBps: 300,
+    jupiterQuote,
+    dammV2Quote,
   });
+
+  const zapInDammV2Tx = await zap.buildZapInDammV2Transaction(result);
 
   // return;
 

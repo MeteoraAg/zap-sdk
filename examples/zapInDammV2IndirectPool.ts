@@ -1,14 +1,17 @@
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
 import {
   Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
-import { Zap } from "../src";
+import { convertUiAmountToLamports, getJupiterQuote, Zap } from "../src";
 import Decimal from "decimal.js";
 import { createJitoTipIx } from "./zapInDammV2DirectPool";
+import { NATIVE_MINT } from "@solana/spl-token";
+import BN from "bn.js";
 
 const MAINNET_RPC_URL = "";
 
@@ -58,15 +61,46 @@ const keypairPath = "";
 
   const zap = new Zap(connection);
 
-  const result = await zap.getZapInDammV2IndirectPoolParams(
-    user.publicKey,
-    usdcMint,
-    amountUseToAddLiquidity,
+  const poolState = await dammV2Instance.fetchPoolState(pool);
+
+  const jupiterQuoteToA = await getJupiterQuote(
+    NATIVE_MINT,
+    poolState.tokenAMint,
+    new BN(LAMPORTS_PER_SOL),
+    40, // maxAccounts,
+    50, //slippageBps,
+    false,
+    true,
+    true,
+    "https://lite-api.jup.ag"
+  );
+
+  const jupiterQuoteToB = await getJupiterQuote(
+    NATIVE_MINT,
+    poolState.tokenBMint,
+    new BN(LAMPORTS_PER_SOL),
+    40, // maxAccounts,
+    50, //slippageBps,
+    false,
+    true,
+    true,
+    "https://lite-api.jup.ag"
+  );
+
+  const result = await zap.getZapInDammV2IndirectPoolParams({
+    user: user.publicKey,
+    inputTokenMint: usdcMint,
+    amountIn: amountUseToAddLiquidity,
     pool,
     position,
     positionNftAccount,
-    1000 // maxSqrtPriceChangeBps
-  );
+    maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps,
+    maxAccounts: 50,
+    slippageBps: 300,
+    maxTransferAmountExtendPercentage: 20,
+    jupiterQuoteToA,
+    jupiterQuoteToB,
+  });
 
   console.log(result);
 
