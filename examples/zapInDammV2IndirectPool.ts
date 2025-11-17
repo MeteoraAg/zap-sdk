@@ -20,49 +20,55 @@ const keypairPath = "";
   const connection = new Connection(MAINNET_RPC_URL);
   const user = Keypair.fromSecretKey(Uint8Array.from(require(keypairPath)));
   const dammV2Instance = new CpAmm(connection);
-  const pool = new PublicKey("BnztueWcXv93mgW7yJe8WYpnCxpz34nujPhfjQT6SLu1");
+  const pool = new PublicKey("Ep5MouzWgvdSSwUyekGQ3UyHMzaa4FKLZga4fEqk2VHG");
+  const usdcMint = new PublicKey(
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  );
 
-  //   const poolState = await dammV2Instance.fetchPoolState(pool);
-  //   const positionNft = Keypair.generate();
-  //   const createPositionTx = await dammV2Instance.createPosition({
-  //     owner: user.publicKey,
-  //     payer: user.publicKey,
-  //     pool,
-  //     positionNft: positionNft.publicKey,
-  //   });
+  // const poolState = await dammV2Instance.fetchPoolState(pool);
+  // const positionNft = Keypair.generate();
+  // const createPositionTx = await dammV2Instance.createPosition({
+  //   owner: user.publicKey,
+  //   payer: user.publicKey,
+  //   pool,
+  //   positionNft: positionNft.publicKey,
+  // });
 
-  //   createPositionTx.feePayer = user.publicKey;
-  //   createPositionTx.recentBlockhash = (
-  //     await connection.getLatestBlockhash()
-  //   ).blockhash;
+  // createPositionTx.feePayer = user.publicKey;
+  // createPositionTx.recentBlockhash = (
+  //   await connection.getLatestBlockhash()
+  // ).blockhash;
 
-  //   const sig = await connection.sendTransaction(createPositionTx, [
-  //     user,
-  //     positionNft,
-  //   ]);
-  //   console.log(sig);
+  // const sig = await connection.sendTransaction(createPositionTx, [
+  //   user,
+  //   positionNft,
+  // ]);
+  // console.log(sig);
 
-  //   return;
+  // return;
 
   const position = new PublicKey(
-    "DzLAYMrP2yyYssXMFzY7577ejDnFCC2cboCRdvxUYqjt"
+    "ESn3eEkbpKqjjdusLJJN68y9RXWrhmiCQCc9dvKBChhC"
   );
   const positionNftAccount = new PublicKey(
-    "Gptio8g1YyFAwxDf7YEA8ykPDMzZ9hYe2VDcdjMDnbTn"
+    "FsqhsNGhoRBKcvJbJ8MKsCiDVX9vELmmW3zce3ijRzd7"
   );
 
-  const amountUseToAddLiquidity = new Decimal(0.1); // 0.1 SOL
+  const amountUseToAddLiquidity = new Decimal(5); // 5 USDC
 
   const zap = new Zap(connection);
 
   const result = await zap.getZapInDammV2IndirectPoolParams(
     user.publicKey,
+    usdcMint,
     amountUseToAddLiquidity,
     pool,
     position,
     positionNftAccount,
     1000 // maxSqrtPriceChangeBps
   );
+
+  console.log(result);
 
   const zapInDammV2Tx = await zap.buildZapInDammV2Transaction(result!);
 
@@ -96,7 +102,6 @@ const keypairPath = "";
   finalTx.push(
     new Transaction().add(
       ...[
-        zapInDammV2Tx.initializeLedgerTx,
         zapInDammV2Tx.ledgerTransaction,
         zapInDammV2Tx.zapInTx,
         zapInDammV2Tx.closeLedgerTx,
@@ -114,6 +119,8 @@ const keypairPath = "";
     // console.log(simulate.value.logs);
     // console.log(simulate.value.err);
   }
+
+  return;
 
   console.log("Sending zap transaction...");
   const jitoBundleResult: {

@@ -1,4 +1,4 @@
-import { CpAmm } from "@meteora-ag/cp-amm-sdk";
+import { CpAmm, derivePositionAddress } from "@meteora-ag/cp-amm-sdk";
 import {
   Keypair,
   PublicKey,
@@ -8,6 +8,7 @@ import {
 import { Connection } from "@solana/web3.js";
 import { Zap } from "../src";
 import Decimal from "decimal.js";
+import { derivePosition } from "@meteora-ag/dlmm";
 
 const MAINNET_RPC_URL = "";
 
@@ -31,12 +32,14 @@ export function createJitoTipIx({
     lamports: BigInt(lamports),
   });
 }
-
-(async () => {
+async function main() {
   const connection = new Connection(MAINNET_RPC_URL);
   const user = Keypair.fromSecretKey(Uint8Array.from(require(keypairPath)));
   const dammV2Instance = new CpAmm(connection);
-  const pool = new PublicKey("Ep5MouzWgvdSSwUyekGQ3UyHMzaa4FKLZga4fEqk2VHG");
+  const pool = new PublicKey("BnztueWcXv93mgW7yJe8WYpnCxpz34nujPhfjQT6SLu1");
+  const usdcMint = new PublicKey(
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  );
   // const poolState = await dammV2Instance.fetchPoolState(pool);
 
   // const positionNft = Keypair.generate();
@@ -61,13 +64,13 @@ export function createJitoTipIx({
   // return;
 
   const position = new PublicKey(
-    "449wV5GXStT3jGocakFxot711pvGjT7qp348jQHUdbqi"
+    "DzLAYMrP2yyYssXMFzY7577ejDnFCC2cboCRdvxUYqjt"
   );
   const positionNftAccount = new PublicKey(
-    "5cDieTywtrNhLFBJDWsHKaQUtaLKqtW6GjNq6VxPu4Hh"
+    "Gptio8g1YyFAwxDf7YEA8ykPDMzZ9hYe2VDcdjMDnbTn"
   );
 
-  const amountUseToAddLiquidity = new Decimal(0.1); // 0.1 SOL
+  const amountUseToAddLiquidity = new Decimal(5); // 5 USDC
 
   const zap = new Zap(connection);
 
@@ -87,6 +90,7 @@ export function createJitoTipIx({
     preSqrtPrice,
   } = await zap.getZapInDammV2DirectPoolParams(
     user.publicKey,
+    usdcMint,
     amountUseToAddLiquidity,
     pool,
     position,
@@ -149,7 +153,6 @@ export function createJitoTipIx({
   finalTx.push(
     new Transaction().add(
       ...[
-        zapInDammV2Tx.initializeLedgerTx,
         zapInDammV2Tx.ledgerTransaction,
         zapInDammV2Tx.zapInTx,
         zapInDammV2Tx.closeLedgerTx,
@@ -167,6 +170,8 @@ export function createJitoTipIx({
     // console.log(simulate.value.logs);
     // console.log(simulate.value.err);
   }
+
+  // return;
 
   console.log("Sending zap transaction...");
   const jitoBundleResult: {
@@ -199,4 +204,6 @@ export function createJitoTipIx({
 
   console.log(jitoBundleResult);
   console.log(`Zap bundle sent: ${jitoBundleResult?.result}`);
-})();
+}
+
+main();
