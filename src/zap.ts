@@ -447,12 +447,24 @@ export class Zap {
     );
 
     if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
-      const userWrapSolAcc = getAssociatedTokenAddressSync(NATIVE_MINT, user);
+      const { ataPubkey: userWrapSolAcc, ix: initializeUserWrapSOLAta } =
+        await getOrCreateATAInstruction(
+          this.connection,
+          inputTokenMint,
+          user,
+          user,
+          false,
+          TOKEN_PROGRAM_ID
+        );
+      initializeUserWrapSOLAta &&
+        preInstructions.push(initializeUserWrapSOLAta);
+
       const wrapSOL = wrapSOLInstruction(
         user,
         userWrapSolAcc,
         BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
       );
+
       preInstructions.push(...wrapSOL);
     }
 
@@ -637,7 +649,7 @@ export class Zap {
           user,
           user,
           false,
-          tokenAProgram
+          TOKEN_PROGRAM_ID
         );
       const wrapSOL = wrapSOLInstruction(
         user,
