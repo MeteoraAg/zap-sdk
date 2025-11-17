@@ -1,10 +1,11 @@
-import { CpAmm, PoolState } from "@meteora-ag/cp-amm-sdk";
-import { NATIVE_MINT } from "@solana/spl-token";
-import { Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { CpAmm, getTokenDecimals, PoolState } from "@meteora-ag/cp-amm-sdk";
+import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
 import { JupiterQuoteResponse } from "../../types";
+import { convertUiAmountToLamports } from "../common";
 
 // SOL is token A
 // (amount - x) / A = x * p / B
@@ -55,9 +56,13 @@ export function calculateIndirectPoolSwapAmount(
 
 export async function getJupAndDammV2Quotes(
   connection: Connection,
+  inputTokenMint: PublicKey,
   poolState: PoolState,
   tokenADecimal: number,
-  tokenBDecimal: number
+  tokenBDecimal: number,
+  dammV2Slippage: number,
+  jupSlippage: number,
+  maxAccounts: number
 ): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
@@ -74,10 +79,19 @@ export async function getJupAndDammV2Quotes(
     (await connection.getBlockTime(currentSlot)) ?? new Date().getTime() / 1000;
   const dammV2 = new CpAmm(connection);
 
+  const inputTokenDecimal = await getTokenDecimals(
+    connection,
+    inputTokenMint,
+    TOKEN_PROGRAM_ID
+  );
+  const ONE_TOKEN = convertUiAmountToLamports(
+    new Decimal(1),
+    inputTokenDecimal
+  );
   const dammV2Quote = dammV2.getQuote({
-    inAmount: new BN(LAMPORTS_PER_SOL),
-    inputTokenMint: NATIVE_MINT,
-    slippage: 50,
+    inAmount: new BN(ONE_TOKEN.floor().toString()),
+    inputTokenMint,
+    slippage: dammV2Slippage,
     poolState,
     currentSlot,
     currentTime,
@@ -86,14 +100,14 @@ export async function getJupAndDammV2Quotes(
   });
 
   const jupiterQuote = await getJupiterQuote(
-    NATIVE_MINT,
-    poolState.tokenAMint.equals(NATIVE_MINT)
+    inputTokenMint,
+    poolState.tokenAMint.equals(inputTokenMint)
       ? poolState.tokenBMint
       : poolState.tokenAMint,
 
-    new BN(LAMPORTS_PER_SOL),
-    40,
-    50,
+    new BN(ONE_TOKEN.floor().toString()),
+    maxAccounts,
+    jupSlippage,
     false,
     true,
     true,

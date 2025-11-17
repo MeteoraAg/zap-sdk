@@ -60,7 +60,11 @@ import {
   getTokenProgram,
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
-import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
+import {
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import { getTokenProgramId, RemainingAccountInfo } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
@@ -207,6 +211,20 @@ export class Zap {
         dammEventAuthority: deriveDammV2EventAuthority(),
       })
       .transaction();
+  }
+
+  private async resetOrInitializeLedgerAccount(
+    user: PublicKey
+  ): Promise<Transaction> {
+    const ledgerAccount = deriveLedgerAccount(user);
+    const accountInfo = await this.connection.getAccountInfo(ledgerAccount);
+    if (accountInfo) {
+      const closeLedger = await this.closeLedgerAccount(user, user);
+      const reInitializeLedger = await this.initializeLedgerAccount(user, user);
+      return new Transaction().add(closeLedger).add(reInitializeLedger);
+    }
+
+    return await this.initializeLedgerAccount(user, user);
   }
 
   private async zapInDlmmForInitializedPosition(params: {
@@ -390,6 +408,7 @@ export class Zap {
 
   async getZapInDammV2DirectPoolParams(
     user: PublicKey,
+    inputTokenMint: PublicKey,
     amountIn: Decimal,
     pool: PublicKey,
     position: PublicKey,
@@ -397,7 +416,8 @@ export class Zap {
     maxSqrtPriceChangeBps: number,
     maxTransferAmountExtendPercentage: number = 20,
     maxAccounts: number = 40,
-    slippageBps: number = 50
+    slippageBps: number = 50,
+    dammV2Slippage: number = 50
   ): Promise<ZapInDammV2DirectPoolParam> {
     const poolState = await getDammV2Pool(this.connection, pool);
     const {
@@ -414,13 +434,15 @@ export class Zap {
 
     const preInstructions: TransactionInstruction[] = [];
 
-    const userWrapSolAcc = getAssociatedTokenAddressSync(NATIVE_MINT, user);
-    const wrapSOL = wrapSOLInstruction(
-      user,
-      userWrapSolAcc,
-      BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
-    );
-    preInstructions.push(...wrapSOL);
+    if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
+      const userWrapSolAcc = getAssociatedTokenAddressSync(NATIVE_MINT, user);
+      const wrapSOL = wrapSOLInstruction(
+        user,
+        userWrapSolAcc,
+        BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
+      );
+      preInstructions.push(...wrapSOL);
+    }
 
     const tokenADecimal = await getTokenDecimals(
       this.connection,
@@ -433,6 +455,10 @@ export class Zap {
       tokenBMint,
       tokenBProgram
     );
+
+    const inputTokenDecimal = inputTokenMint.equals(tokenAMint)
+      ? tokenADecimal
+      : tokenBDecimal;
 
     const poolBalanceTokenA = getAmountAFromLiquidityDelta(
       poolState.sqrtPrice,
@@ -453,9 +479,13 @@ export class Zap {
 
     const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes(
       this.connection,
+      inputTokenMint,
       poolState,
       tokenADecimal,
-      tokenBDecimal
+      tokenBDecimal,
+      dammV2Slippage,
+      slippageBps,
+      maxAccounts
     );
 
     if (
@@ -464,7 +494,7 @@ export class Zap {
     ) {
       const price = convertLamportsToUiAmount(
         new Decimal(jupiterQuote.outAmount),
-        tokenAMint.equals(NATIVE_MINT) ? tokenBDecimal : tokenADecimal
+        tokenAMint.equals(inputTokenMint) ? tokenBDecimal : tokenADecimal
       );
 
       const swapAmount = calculateDirectPoolSwapAmount(
@@ -478,7 +508,7 @@ export class Zap {
           new Decimal(poolBalanceTokenB.toString()),
           tokenBDecimal
         ),
-        tokenAMint.equals(NATIVE_MINT)
+        tokenAMint.equals(inputTokenMint)
       );
 
       amount = amountIn.sub(swapAmount);
@@ -489,8 +519,8 @@ export class Zap {
 
       const result = await buildJupiterSwapTransaction(
         user,
-        NATIVE_MINT,
-        tokenAMint.equals(NATIVE_MINT) ? tokenBMint : tokenAMint,
+        inputTokenMint,
+        tokenAMint.equals(inputTokenMint) ? tokenBMint : tokenAMint,
         swapAmountInLamports,
         maxAccounts,
         slippageBps
@@ -510,11 +540,14 @@ export class Zap {
 
     return {
       user,
-      amount: new BN(amount.mul(LAMPORTS_PER_SOL).floor().toString()),
+      amount: new BN(
+        convertUiAmountToLamports(amount, inputTokenDecimal).floor().toString()
+      ),
       pool,
       position,
       positionNftAccount,
       isDirectPool: true,
+      isTokenA: tokenAMint.equals(inputTokenMint),
       tokenAMint,
       tokenBMint,
       tokenAVault,
@@ -531,6 +564,7 @@ export class Zap {
 
   async getZapInDammV2IndirectPoolParams(
     user: PublicKey,
+    inputTokenMint: PublicKey,
     amountIn: Decimal,
     pool: PublicKey,
     position: PublicKey,
@@ -565,24 +599,32 @@ export class Zap {
       tokenBProgram
     );
 
+    const inputTokenDecimal = await getTokenDecimals(
+      this.connection,
+      inputTokenMint,
+      TOKEN_PROGRAM_ID
+    );
+
     const preInstructions: TransactionInstruction[] = [];
 
-    const { ataPubkey: userWrapSolAcc, ix: initializeWrapSOLAta } =
-      await getOrCreateATAInstruction(
-        this.connection,
-        NATIVE_MINT,
+    if (inputTokenMint.equals(NATIVE_MINT)) {
+      const { ataPubkey: userWrapSolAcc, ix: initializeWrapSOLAta } =
+        await getOrCreateATAInstruction(
+          this.connection,
+          inputTokenMint,
+          user,
+          user,
+          false,
+          tokenAProgram
+        );
+      const wrapSOL = wrapSOLInstruction(
         user,
-        user,
-        false,
-        tokenAProgram
+        userWrapSolAcc,
+        BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
       );
-    const wrapSOL = wrapSOLInstruction(
-      user,
-      userWrapSolAcc,
-      BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
-    );
-    initializeWrapSOLAta && preInstructions.push(initializeWrapSOLAta);
-    preInstructions.push(...wrapSOL);
+      initializeWrapSOLAta && preInstructions.push(initializeWrapSOLAta);
+      preInstructions.push(...wrapSOL);
+    }
 
     const poolBalanceTokenA = getAmountAFromLiquidityDelta(
       poolState.sqrtPrice,
@@ -598,7 +640,7 @@ export class Zap {
     );
 
     const jupiterQuoteTokenA = await getJupiterQuote(
-      NATIVE_MINT,
+      inputTokenMint,
       poolState.tokenAMint,
       new BN(LAMPORTS_PER_SOL),
       maxAccounts,
@@ -610,7 +652,7 @@ export class Zap {
     );
 
     const jupiterQuoteTokenB = await getJupiterQuote(
-      NATIVE_MINT,
+      inputTokenMint,
       poolState.tokenBMint,
       new BN(LAMPORTS_PER_SOL),
       maxAccounts,
@@ -622,12 +664,16 @@ export class Zap {
     );
 
     if (jupiterQuoteTokenA && jupiterQuoteTokenB === null) {
+      const amountInLamports = convertUiAmountToLamports(
+        amountIn,
+        inputTokenDecimal
+      );
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
-          NATIVE_MINT,
+          inputTokenMint,
           tokenAMint,
-          new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
+          new BN(amountInLamports.floor().toString()),
           maxAccounts,
           slippageBps
         );
@@ -638,7 +684,7 @@ export class Zap {
         position,
         positionNftAccount,
         maxSqrtPriceChangeBps,
-        amount: new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
+        amount: new BN(0),
         isDirectPool: false,
         tokenAMint,
         tokenBMint,
@@ -659,12 +705,16 @@ export class Zap {
     }
 
     if (jupiterQuoteTokenB && jupiterQuoteTokenA === null) {
+      const amountInLamports = convertUiAmountToLamports(
+        amountIn,
+        inputTokenDecimal
+      );
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
-          NATIVE_MINT,
+          inputTokenMint,
           tokenBMint,
-          new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
+          new BN(amountInLamports.floor().toString()),
           maxAccounts,
           slippageBps
         );
@@ -675,7 +725,7 @@ export class Zap {
         position,
         positionNftAccount,
         maxSqrtPriceChangeBps,
-        amount: new BN(amountIn.mul(LAMPORTS_PER_SOL).floor().toString()),
+        amount: new BN(0),
         isDirectPool: false,
         tokenAMint,
         tokenBMint,
@@ -722,20 +772,22 @@ export class Zap {
 
       const swapAmountToB = amountIn.sub(swapAmountToA);
 
-      console.log({ swapAmountToA, swapAmountToB });
-
       const swapAmountToAInLamports = new BN(
-        convertUiAmountToLamports(swapAmountToA, 9).floor().toString()
+        convertUiAmountToLamports(swapAmountToA, inputTokenDecimal)
+          .floor()
+          .toString()
       );
 
       const swapAmountToBInLamports = new BN(
-        convertUiAmountToLamports(swapAmountToB, 9).floor().toString()
+        convertUiAmountToLamports(swapAmountToB, inputTokenDecimal)
+          .floor()
+          .toString()
       );
 
       const { transaction: swapToATransaction, quoteResponse: swapToAQuote } =
         await buildJupiterSwapTransaction(
           user,
-          NATIVE_MINT,
+          inputTokenMint,
           tokenAMint,
           swapAmountToAInLamports,
           maxAccounts,
@@ -745,7 +797,7 @@ export class Zap {
       const { transaction: swapToBTransaction, quoteResponse: swapToBQuote } =
         await buildJupiterSwapTransaction(
           user,
-          NATIVE_MINT,
+          inputTokenMint,
           tokenBMint,
           swapAmountToBInLamports,
           maxAccounts,
@@ -833,16 +885,22 @@ export class Zap {
       ),
     ]);
 
-    initializeTokenAIx && initializeAtaIxs.push(initializeTokenAIx);
-    initializeTokenBIx && initializeAtaIxs.push(initializeTokenBIx);
+    const setupTransaction = new Transaction();
+    initializeTokenAIx && setupTransaction.add(initializeTokenAIx);
+    initializeTokenBIx && setupTransaction.add(initializeTokenBIx);
 
-    // initialize ledger tx
-    const initializeLedgerTx = await this.initializeLedgerAccount(user, user);
+    if (preInstructions.length > 0) {
+      setupTransaction.add(...preInstructions);
+    }
 
-    // ledger transaction included: setLedgerBalanceTx and updateLedgerBalanceAfterSwap
     const ledgerTransaction = new Transaction();
+    const resetOrInitializeLedgerTx = await this.resetOrInitializeLedgerAccount(
+      user
+    );
+    ledgerTransaction.add(resetOrInitializeLedgerTx);
+
     if (isDirectPool) {
-      const isTokenA = tokenAMint.equals(NATIVE_MINT);
+      const isTokenA = params.isTokenA!;
       const setLedgerBalanceTx = await this.setLedgerBalance(
         user,
         amount,
@@ -926,11 +984,8 @@ export class Zap {
     const closeLedgerTx = await this.closeLedgerAccount(user, user);
 
     return {
-      setupTransaction: new Transaction()
-        .add(...initializeAtaIxs)
-        .add(...preInstructions),
+      setupTransaction,
       swapTransaction: swapTransaction ?? new Transaction(),
-      initializeLedgerTx,
       ledgerTransaction,
       zapInTx,
       closeLedgerTx,

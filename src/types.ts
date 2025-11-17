@@ -150,6 +150,7 @@ export type ZapInDammV2DirectPoolParam = {
   amount: BN;
   preInstructions: TransactionInstruction[];
   swapTransaction: Transaction | null;
+  isTokenA?: boolean;
 };
 
 export enum SwapExternalType {
@@ -170,7 +171,6 @@ export type ZapInDammV2InDirectPoolParam = Omit<
 export type ZapInDammV2Response = {
   setupTransaction: Transaction;
   swapTransaction: Transaction;
-  initializeLedgerTx: Transaction;
   ledgerTransaction: Transaction;
   zapInTx: Transaction;
   closeLedgerTx: Transaction;
