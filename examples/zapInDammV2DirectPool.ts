@@ -88,6 +88,7 @@ async function main() {
     swapTransaction,
     maxSqrtPriceChangeBps,
     preSqrtPrice,
+    cleanUpInstructions,
   } = await zap.getZapInDammV2DirectPoolParams(
     user.publicKey,
     usdcMint,
@@ -116,6 +117,7 @@ async function main() {
     isDirectPool,
     preInstructions,
     swapTransaction,
+    cleanUpInstructions,
   });
 
   // return;

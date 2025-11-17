@@ -29,6 +29,9 @@ importers:
       decimal.js:
         specifier: ^10.4.2
         version: 10.6.0
+      invariant:
+        specifier: ^2.2.4
+        version: 2.2.4
       jito-ts:
         specifier: ^4.2.0
         version: 4.2.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
@@ -42,6 +45,9 @@ importers:
       '@types/bun':
         specifier: latest
         version: 1.2.20(@types/react@19.1.9)
+      '@types/invariant':
+        specifier: ^2.2.37
+        version: 2.2.37
       tsup:
         specifier: ^8.4.0
         version: 8.5.0(tsx@4.20.3)(typescript@5.9.2)
@@ -520,6 +526,9 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+
+  '@types/invariant@2.2.37':
+    resolution: {integrity: sha512-IwpIMieE55oGWiXkQPSBY1nw1nFs6bsKXTFskNY8sdS17K24vyEBRQZEwlRS7ZmXCWnJcQtbxWzly+cODWGs2A==}
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
@@ -1930,6 +1939,8 @@ snapshots:
       '@types/node': 12.20.55
 
   '@types/estree@1.0.8': {}
+
+  '@types/invariant@2.2.37': {}
 
   '@types/node@12.20.55': {}
 

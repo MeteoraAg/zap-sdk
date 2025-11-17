@@ -60,8 +60,8 @@ export async function getJupAndDammV2Quotes(
   poolState: PoolState,
   tokenADecimal: number,
   tokenBDecimal: number,
-  dammV2Slippage: number,
-  jupSlippage: number,
+  dammV2SlippageBps: number,
+  jupSlippageBps: number,
   maxAccounts: number
 ): Promise<{
   dammV2Quote: {
@@ -91,7 +91,7 @@ export async function getJupAndDammV2Quotes(
   const dammV2Quote = dammV2.getQuote({
     inAmount: new BN(ONE_TOKEN.floor().toString()),
     inputTokenMint,
-    slippage: dammV2Slippage,
+    slippage: dammV2SlippageBps,
     poolState,
     currentSlot,
     currentTime,
@@ -107,7 +107,7 @@ export async function getJupAndDammV2Quotes(
 
     new BN(ONE_TOKEN.floor().toString()),
     maxAccounts,
-    jupSlippage,
+    jupSlippageBps,
     false,
     true,
     true,

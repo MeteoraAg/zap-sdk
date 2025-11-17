@@ -7,6 +7,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
+import invariant from "invariant";
 import { BN, Program } from "@coral-xyz/anchor";
 import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
@@ -416,8 +417,8 @@ export class Zap {
     maxSqrtPriceChangeBps: number,
     maxTransferAmountExtendPercentage: number = 20,
     maxAccounts: number = 40,
-    slippageBps: number = 50,
-    dammV2Slippage: number = 50
+    slippageBps: number = 300,
+    dammV2SlippageBps: number = 300
   ): Promise<ZapInDammV2DirectPoolParam> {
     const poolState = await getDammV2Pool(this.connection, pool);
     const {
@@ -433,6 +434,11 @@ export class Zap {
     const tokenBProgram = getTokenProgram(tokenBFlag);
 
     const preInstructions: TransactionInstruction[] = [];
+
+    invariant(
+      inputTokenMint.equals(tokenAMint) || inputTokenMint.equals(tokenBMint),
+      "Invalid input token mint"
+    );
 
     if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
       const userWrapSolAcc = getAssociatedTokenAddressSync(NATIVE_MINT, user);
@@ -483,7 +489,7 @@ export class Zap {
       poolState,
       tokenADecimal,
       tokenBDecimal,
-      dammV2Slippage,
+      dammV2SlippageBps,
       slippageBps,
       maxAccounts
     );
@@ -538,6 +544,16 @@ export class Zap {
       );
     }
 
+    const cleanUpInstructions: TransactionInstruction[] = [];
+    if (
+      inputTokenMint.equals(NATIVE_MINT) ||
+      tokenAMint.equals(NATIVE_MINT) ||
+      tokenBMint.equals(NATIVE_MINT)
+    ) {
+      const closewrapSol = unwrapSOLInstruction(user, user, false);
+      closewrapSol && cleanUpInstructions.push(closewrapSol);
+    }
+
     return {
       user,
       amount: new BN(
@@ -559,6 +575,7 @@ export class Zap {
       maxSqrtPriceChangeBps,
       preInstructions,
       swapTransaction,
+      cleanUpInstructions,
     };
   }
 
@@ -572,7 +589,7 @@ export class Zap {
     maxSqrtPriceChangeBps: number,
     maxTransferAmountExtendPercentage: number = 20,
     maxAccounts: number = 40,
-    slippageBps: number = 50
+    slippageBps: number = 300
   ): Promise<ZapInDammV2InDirectPoolParam | null> {
     const poolState = await getDammV2Pool(this.connection, pool);
     const {
@@ -583,6 +600,11 @@ export class Zap {
       tokenAFlag,
       tokenBFlag,
     } = poolState;
+
+    invariant(
+      !inputTokenMint.equals(tokenAMint) && !inputTokenMint.equals(tokenBMint),
+      "Invalid input token mint"
+    );
 
     const tokenAProgram = getTokenProgram(tokenAFlag);
     const tokenBProgram = getTokenProgram(tokenBFlag);
@@ -624,6 +646,16 @@ export class Zap {
       );
       initializeWrapSOLAta && preInstructions.push(initializeWrapSOLAta);
       preInstructions.push(...wrapSOL);
+    }
+
+    const cleanUpInstructions: TransactionInstruction[] = [];
+    if (
+      inputTokenMint.equals(NATIVE_MINT) ||
+      tokenAMint.equals(NATIVE_MINT) ||
+      tokenBMint.equals(NATIVE_MINT)
+    ) {
+      const closewrapSol = unwrapSOLInstruction(user, user, false);
+      closewrapSol && cleanUpInstructions.push(closewrapSol);
     }
 
     const poolBalanceTokenA = getAmountAFromLiquidityDelta(
@@ -692,7 +724,6 @@ export class Zap {
         tokenBVault,
         tokenAProgram,
         tokenBProgram,
-        preInstructions,
         maxTransferAmountA: getExtendMaxAmountTransfer(
           jupiterQuoteTokenA.outAmount,
           maxTransferAmountExtendPercentage
@@ -700,7 +731,9 @@ export class Zap {
         swapType: SwapExternalType.swapToA,
         maxTransferAmountB: new BN(0),
         preSqrtPrice: poolState.sqrtPrice,
+        preInstructions,
         swapTransaction: swapTransaction,
+        cleanUpInstructions,
       };
     }
 
@@ -733,7 +766,6 @@ export class Zap {
         tokenBVault,
         tokenAProgram,
         tokenBProgram,
-        preInstructions,
         maxTransferAmountA: new BN(0),
         maxTransferAmountB: getExtendMaxAmountTransfer(
           jupiterQuoteTokenB.outAmount,
@@ -741,7 +773,9 @@ export class Zap {
         ),
         swapType: SwapExternalType.swapToB,
         preSqrtPrice: poolState.sqrtPrice,
+        preInstructions,
         swapTransaction: swapTransaction,
+        cleanUpInstructions,
       };
     }
 
@@ -833,6 +867,7 @@ export class Zap {
         swapType: SwapExternalType.swapToBoth,
         preSqrtPrice: poolState.sqrtPrice,
         swapTransaction: swapTransaction,
+        cleanUpInstructions,
       };
     }
     // jupiterQuoteTokenA & jupiterQuoteTokenB both is null
@@ -859,9 +894,8 @@ export class Zap {
       maxSqrtPriceChangeBps,
       preInstructions,
       swapTransaction,
+      cleanUpInstructions,
     } = params;
-
-    const initializeAtaIxs: TransactionInstruction[] = [];
 
     const [
       { ataPubkey: tokenAAccount, ix: initializeTokenAIx },
@@ -989,6 +1023,10 @@ export class Zap {
       ledgerTransaction,
       zapInTx,
       closeLedgerTx,
+      cleanUpTransaction:
+        cleanUpInstructions.length > 0
+          ? new Transaction().add(...cleanUpInstructions)
+          : new Transaction(),
     };
   }
 

@@ -150,6 +150,7 @@ export type ZapInDammV2DirectPoolParam = {
   amount: BN;
   preInstructions: TransactionInstruction[];
   swapTransaction: Transaction | null;
+  cleanUpInstructions: TransactionInstruction[];
   isTokenA?: boolean;
 };
 
@@ -174,4 +175,5 @@ export type ZapInDammV2Response = {
   ledgerTransaction: Transaction;
   zapInTx: Transaction;
   closeLedgerTx: Transaction;
+  cleanUpTransaction: Transaction;
 };
