@@ -131,7 +131,9 @@ const keypairPath = "";
     new Transaction().add(...[zapInDammV2Tx.setupTransaction, jitoTipsTx])
   );
 
-  finalTx.push(new Transaction().add(...[zapInDammV2Tx.swapTransaction]));
+  for (const swapTx of zapInDammV2Tx.swapTransactions) {
+    finalTx.push(swapTx);
+  }
 
   finalTx.push(
     new Transaction().add(

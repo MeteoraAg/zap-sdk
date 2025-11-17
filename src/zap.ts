@@ -486,7 +486,7 @@ export class Zap {
     );
 
     let amount;
-    let swapTransaction: Transaction | null = null;
+    let swapTransactions: Transaction[] = [];
     let maxTransferAmount;
 
     if (
@@ -526,7 +526,7 @@ export class Zap {
         maxAccounts,
         slippageBps
       );
-      swapTransaction = result.transaction;
+      swapTransactions = [result.transaction];
       maxTransferAmount = getExtendMaxAmountTransfer(
         result.quoteResponse!.outAmount,
         maxTransferAmountExtendPercentage
@@ -569,7 +569,7 @@ export class Zap {
       preSqrtPrice: poolState.sqrtPrice,
       maxSqrtPriceChangeBps,
       preInstructions,
-      swapTransaction,
+      swapTransactions,
       cleanUpInstructions,
     };
   }
@@ -708,7 +708,7 @@ export class Zap {
         maxTransferAmountB: new BN(0),
         preSqrtPrice: poolState.sqrtPrice,
         preInstructions,
-        swapTransaction: swapTransaction,
+        swapTransactions: [swapTransaction],
         cleanUpInstructions,
       };
     }
@@ -750,7 +750,7 @@ export class Zap {
         swapType: SwapExternalType.swapToB,
         preSqrtPrice: poolState.sqrtPrice,
         preInstructions,
-        swapTransaction: swapTransaction,
+        swapTransactions: [swapTransaction],
         cleanUpInstructions,
       };
     }
@@ -813,10 +813,6 @@ export class Zap {
           maxAccounts,
           slippageBps
         );
-      const swapTransaction = new Transaction()
-        .add(swapToATransaction)
-        .add(swapToBTransaction);
-
       return {
         user,
         pool,
@@ -842,7 +838,7 @@ export class Zap {
         ),
         swapType: SwapExternalType.swapToBoth,
         preSqrtPrice: poolState.sqrtPrice,
-        swapTransaction: swapTransaction,
+        swapTransactions: [swapToATransaction, swapToBTransaction],
         cleanUpInstructions,
       };
     }
@@ -869,7 +865,7 @@ export class Zap {
       preSqrtPrice,
       maxSqrtPriceChangeBps,
       preInstructions,
-      swapTransaction,
+      swapTransactions,
       cleanUpInstructions,
     } = params;
 
@@ -918,7 +914,7 @@ export class Zap {
       );
 
       ledgerTransaction.add(setLedgerBalanceTx);
-      if (swapTransaction) {
+      if (swapTransactions.length > 0) {
         const tokenAccount = isTokenA ? tokenBAccount : tokenAAccount;
         const preTokenBalance = await getTokenAccountBalance(
           this.connection,
@@ -995,7 +991,7 @@ export class Zap {
 
     return {
       setupTransaction,
-      swapTransaction: swapTransaction ?? new Transaction(),
+      swapTransactions,
       ledgerTransaction,
       zapInTx,
       closeLedgerTx,

@@ -187,7 +187,7 @@ export type ZapInDammV2DirectPoolParam = {
   maxSqrtPriceChangeBps: number;
   amount: BN;
   preInstructions: TransactionInstruction[];
-  swapTransaction: Transaction | null;
+  swapTransactions: Transaction[];
   cleanUpInstructions: TransactionInstruction[];
   isTokenA?: boolean;
 };
@@ -209,7 +209,7 @@ export type ZapInDammV2InDirectPoolParam = Omit<
 
 export type ZapInDammV2Response = {
   setupTransaction: Transaction;
-  swapTransaction: Transaction;
+  swapTransactions: Transaction[];
   ledgerTransaction: Transaction;
   zapInTx: Transaction;
   closeLedgerTx: Transaction;
