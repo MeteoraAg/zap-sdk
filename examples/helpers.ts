@@ -45,7 +45,7 @@ interface JitoBundleResult {
 
 export async function sendJitoBundle(
   transactions: Transaction[],
-  JITO_PRIVATE_KEY: string
+  jitoPrivateKey: string
 ) {
   const jitoBundleResult = await fetch(
     "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
@@ -53,7 +53,7 @@ export async function sendJitoBundle(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-jito-auth": JITO_PRIVATE_KEY,
+        "x-jito-auth": jitoPrivateKey,
       },
       body: JSON.stringify({
         jsonrpc: "2.0",

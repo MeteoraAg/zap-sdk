@@ -58,9 +58,7 @@ async function main() {
   // console.log(sig);
   // return;
 
-  const positionAddress = new PublicKey(
-    "9b6eBYNUosrevPdBnatwkjdKEyjt57L3MNDEpTCAieRc"
-  );
+  const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
 
   const zap = new Zap(connection);
   const position = await dlmm.getPosition(positionAddress);

@@ -1581,7 +1581,10 @@ export class Zap {
     const tokenXAmount = new BN(position.positionData.totalXAmount);
     const tokenYAmount = new BN(position.positionData.totalYAmount);
     let swapTransaction: Transaction | undefined;
-    if (directSwapEstimate.swapDirection !== "noSwap") {
+    if (
+      directSwapEstimate.swapDirection !== "noSwap" &&
+      directSwapEstimate.quote
+    ) {
       const isXToY = directSwapEstimate.swapDirection === "xToY";
       const inputMint = isXToY
         ? dlmm.lbPair.tokenXMint
