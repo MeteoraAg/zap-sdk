@@ -53,7 +53,6 @@ import {
   convertUiAmountToLamports,
   convertLamportsToUiAmount,
   buildJupiterSwapTransaction,
-  estimateDirectSwap,
   getJupiterSwapInstruction,
   toProgramStrategyType,
 } from "./helpers";
@@ -67,7 +66,6 @@ import {
   MEMO_PROGRAM_ID,
 } from "./constants";
 import {
-  CpAmm,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
   getTokenDecimals,
@@ -1520,10 +1518,10 @@ export class Zap {
    * @param params.user - Public key of the user performing the rebalance
    * @param params.minDeltaId - The delta between the id of the rebalanced min bin id and the active bin id (relative to active bin)
    * @param params.maxDeltaId - The delta between the id of the rebalanced max bin id and the active bin id (relative to active bin)
-   * @param params.swapSlippagePercentage - The maximum slippage percentage for the swap operation
-   * @param params.liquiditySlippagePercentage - The maximum slippage percentage for the rebalance liquidity operation
+   * @param params.liquiditySlippageBps - The maximum slippage in basis points for the rebalance liquidity operation (percentage * 100)
    * @param params.strategy - The strategy to use for the rebalance
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
+   * @param params.directSwapEstimate - The estimate of the direct swap operation
    * @returns Response containing transactions and estimation details
    */
   async rebalanceDlmmPosition(
@@ -1535,10 +1533,10 @@ export class Zap {
       user,
       minDeltaId,
       maxDeltaId,
-      swapSlippagePercentage,
-      liquiditySlippagePercentage,
+      liquiditySlippageBps,
       strategy,
       favorXInActiveId,
+      directSwapEstimate,
     } = params;
 
     const dlmm = await DLMM.create(this.connection, lbPairAddress);
@@ -1559,15 +1557,9 @@ export class Zap {
     // swap tokens to balance if needed
     const tokenXAmount = new BN(position.positionData.totalXAmount);
     const tokenYAmount = new BN(position.positionData.totalYAmount);
-    const swapEstimate = await this.estimateBalancedSwapThroughJupiterAndDlmm({
-      lbPairAddress,
-      tokenXAmount,
-      tokenYAmount,
-      slippage: swapSlippagePercentage,
-    });
     const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
-    if (swapEstimate.swapDirection !== "noSwap") {
-      const isXToY = swapEstimate.swapDirection === "xToY";
+    if (directSwapEstimate.swapDirection !== "noSwap") {
+      const isXToY = directSwapEstimate.swapDirection === "xToY";
       const inputMint = isXToY
         ? dlmm.lbPair.tokenXMint
         : dlmm.lbPair.tokenYMint;
@@ -1578,8 +1570,8 @@ export class Zap {
       const outputTokenProgram = isXToY ? tokenYProgram : tokenXProgram;
 
       let zapOutTx: Transaction;
-      if (swapEstimate.quote?.route === "jupiter") {
-        const jupiterQuote = swapEstimate.quote.originalQuote;
+      if (directSwapEstimate.quote?.route === "jupiter") {
+        const jupiterQuote = directSwapEstimate.quote.originalQuote;
         const jupiterSwapResponse = await getJupiterSwapInstruction(
           user,
           jupiterQuote
@@ -1592,7 +1584,7 @@ export class Zap {
           inputTokenProgram,
           outputTokenProgram,
           jupiterSwapResponse,
-          maxSwapAmount: swapEstimate.swapAmount,
+          maxSwapAmount: directSwapEstimate.swapAmount,
           percentageToZapOut: 100,
         });
       } else {
@@ -1603,9 +1595,9 @@ export class Zap {
           outputMint,
           inputTokenProgram,
           outputTokenProgram,
-          amountIn: swapEstimate.swapAmount,
-          minimumSwapAmountOut: swapEstimate.expectedOutput,
-          maxSwapAmount: swapEstimate.swapAmount,
+          amountIn: directSwapEstimate.swapAmount,
+          minimumSwapAmountOut: directSwapEstimate.expectedOutput,
+          maxSwapAmount: directSwapEstimate.swapAmount,
           percentageToZapOut: 100,
         });
       }
@@ -1632,18 +1624,18 @@ export class Zap {
       : await getTokenAccountBalance(this.connection, userTokenY);
 
     const tokenXAmountAfterSwap = BN.min(
-      swapEstimate.swapDirection === "xToY"
-        ? tokenXAmount.sub(swapEstimate.swapAmount)
-        : swapEstimate.swapDirection === "yToX"
-        ? tokenXAmount.add(swapEstimate.expectedOutput)
+      directSwapEstimate.swapDirection === "xToY"
+        ? tokenXAmount.sub(directSwapEstimate.swapAmount)
+        : directSwapEstimate.swapDirection === "yToX"
+        ? tokenXAmount.add(directSwapEstimate.expectedOutput)
         : tokenXAmount,
       new BN(preTokenXBalance)
     );
     const tokenYAmountAfterSwap = BN.min(
-      swapEstimate.swapDirection === "xToY"
-        ? tokenYAmount.add(swapEstimate.expectedOutput)
-        : swapEstimate.swapDirection === "yToX"
-        ? tokenYAmount.sub(swapEstimate.swapAmount)
+      directSwapEstimate.swapDirection === "xToY"
+        ? tokenYAmount.add(directSwapEstimate.expectedOutput)
+        : directSwapEstimate.swapDirection === "yToX"
+        ? tokenYAmount.sub(directSwapEstimate.swapAmount)
         : tokenYAmount,
       new BN(preTokenYBalance)
     );
@@ -1705,7 +1697,7 @@ export class Zap {
     transactions.push(ledgerTx);
 
     const maxActiveBinSlippage = getAndCapMaxActiveBinSlippage(
-      liquiditySlippagePercentage * 100,
+      liquiditySlippageBps,
       dlmm.lbPair.binStep,
       MAX_ACTIVE_BIN_SLIPPAGE
     );
@@ -1774,12 +1766,6 @@ export class Zap {
         afterSwap: {
           tokenX: tokenXAmountAfterSwap,
           tokenY: tokenYAmountAfterSwap,
-        },
-        swap: {
-          direction: swapEstimate.swapDirection,
-          amount: swapEstimate.swapAmount,
-          expectedOutput: swapEstimate.expectedOutput,
-          route: swapEstimate.quote?.route ?? null,
         },
       },
     };
@@ -2172,33 +2158,5 @@ export class Zap {
       preInstructions,
       postInstructions,
     });
-  }
-
-  /**
-   * Estimates a balanced swap operation to find the optimal swap route between Jupiter and DLMM.
-   * This method calculates the optimal swap amount to achieve equal value (1:1 ratio) between token X and token Y amounts.
-   *
-   * @param params - Estimation parameters
-   * @param params.lbPairAddress - Address of the DLMM pair to estimate against
-   * @param params.tokenXAmount - Amount of token X available
-   * @param params.tokenYAmount - Amount of token Y available
-   * @param params.slippage - Slippage tolerance as a decimal (e.g., 0.01 for 1%)
-   * @returns Swap calculation result with optimal routing information
-   */
-  async estimateBalancedSwapThroughJupiterAndDlmm(
-    params: EstimateBalancedSwapThroughJupiterAndDlmmParams
-  ): Promise<DirectSwapEstimate> {
-    const { lbPairAddress, tokenXAmount, tokenYAmount, slippage } = params;
-
-    const dlmm = await DLMM.create(this.connection, lbPairAddress);
-
-    const directSwapEstimate = await estimateDirectSwap(
-      tokenXAmount,
-      tokenYAmount,
-      dlmm,
-      slippage
-    );
-
-    return directSwapEstimate;
   }
 }

@@ -256,10 +256,10 @@ export interface RebalanceDlmmPositionParams {
   user: PublicKey;
   minDeltaId: number;
   maxDeltaId: number;
-  swapSlippagePercentage: number;
-  liquiditySlippagePercentage: number;
+  liquiditySlippageBps: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
+  directSwapEstimate: DirectSwapEstimate;
 }
 
 export interface RebalanceDlmmPositionResponse {
@@ -272,12 +272,6 @@ export interface RebalanceDlmmPositionResponse {
     afterSwap: {
       tokenX: BN;
       tokenY: BN;
-    };
-    swap: {
-      direction: SwapDirection;
-      amount: BN;
-      expectedOutput: BN;
-      route: DlmmSwapRoute | null;
     };
   };
 }
