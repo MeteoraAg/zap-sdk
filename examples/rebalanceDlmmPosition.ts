@@ -119,7 +119,7 @@ async function main() {
       ...[result.ledgerTransaction, result.zapInTx, result.closeLedgerTx]
     )
   );
-  if (result.cleanUpTransaction) {
+  if (result.cleanUpTransaction.instructions.length > 0) {
     finalTx.push(result.cleanUpTransaction);
   }
 
