@@ -1,5 +1,10 @@
 import DLMM, { BinLiquidity, SwapQuote } from "@meteora-ag/dlmm";
-import { SwapEstimate, SwapQuoteResult } from "../types";
+import {
+  DirectSwapEstimate,
+  SwapQuoteResult,
+  JupiterQuoteResponse,
+  IndirectSwapEstimate,
+} from "../types";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
@@ -163,15 +168,220 @@ function binarySearchRefineSwapAmount(
 }
 
 /**
- * Calculate optimal swap amount to achieve equal value (1:1 ratio)
+ * Calculate swap amounts from a single input token (that is not tokenX or tokenY)
+ * to achieve balanced tokenX and tokenY amounts
+ *
+ * Uses Jupiter for swaps since input token is not part of the DLMM pool
+ * First tries a 50:50 split (inputToken -> X and inputToken -> Y)
+ * then refines using binary search if the resulting X and Y values are not balanced enough.
  */
-export async function estimateBalancedSwap(
-  tokenXAmount: BN,
-  tokenYAmount: BN,
+export async function estimateIndirectSwap(
+  inputTokenAmount: BN,
+  inputMint: PublicKey,
   dlmm: DLMM,
   activeBin: BinLiquidity,
   swapSlippage: number
-): Promise<SwapEstimate> {
+): Promise<IndirectSwapEstimate> {
+  const activeBinPrice = new Decimal(activeBin.price);
+  const tokenXMint = dlmm.lbPair.tokenXMint;
+  const tokenYMint = dlmm.lbPair.tokenYMint;
+  const slippageBps = swapSlippage * 100;
+
+  const halfAmount = inputTokenAmount.div(new BN(2));
+  const [quoteToXResult, quoteToYResult] = await Promise.allSettled([
+    getJupiterQuote(
+      inputMint,
+      tokenXMint,
+      halfAmount,
+      50,
+      slippageBps,
+      false,
+      true,
+      true,
+      "https://lite-api.jup.ag"
+    ),
+    getJupiterQuote(
+      inputMint,
+      tokenYMint,
+      halfAmount,
+      50,
+      slippageBps,
+      false,
+      true,
+      true,
+      "https://lite-api.jup.ag"
+    ),
+  ]);
+
+  const quoteToX =
+    quoteToXResult.status === "fulfilled" ? quoteToXResult.value : null;
+  const quoteToY =
+    quoteToYResult.status === "fulfilled" ? quoteToYResult.value : null;
+
+  if (!quoteToX || !quoteToY) {
+    return {
+      swapToX: null,
+      swapToY: null,
+      swapAmountToX: new BN(0),
+      swapAmountToY: new BN(0),
+      postSwapX: new BN(0),
+      postSwapY: new BN(0),
+    };
+  }
+
+  const initialTokenX = new BN(quoteToX.outAmount);
+  const initialTokenY = new BN(quoteToY.outAmount);
+
+  const valueX = new Decimal(initialTokenX.toString()).mul(activeBinPrice);
+  const valueY = new Decimal(initialTokenY.toString());
+  const ratio = valueX.div(valueY);
+
+  // return early if initial split is balanced enough
+  if (ratio.sub(1).abs().lt(TOLERANCE)) {
+    return {
+      swapToX: quoteToX,
+      swapToY: quoteToY,
+      swapAmountToX: halfAmount,
+      swapAmountToY: halfAmount,
+      postSwapX: initialTokenX,
+      postSwapY: initialTokenY,
+    };
+  }
+
+  const effectiveRateToX = new Decimal(quoteToX.outAmount).div(
+    new Decimal(quoteToX.inAmount)
+  );
+  const effectiveRateToY = new Decimal(quoteToY.outAmount).div(
+    new Decimal(quoteToY.inAmount)
+  );
+
+  // binary search to find optimal input
+  // Initialize bounds based on initial 50:50 result to skip redundant first iteration
+  const MAX_ITERATIONS = 20;
+  let left: BN;
+  let right: BN;
+  if (ratio.gt(1)) {
+    // Too much X value, need to swap less to X
+    left = new BN(0);
+    right = halfAmount;
+  } else {
+    // Too much Y value, need to swap more to X
+    left = halfAmount;
+    right = inputTokenAmount;
+  }
+
+  let bestAmountToX = halfAmount;
+  let bestAmountToY = halfAmount;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const midAmountToX = left.add(right).div(new BN(2));
+    const midAmountToY = inputTokenAmount.sub(midAmountToX);
+
+    if (right.sub(left).lte(new BN(1000))) {
+      bestAmountToX = midAmountToX;
+      bestAmountToY = midAmountToY;
+      break;
+    }
+
+    const estimatedX = estimateSwapOutput(midAmountToX, effectiveRateToX);
+    const estimatedY = estimateSwapOutput(midAmountToY, effectiveRateToY);
+
+    const estValueX = new Decimal(estimatedX.toString()).mul(activeBinPrice);
+    const estValueY = new Decimal(estimatedY.toString());
+    const xOverYRatio = estValueX.div(estValueY);
+
+    // Stop if within tolerance
+    if (xOverYRatio.sub(1).abs().lt(TOLERANCE)) {
+      bestAmountToX = midAmountToX;
+      bestAmountToY = midAmountToY;
+      break;
+    }
+
+    if (xOverYRatio.gt(1)) {
+      // Too much X value, swap less to X (move left)
+      right = midAmountToX;
+    } else {
+      // Too much Y value, swap more to X (move right)
+      left = midAmountToX;
+    }
+
+    bestAmountToX = midAmountToX;
+    bestAmountToY = midAmountToY;
+  }
+
+  // Get final quotes with refined amounts
+  const [finalQuoteToXResult, finalQuoteToYResult] = await Promise.allSettled([
+    getJupiterQuote(
+      inputMint,
+      tokenXMint,
+      bestAmountToX,
+      50,
+      slippageBps,
+      false,
+      true,
+      true,
+      "https://lite-api.jup.ag"
+    ),
+    getJupiterQuote(
+      inputMint,
+      tokenYMint,
+      bestAmountToY,
+      50,
+      slippageBps,
+      false,
+      true,
+      true,
+      "https://lite-api.jup.ag"
+    ),
+  ]);
+
+  const finalQuoteToX =
+    finalQuoteToXResult.status === "fulfilled"
+      ? finalQuoteToXResult.value
+      : null;
+  const finalQuoteToY =
+    finalQuoteToYResult.status === "fulfilled"
+      ? finalQuoteToYResult.value
+      : null;
+
+  if (!finalQuoteToX || !finalQuoteToY) {
+    // Fallback to initial 50:50 quotes
+    return {
+      swapToX: quoteToX,
+      swapToY: quoteToY,
+      swapAmountToX: halfAmount,
+      swapAmountToY: halfAmount,
+      postSwapX: initialTokenX,
+      postSwapY: initialTokenY,
+    };
+  }
+
+  const finalTokenX = new BN(finalQuoteToX.outAmount);
+  const finalTokenY = new BN(finalQuoteToY.outAmount);
+
+  return {
+    swapToX: finalQuoteToX,
+    swapToY: finalQuoteToY,
+    swapAmountToX: bestAmountToX,
+    swapAmountToY: bestAmountToY,
+    postSwapX: finalTokenX,
+    postSwapY: finalTokenY,
+  };
+}
+
+/**
+ * Calculate optimal swap amount to achieve equal value (1:1 ratio)
+ *
+ * Balances tokenX and tokenY to achieve equal value by swapping excess of one token to the other
+ * using either the DLMM pool or Jupiter
+ */
+export async function estimateDirectSwap(
+  tokenXAmount: BN,
+  tokenYAmount: BN,
+  dlmm: DLMM,
+  swapSlippage: number
+): Promise<DirectSwapEstimate> {
+  const activeBin = await dlmm.getActiveBin();
   const activeBinPrice = new Decimal(activeBin.price);
 
   // Determine ratio of token values in terms of Y
@@ -204,20 +414,17 @@ export async function estimateBalancedSwap(
   let swapDirection: "xToY" | "yToX";
   let inMint: PublicKey;
   let outMint: PublicKey;
-  let inTokenDecimals: number;
 
   if (xOverYRatio.gt(1)) {
     // More X than Y, swap X -> Y
     swapDirection = "xToY";
     inMint = dlmm.lbPair.tokenXMint;
     outMint = dlmm.lbPair.tokenYMint;
-    inTokenDecimals = dlmm.tokenX.mint.decimals;
   } else {
     // More Y than X, swap Y -> X
     swapDirection = "yToX";
     inMint = dlmm.lbPair.tokenYMint;
     outMint = dlmm.lbPair.tokenXMint;
-    inTokenDecimals = dlmm.tokenY.mint.decimals;
   }
 
   // Get simple initial estimate using activeBinPrice

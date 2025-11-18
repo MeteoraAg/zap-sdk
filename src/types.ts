@@ -8,7 +8,11 @@ import {
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
-import { SwapQuote, StrategyType } from "@meteora-ag/dlmm";
+import {
+  SwapQuote,
+  StrategyType,
+  RemainingAccountInfo,
+} from "@meteora-ag/dlmm";
 
 export type ZapProgram = Program<Zap>;
 
@@ -193,6 +197,13 @@ export enum SwapExternalType {
   swapToBoth,
 }
 
+export enum DlmmSwapExternalType {
+  swapToX,
+  swapToY,
+  swapToBoth,
+  noSwap,
+}
+
 export type ZapInDammV2InDirectPoolParam = Omit<
   ZapInDammV2DirectPoolParam,
   "maxTransferAmount"
@@ -220,13 +231,22 @@ export interface SwapQuoteResult {
 type SwapDirection = "xToY" | "yToX" | "noSwap";
 type DlmmSwapRoute = "jupiter" | "dlmm";
 
-export interface SwapEstimate {
+export interface DirectSwapEstimate {
   swapDirection: SwapDirection;
   swapAmount: BN;
   expectedOutput: BN;
   postSwapX: BN;
   postSwapY: BN;
   quote: SwapQuoteResult | null;
+}
+
+export interface IndirectSwapEstimate {
+  swapToX: JupiterQuoteResponse | null;
+  swapToY: JupiterQuoteResponse | null;
+  swapAmountToX: BN;
+  swapAmountToY: BN;
+  postSwapX: BN;
+  postSwapY: BN;
 }
 
 ///// ZAPIN TYPES /////
@@ -268,3 +288,89 @@ export interface EstimateBalancedSwapThroughJupiterAndDlmmParams {
   tokenYAmount: BN;
   slippage: number;
 }
+
+export interface GetZapInDlmmIndirectParams {
+  user: PublicKey;
+  lbPair: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: BN;
+  maxActiveBinSlippage: number;
+  binDeltaId: number;
+  strategy: StrategyType;
+  favorXInActiveId: boolean;
+  indirectSwapEstimate: IndirectSwapEstimate;
+  maxAccounts: number;
+  slippageBps: number;
+  maxTransferAmountExtendPercentage: number;
+}
+
+export interface GetZapInDlmmDirectParams {
+  user: PublicKey;
+  lbPair: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: BN;
+  maxActiveBinSlippage: number;
+  binDeltaId: number;
+  strategy: StrategyType;
+  favorXInActiveId: boolean;
+  maxAccounts: number;
+  slippageBps: number;
+  maxTransferAmountExtendPercentage: number;
+  directSwapEstimate: DirectSwapEstimate;
+}
+
+export type ZapInDlmmIndirectPoolParam = {
+  user: PublicKey;
+  lbPair: PublicKey;
+  tokenXMint: PublicKey;
+  tokenYMint: PublicKey;
+  tokenXProgram: PublicKey;
+  tokenYProgram: PublicKey;
+  activeId: number;
+  binDelta: number;
+  maxActiveBinSlippage: number;
+  favorXInActiveId: boolean;
+  strategy: StrategyType;
+  maxTransferAmountX: BN;
+  maxTransferAmountY: BN;
+  preInstructions: TransactionInstruction[];
+  swapTransactions: Transaction[];
+  cleanUpInstructions: TransactionInstruction[];
+  binArrays: AccountMeta[];
+  remainingAccountInfo: RemainingAccountInfo;
+  binArrayBitmapExtension: PublicKey | null;
+  isDirectRoute: boolean;
+};
+
+export type ZapInDlmmDirectPoolParam = {
+  user: PublicKey;
+  lbPair: PublicKey;
+  tokenXMint: PublicKey;
+  tokenYMint: PublicKey;
+  tokenXProgram: PublicKey;
+  tokenYProgram: PublicKey;
+  activeId: number;
+  binDelta: number;
+  maxActiveBinSlippage: number;
+  favorXInActiveId: boolean;
+  strategy: StrategyType;
+  amount: BN;
+  maxTransferAmount: BN;
+  preInstructions: TransactionInstruction[];
+  swapTransactions: Transaction[];
+  cleanUpInstructions: TransactionInstruction[];
+  binArrays: AccountMeta[];
+  remainingAccountInfo: RemainingAccountInfo;
+  binArrayBitmapExtension: PublicKey | null;
+  isDirectRoute: boolean;
+  isTokenX: boolean;
+};
+
+export type ZapInDlmmResponse = {
+  setupTransaction: Transaction;
+  swapTransactions: Transaction[];
+  ledgerTransaction: Transaction;
+  zapInTx: Transaction;
+  closeLedgerTx: Transaction;
+  cleanUpTransaction: Transaction;
+};
