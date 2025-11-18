@@ -263,7 +263,13 @@ export interface RebalanceDlmmPositionParams {
 }
 
 export interface RebalanceDlmmPositionResponse {
-  transactions: Transaction[];
+  setupTransaction: Transaction;
+  removeLiquidityTransactions: Transaction[];
+  swapTransaction?: Transaction;
+  ledgerTransaction: Transaction;
+  zapInTx: Transaction;
+  closeLedgerTx: Transaction;
+  cleanUpTransaction: Transaction;
   estimation: {
     currentBalances: {
       tokenX: BN;

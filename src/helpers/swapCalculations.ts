@@ -8,6 +8,7 @@ import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "./jupiter";
+import invariant from "invariant";
 
 // Constants
 const TOLERANCE = new Decimal(0.0001); // 0.01%
@@ -191,19 +192,24 @@ function binarySearchRefineDirectSwapAmount(
  */
 export async function estimateIndirectSwap(
   inputTokenAmount: BN,
-  inputMint: PublicKey,
+  inputTokenMint: PublicKey,
   dlmm: DLMM,
-  activeBin: BinLiquidity,
   swapSlippageBps: number
 ): Promise<IndirectSwapEstimate> {
+  const activeBin = await dlmm.getActiveBin();
   const activeBinPrice = new Decimal(activeBin.price);
   const tokenXMint = dlmm.lbPair.tokenXMint;
   const tokenYMint = dlmm.lbPair.tokenYMint;
 
+  invariant(
+    !inputTokenMint.equals(tokenXMint) && !inputTokenMint.equals(tokenYMint),
+    "Input token must not be tokenX or tokenY for indirect route"
+  );
+
   const halfAmount = inputTokenAmount.div(new BN(2));
   const [quoteToXResult, quoteToYResult] = await Promise.allSettled([
     getJupiterQuote(
-      inputMint,
+      inputTokenMint,
       tokenXMint,
       halfAmount,
       50,
@@ -214,7 +220,7 @@ export async function estimateIndirectSwap(
       "https://lite-api.jup.ag"
     ),
     getJupiterQuote(
-      inputMint,
+      inputTokenMint,
       tokenYMint,
       halfAmount,
       50,
@@ -327,7 +333,7 @@ export async function estimateIndirectSwap(
   // Get final quotes with refined amounts
   const [finalQuoteToXResult, finalQuoteToYResult] = await Promise.allSettled([
     getJupiterQuote(
-      inputMint,
+      inputTokenMint,
       tokenXMint,
       bestAmountToX,
       50,
@@ -338,7 +344,7 @@ export async function estimateIndirectSwap(
       "https://lite-api.jup.ag"
     ),
     getJupiterQuote(
-      inputMint,
+      inputTokenMint,
       tokenYMint,
       bestAmountToY,
       50,

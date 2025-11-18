@@ -24,10 +24,8 @@ import {
   ZapOutThroughDlmmParams,
   ZapOutThroughJupiterParams,
   ZapProgram,
-  DirectSwapEstimate,
   RebalanceDlmmPositionParams,
   RebalanceDlmmPositionResponse,
-  EstimateBalancedSwapThroughJupiterAndDlmmParams,
   GetZapInDlmmIndirectParams,
   GetZapInDlmmDirectParams,
   ZapInDlmmIndirectPoolParam,
@@ -1036,7 +1034,7 @@ export class Zap {
 
   async getZapInDlmmDirectParams(
     params: GetZapInDlmmDirectParams
-  ): Promise<ZapInDlmmDirectPoolParam | null> {
+  ): Promise<ZapInDlmmDirectPoolParam> {
     const {
       user,
       lbPair,
@@ -1200,7 +1198,7 @@ export class Zap {
 
   async getZapInDlmmIndirectParams(
     params: GetZapInDlmmIndirectParams
-  ): Promise<ZapInDlmmIndirectPoolParam | null> {
+  ): Promise<ZapInDlmmIndirectPoolParam> {
     const {
       user,
       lbPair,
@@ -1221,7 +1219,7 @@ export class Zap {
 
     invariant(
       !inputTokenMint.equals(tokenXMint) && !inputTokenMint.equals(tokenYMint),
-      "Invalid input token mint for indirect route"
+      "Input token must not be tokenX or tokenY for indirect route"
     );
 
     const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
@@ -1541,10 +1539,36 @@ export class Zap {
 
     const dlmm = await DLMM.create(this.connection, lbPairAddress);
     const position = await dlmm.getPosition(positionAddress);
-    const transactions: Transaction[] = [];
+    const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
+
+    const [
+      { ataPubkey: userTokenX, ix: userTokenXIx },
+      { ataPubkey: userTokenY, ix: userTokenYIx },
+    ] = await Promise.all([
+      getOrCreateATAInstruction(
+        this.connection,
+        dlmm.lbPair.tokenXMint,
+        user,
+        user,
+        true,
+        tokenXProgram
+      ),
+      getOrCreateATAInstruction(
+        this.connection,
+        dlmm.lbPair.tokenYMint,
+        user,
+        user,
+        true,
+        tokenYProgram
+      ),
+    ]);
+
+    const setupTransaction = new Transaction();
+    userTokenXIx && setupTransaction.add(userTokenXIx);
+    userTokenYIx && setupTransaction.add(userTokenYIx);
 
     // remove liquidity from existing position
-    const removeLiquidityTxs = await dlmm.removeLiquidity({
+    const removeLiquidityTransactions = await dlmm.removeLiquidity({
       user,
       position: positionAddress,
       fromBinId: position.positionData.lowerBinId,
@@ -1552,12 +1576,11 @@ export class Zap {
       bps: new BN(BASIS_POINT_MAX), // remove all liquidity
       shouldClaimAndClose: false,
     });
-    transactions.push(...removeLiquidityTxs);
 
     // swap tokens to balance if needed
     const tokenXAmount = new BN(position.positionData.totalXAmount);
     const tokenYAmount = new BN(position.positionData.totalYAmount);
-    const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
+    let swapTransaction: Transaction | undefined;
     if (directSwapEstimate.swapDirection !== "noSwap") {
       const isXToY = directSwapEstimate.swapDirection === "xToY";
       const inputMint = isXToY
@@ -1569,7 +1592,6 @@ export class Zap {
       const inputTokenProgram = isXToY ? tokenXProgram : tokenYProgram;
       const outputTokenProgram = isXToY ? tokenYProgram : tokenXProgram;
 
-      let zapOutTx: Transaction;
       if (directSwapEstimate.quote?.route === "jupiter") {
         const jupiterQuote = directSwapEstimate.quote.originalQuote;
         const jupiterSwapResponse = await getJupiterSwapInstruction(
@@ -1577,7 +1599,7 @@ export class Zap {
           jupiterQuote
         );
 
-        zapOutTx = await this.zapOutThroughJupiter({
+        swapTransaction = await this.zapOutThroughJupiter({
           user,
           inputMint,
           outputMint,
@@ -1588,7 +1610,7 @@ export class Zap {
           percentageToZapOut: 100,
         });
       } else {
-        zapOutTx = await this.zapOutThroughDlmm({
+        swapTransaction = await this.zapOutThroughDlmm({
           user,
           lbPairAddress,
           inputMint,
@@ -1601,83 +1623,63 @@ export class Zap {
           percentageToZapOut: 100,
         });
       }
-      transactions.push(zapOutTx);
     }
 
-    const userTokenX = getAssociatedTokenAddressSync(
-      dlmm.lbPair.tokenXMint,
-      user,
-      false,
-      tokenXProgram
+    const preTokenXBalance = await getTokenAccountBalance(
+      this.connection,
+      userTokenX
     );
-    const userTokenY = getAssociatedTokenAddressSync(
-      dlmm.lbPair.tokenYMint,
-      user,
-      false,
-      tokenYProgram
+    const preTokenYBalance = await getTokenAccountBalance(
+      this.connection,
+      userTokenY
     );
-    const preTokenXBalance = dlmm.lbPair.tokenXMint.equals(NATIVE_MINT)
-      ? await this.connection.getBalance(user)
-      : await getTokenAccountBalance(this.connection, userTokenX);
-    const preTokenYBalance = dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)
-      ? await this.connection.getBalance(user)
-      : await getTokenAccountBalance(this.connection, userTokenY);
 
-    const tokenXAmountAfterSwap = BN.min(
+    const tokenXAmountAfterSwap =
       directSwapEstimate.swapDirection === "xToY"
         ? tokenXAmount.sub(directSwapEstimate.swapAmount)
         : directSwapEstimate.swapDirection === "yToX"
         ? tokenXAmount.add(directSwapEstimate.expectedOutput)
-        : tokenXAmount,
-      new BN(preTokenXBalance)
-    );
-    const tokenYAmountAfterSwap = BN.min(
+        : tokenXAmount;
+    const tokenYAmountAfterSwap =
       directSwapEstimate.swapDirection === "xToY"
         ? tokenYAmount.add(directSwapEstimate.expectedOutput)
         : directSwapEstimate.swapDirection === "yToX"
         ? tokenYAmount.sub(directSwapEstimate.swapAmount)
-        : tokenYAmount,
-      new BN(preTokenYBalance)
-    );
+        : tokenYAmount;
 
     // initialize ledger if needed and update balances
     const ledgerAddress = deriveLedgerAccount(user);
     const ledgerAccountInfo = await this.connection.getAccountInfo(
       ledgerAddress
     );
-    const ledgerTx = new Transaction();
+    const ledgerTransaction = new Transaction();
     if (!ledgerAccountInfo) {
       // initialize ledger account when it already exists will cause an error
       const initLedgerTx = await this.initializeLedgerAccount(user, user);
-      ledgerTx.add(...initLedgerTx.instructions);
+      ledgerTransaction.add(...initLedgerTx.instructions);
     }
     // Wrap SOL if needed before updating ledger
     if (
-      dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) &&
-      tokenXAmountAfterSwap.gt(new BN(0))
+      (dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) &&
+        tokenXAmountAfterSwap.gt(new BN(0))) ||
+      (dlmm.lbPair.tokenYMint.equals(NATIVE_MINT) &&
+        tokenYAmountAfterSwap.gt(new BN(0)))
     ) {
-      const wrapAmount = BigInt(tokenXAmountAfterSwap.toString());
+      const isTokenXSol = dlmm.lbPair.tokenXMint.equals(NATIVE_MINT);
+      const wrapAmount = BigInt(
+        isTokenXSol
+          ? tokenXAmountAfterSwap.toString()
+          : tokenYAmountAfterSwap.toString()
+      );
       const wrapIxs = wrapSOLInstruction(
         user,
-        userTokenX,
+        isTokenXSol ? userTokenX : userTokenY,
         wrapAmount,
-        tokenXProgram
+        isTokenXSol ? tokenXProgram : tokenYProgram
       );
-      ledgerTx.add(...wrapIxs);
+      ledgerTransaction.add(...wrapIxs);
     }
-    if (
-      dlmm.lbPair.tokenYMint.equals(NATIVE_MINT) &&
-      tokenYAmountAfterSwap.gt(new BN(0))
-    ) {
-      const wrapAmount = BigInt(tokenYAmountAfterSwap.toString());
-      const wrapIxs = wrapSOLInstruction(
-        user,
-        userTokenY,
-        wrapAmount,
-        tokenYProgram
-      );
-      ledgerTx.add(...wrapIxs);
-    }
+
     const updateLedgerXTx = await this.updateLedgerBalanceAfterSwap(
       user,
       userTokenX,
@@ -1685,7 +1687,7 @@ export class Zap {
       tokenXAmountAfterSwap,
       true
     );
-    ledgerTx.add(...updateLedgerXTx.instructions);
+    ledgerTransaction.add(...updateLedgerXTx.instructions);
     const updateLedgerYTx = await this.updateLedgerBalanceAfterSwap(
       user,
       userTokenY,
@@ -1693,8 +1695,7 @@ export class Zap {
       tokenYAmountAfterSwap,
       false
     );
-    ledgerTx.add(...updateLedgerYTx.instructions);
-    transactions.push(ledgerTx);
+    ledgerTransaction.add(...updateLedgerYTx.instructions);
 
     const maxActiveBinSlippage = getAndCapMaxActiveBinSlippage(
       liquiditySlippageBps,
@@ -1726,38 +1727,34 @@ export class Zap {
       strategy,
       remainingAccountInfo: { slices: [] },
     });
-    // TODO: Set proper compute unit limit using more accurate calculation
     zapInTx.instructions.unshift(
       // based on 1 tx that consumed 462_610. Add 20% for safety and round up to nearest 100,000
       // 462_610 * 1.2 = 555_132 => 600_000
       ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })
     );
-    transactions.push(zapInTx);
 
     // unwrap any remaining WSOL back to native SOL
-    const unwrapTx = new Transaction();
-    if (dlmm.lbPair.tokenXMint.equals(NATIVE_MINT)) {
+    const cleanUpTransaction = new Transaction();
+    if (
+      dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) ||
+      dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)
+    ) {
       const unwrapIx = unwrapSOLInstruction(user, user);
       if (unwrapIx) {
-        unwrapTx.add(unwrapIx);
+        cleanUpTransaction.add(unwrapIx);
       }
-    }
-    if (dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)) {
-      const unwrapIx = unwrapSOLInstruction(user, user);
-      if (unwrapIx) {
-        unwrapTx.add(unwrapIx);
-      }
-    }
-    if (unwrapTx.instructions.length > 0) {
-      transactions.push(unwrapTx);
     }
 
-    // close ledger account
     const closeLedgerTx = await this.closeLedgerAccount(user, user);
-    transactions.push(closeLedgerTx);
 
     return {
-      transactions, // TODO: optimize to reduce # of transactions
+      setupTransaction,
+      removeLiquidityTransactions,
+      swapTransaction,
+      ledgerTransaction,
+      zapInTx,
+      closeLedgerTx,
+      cleanUpTransaction,
       estimation: {
         currentBalances: {
           tokenX: tokenXAmount,
