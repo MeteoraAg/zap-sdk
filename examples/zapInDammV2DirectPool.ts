@@ -1,20 +1,11 @@
-import {
-  CpAmm,
-  derivePositionAddress,
-  getTokenDecimals,
-} from "@meteora-ag/cp-amm-sdk";
-import {
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
+import { CpAmm, getTokenDecimals } from "@meteora-ag/cp-amm-sdk";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { Zap } from "../src";
 import Decimal from "decimal.js";
-import { derivePosition } from "@meteora-ag/dlmm";
 import { getJupAndDammV2Quotes } from "../src/helpers/zapin";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { createJitoTipIx, sendJitoBundle } from "./helpers";
 
 const MAINNET_RPC_URL = "";
 
@@ -22,22 +13,6 @@ const JITO_PRIVATE_KEY = "";
 
 const keypairPath = "";
 
-export function createJitoTipIx({
-  payer,
-  lamports,
-}: {
-  payer: PublicKey;
-  lamports: string;
-}) {
-  const tipAccount = new PublicKey(
-    "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5"
-  );
-  return SystemProgram.transfer({
-    fromPubkey: payer,
-    toPubkey: tipAccount,
-    lamports: BigInt(lamports),
-  });
-}
 async function main() {
   const connection = new Connection(MAINNET_RPC_URL);
   const user = Keypair.fromSecretKey(Uint8Array.from(require(keypairPath)));
@@ -177,34 +152,7 @@ async function main() {
   // return;
 
   console.log("Sending zap transaction...");
-  const jitoBundleResult: {
-    result: string;
-  } = (await fetch("https://mainnet.block-engine.jito.wtf/api/v1/bundles", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-jito-auth": JITO_PRIVATE_KEY,
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "sendBundle",
-      params: [
-        finalTx.map((signedTx) => signedTx.serialize().toString("base64")),
-        { encoding: "base64" },
-      ],
-    }),
-  })
-    .then((res) => res.json())
-    .catch((err) => {
-      console.error(err);
-      return {
-        result: err.message,
-      };
-    })) as {
-    result: string;
-  };
-
+  const jitoBundleResult = await sendJitoBundle(finalTx, JITO_PRIVATE_KEY);
   console.log(jitoBundleResult);
   console.log(`Zap bundle sent: ${jitoBundleResult?.result}`);
 }

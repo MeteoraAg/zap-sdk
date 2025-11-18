@@ -3,15 +3,14 @@ import {
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
-  SystemProgram,
   Transaction,
 } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
-import { convertUiAmountToLamports, getJupiterQuote, Zap } from "../src";
+import { getJupiterQuote, Zap } from "../src";
 import Decimal from "decimal.js";
-import { createJitoTipIx } from "./zapInDammV2DirectPool";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
+import { createJitoTipIx, sendJitoBundle } from "./helpers";
 
 const MAINNET_RPC_URL = "";
 
@@ -159,34 +158,7 @@ const keypairPath = "";
   return;
 
   console.log("Sending zap transaction...");
-  const jitoBundleResult: {
-    result: string;
-  } = (await fetch("https://mainnet.block-engine.jito.wtf/api/v1/bundles", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-jito-auth": JITO_PRIVATE_KEY,
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "sendBundle",
-      params: [
-        finalTx.map((signedTx) => signedTx.serialize().toString("base64")),
-        { encoding: "base64" },
-      ],
-    }),
-  })
-    .then((res) => res.json())
-    .catch((err) => {
-      console.error(err);
-      return {
-        result: err.message,
-      };
-    })) as {
-    result: string;
-  };
-
+  const jitoBundleResult = await sendJitoBundle(finalTx, JITO_PRIVATE_KEY);
   console.log(jitoBundleResult);
   console.log(`Zap bundle sent: ${jitoBundleResult?.result}`);
 })();
