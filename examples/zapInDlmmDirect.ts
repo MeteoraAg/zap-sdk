@@ -84,9 +84,9 @@ async function main() {
     lamports: jitoTip.toString(),
   });
 
-  finalTx.push(
-    new Transaction().add(...[zapInDlmmTx.setupTransaction, jitoTipsTx])
-  );
+  if (zapInDlmmTx.setupTransaction) {
+    finalTx.push(zapInDlmmTx.setupTransaction);
+  }
   for (const swapTx of zapInDlmmTx.swapTransactions) {
     finalTx.push(swapTx);
   }
@@ -94,15 +94,12 @@ async function main() {
     new Transaction().add(
       ...[
         zapInDlmmTx.ledgerTransaction,
-        zapInDlmmTx.zapInTx,
-        zapInDlmmTx.closeLedgerTx,
+        zapInDlmmTx.zapInTransaction,
+        zapInDlmmTx.cleanUpTransaction,
+        jitoTipsTx,
       ]
     )
   );
-
-  if (zapInDlmmTx.cleanUpTransaction) {
-    finalTx.push(zapInDlmmTx.cleanUpTransaction);
-  }
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;
   for (const tx of finalTx) {

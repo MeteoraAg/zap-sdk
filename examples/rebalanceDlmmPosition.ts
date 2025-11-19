@@ -58,6 +58,7 @@ async function main() {
   //   newPosition,
   // ]);
   // console.log(sig);
+  // console.log(`Position created: ${newPosition.publicKey.toString()}`);
   // return;
 
   const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
@@ -109,7 +110,9 @@ async function main() {
     lamports: jitoTip.toString(),
   });
 
-  finalTx.push(new Transaction().add(...[result.setupTransaction, jitoTipsTx]));
+  if (result.setupTransaction) {
+    finalTx.push(result.setupTransaction);
+  }
 
   for (const removeLiquidityTx of result.removeLiquidityTransactions) {
     finalTx.push(removeLiquidityTx);
@@ -119,12 +122,14 @@ async function main() {
   }
   finalTx.push(
     new Transaction().add(
-      ...[result.ledgerTransaction, result.zapInTx, result.closeLedgerTx]
+      ...[
+        result.ledgerTransaction,
+        result.zapInTransaction,
+        result.cleanUpTransaction,
+        jitoTipsTx,
+      ]
     )
   );
-  if (result.cleanUpTransaction.instructions.length > 0) {
-    finalTx.push(result.cleanUpTransaction);
-  }
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;
   for (const tx of finalTx) {

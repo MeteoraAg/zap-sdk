@@ -1003,7 +1003,7 @@ export class Zap {
       }
     }
 
-    const zapInTx = await this.zapInDammV2({
+    const zapInTransaction = await this.zapInDammV2({
       user,
       pool,
       position,
@@ -1018,18 +1018,19 @@ export class Zap {
       tokenBProgram,
     });
 
-    const closeLedgerTx = await this.closeLedgerAccount(user, user);
-
+    const cleanUpTransaction = new Transaction();
+    const closeLedgerTransaction = await this.closeLedgerAccount(user, user);
+    cleanUpTransaction.add(closeLedgerTransaction);
+    if (cleanUpInstructions.length > 0) {
+      cleanUpTransaction.add(...cleanUpInstructions);
+    }
     return {
-      setupTransaction,
+      setupTransaction:
+        setupTransaction.instructions.length > 0 ? setupTransaction : undefined,
       swapTransactions,
       ledgerTransaction,
-      zapInTx,
-      closeLedgerTx,
-      cleanUpTransaction:
-        cleanUpInstructions.length > 0
-          ? new Transaction().add(...cleanUpInstructions)
-          : new Transaction(),
+      zapInTransaction,
+      cleanUpTransaction,
     };
   }
 
@@ -1474,7 +1475,7 @@ export class Zap {
       ledgerTransaction.add(updateLedgerBalanceTokenYAfterSwapTx);
     }
 
-    const zapInTx = await this.zapInDlmmForUninitializedPosition({
+    const zapInTransaction = await this.zapInDlmmForUninitializedPosition({
       user,
       lbPair,
       position,
@@ -1490,18 +1491,20 @@ export class Zap {
       remainingAccountInfo,
     });
 
-    const closeLedgerTx = await this.closeLedgerAccount(user, user);
+    const cleanUpTransaction = new Transaction();
+    const closeLedgerTransaction = await this.closeLedgerAccount(user, user);
+    cleanUpTransaction.add(closeLedgerTransaction);
+    if (cleanUpInstructions.length > 0) {
+      cleanUpTransaction.add(...cleanUpInstructions);
+    }
 
     return {
-      setupTransaction,
+      setupTransaction:
+        setupTransaction.instructions.length > 0 ? setupTransaction : undefined,
       swapTransactions,
       ledgerTransaction,
-      zapInTx,
-      closeLedgerTx,
-      cleanUpTransaction:
-        cleanUpInstructions.length > 0
-          ? new Transaction().add(...cleanUpInstructions)
-          : new Transaction(),
+      zapInTransaction,
+      cleanUpTransaction,
     };
   }
 
@@ -1718,7 +1721,7 @@ export class Zap {
       isWritable: true,
     }));
     // build zap in transaction with compute budget
-    const zapInTx = await this.zapInDlmmForInitializedPosition({
+    const zapInTransaction = await this.zapInDlmmForInitializedPosition({
       user,
       lbPair: lbPairAddress,
       position: positionAddress,
@@ -1731,14 +1734,16 @@ export class Zap {
       strategy,
       remainingAccountInfo: { slices: [] },
     });
-    zapInTx.instructions.unshift(
+    zapInTransaction.instructions.unshift(
       // based on 1 tx that consumed 462_610. Add 20% for safety and round up to nearest 100,000
       // 462_610 * 1.2 = 555_132 => 600_000
       ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })
     );
 
-    // unwrap any remaining WSOL back to native SOL
     const cleanUpTransaction = new Transaction();
+    const closeLedgerTx = await this.closeLedgerAccount(user, user);
+    cleanUpTransaction.add(closeLedgerTx);
+    // unwrap any remaining WSOL back to native SOL
     if (
       dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) ||
       dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)
@@ -1749,15 +1754,12 @@ export class Zap {
       }
     }
 
-    const closeLedgerTx = await this.closeLedgerAccount(user, user);
-
     return {
       setupTransaction,
       removeLiquidityTransactions,
       swapTransaction,
       ledgerTransaction,
-      zapInTx,
-      closeLedgerTx,
+      zapInTransaction,
       cleanUpTransaction,
       estimation: {
         currentBalances: {

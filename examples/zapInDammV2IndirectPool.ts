@@ -126,9 +126,9 @@ const keypairPath = "";
     lamports: jitoTip.toString(),
   });
 
-  finalTx.push(
-    new Transaction().add(...[zapInDammV2Tx.setupTransaction, jitoTipsTx])
-  );
+  if (zapInDammV2Tx.setupTransaction) {
+    finalTx.push(zapInDammV2Tx.setupTransaction);
+  }
 
   for (const swapTx of zapInDammV2Tx.swapTransactions) {
     finalTx.push(swapTx);
@@ -138,8 +138,9 @@ const keypairPath = "";
     new Transaction().add(
       ...[
         zapInDammV2Tx.ledgerTransaction,
-        zapInDammV2Tx.zapInTx,
-        zapInDammV2Tx.closeLedgerTx,
+        zapInDammV2Tx.zapInTransaction,
+        zapInDammV2Tx.cleanUpTransaction,
+        jitoTipsTx,
       ]
     )
   );
@@ -155,7 +156,7 @@ const keypairPath = "";
     // console.log(simulate.value.err);
   }
 
-  return;
+  // return;
 
   console.log("Sending zap transaction...");
   const jitoBundleResult = await sendJitoBundle(finalTx, JITO_PRIVATE_KEY);
