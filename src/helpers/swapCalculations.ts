@@ -112,8 +112,8 @@ async function getBestSwapQuoteJupiterDlmm(
   if (!jupiterQuote) return dlmmQuote;
 
   return jupiterQuote.outAmount.gt(dlmmQuote.outAmount)
-    ? dlmmQuote
-    : jupiterQuote;
+    ? jupiterQuote
+    : dlmmQuote;
 }
 
 function calculateInitialSwapEstimate(
