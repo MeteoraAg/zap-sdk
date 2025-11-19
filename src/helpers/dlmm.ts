@@ -360,3 +360,18 @@ export function toProgramStrategyType(
       throw new Error(`Unknown strategy: ${strategy}`);
   }
 }
+
+export function binDeltaToMinMaxBinId(
+  binDelta: number,
+  activeBinId: number
+): {
+  minBinId: number;
+  maxBinId: number;
+} {
+  const minBinId = activeBinId - binDelta;
+  const maxBinId = minBinId + binDelta * 2;
+  return {
+    minBinId,
+    maxBinId,
+  };
+}

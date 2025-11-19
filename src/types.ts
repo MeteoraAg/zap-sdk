@@ -254,8 +254,7 @@ export interface RebalanceDlmmPositionParams {
   lbPairAddress: PublicKey;
   positionAddress: PublicKey;
   user: PublicKey;
-  minDeltaId: number;
-  maxDeltaId: number;
+  binDelta: number;
   liquiditySlippageBps: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
@@ -295,7 +294,7 @@ export interface GetZapInDlmmIndirectParams {
   inputTokenMint: PublicKey;
   amountIn: BN;
   maxActiveBinSlippage: number;
-  binDeltaId: number;
+  binDelta: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
   indirectSwapEstimate: IndirectSwapEstimate;
@@ -310,7 +309,7 @@ export interface GetZapInDlmmDirectParams {
   inputTokenMint: PublicKey;
   amountIn: BN;
   maxActiveBinSlippage: number;
-  binDeltaId: number;
+  binDelta: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
   maxAccounts: number;

@@ -53,6 +53,7 @@ import {
   buildJupiterSwapTransaction,
   getJupiterSwapInstruction,
   toProgramStrategyType,
+  binDeltaToMinMaxBinId,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -1040,7 +1041,7 @@ export class Zap {
       lbPair,
       amountIn,
       inputTokenMint,
-      binDeltaId,
+      binDelta,
       strategy,
       favorXInActiveId,
       maxAccounts,
@@ -1147,12 +1148,11 @@ export class Zap {
       closewrapSol && cleanUpInstructions.push(closewrapSol);
     }
 
-    const lowerBinId = activeId - binDeltaId;
-    const upperBinId = activeId + binDeltaId - 1;
+    const { minBinId, maxBinId } = binDeltaToMinMaxBinId(binDelta, activeId);
     const binArrays = getBinArraysRequiredByPositionRange(
       lbPair,
-      new BN(lowerBinId),
-      new BN(upperBinId),
+      new BN(minBinId),
+      new BN(maxBinId),
       DLMM_PROGRAM_ID
     ).map((item) => ({
       pubkey: item.key,
@@ -1177,7 +1177,7 @@ export class Zap {
       tokenXProgram,
       tokenYProgram,
       activeId,
-      binDelta: binDeltaId,
+      binDelta,
       maxActiveBinSlippage,
       favorXInActiveId,
       strategy,
@@ -1204,7 +1204,7 @@ export class Zap {
       lbPair,
       amountIn,
       inputTokenMint,
-      binDeltaId,
+      binDelta,
       strategy,
       favorXInActiveId,
       indirectSwapEstimate,
@@ -1303,12 +1303,11 @@ export class Zap {
       maxTransferAmountExtendPercentage
     );
 
-    const lowerBinId = activeId - binDeltaId;
-    const upperBinId = activeId + binDeltaId - 1;
+    const { minBinId, maxBinId } = binDeltaToMinMaxBinId(binDelta, activeId);
     const binArrays = getBinArraysRequiredByPositionRange(
       lbPair,
-      new BN(lowerBinId),
-      new BN(upperBinId),
+      new BN(minBinId),
+      new BN(maxBinId),
       DLMM_PROGRAM_ID
     ).map((item) => ({
       pubkey: item.key,
@@ -1333,7 +1332,7 @@ export class Zap {
       tokenXProgram,
       tokenYProgram,
       activeId,
-      binDelta: binDeltaId,
+      binDelta,
       maxActiveBinSlippage,
       favorXInActiveId,
       strategy,
@@ -1514,8 +1513,7 @@ export class Zap {
    * @param params.lbPairAddress - The DLMM pool address
    * @param params.positionAddress - The position address
    * @param params.user - Public key of the user performing the rebalance
-   * @param params.minDeltaId - The delta between the id of the rebalanced min bin id and the active bin id (relative to active bin)
-   * @param params.maxDeltaId - The delta between the id of the rebalanced max bin id and the active bin id (relative to active bin)
+   * @param params.binDelta - The delta of bins for the rebalanced position relative to the active bin
    * @param params.liquiditySlippageBps - The maximum slippage in basis points for the rebalance liquidity operation (percentage * 100)
    * @param params.strategy - The strategy to use for the rebalance
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
@@ -1529,8 +1527,7 @@ export class Zap {
       lbPairAddress,
       positionAddress,
       user,
-      minDeltaId,
-      maxDeltaId,
+      binDelta,
       liquiditySlippageBps,
       strategy,
       favorXInActiveId,
@@ -1706,10 +1703,14 @@ export class Zap {
       MAX_ACTIVE_BIN_SLIPPAGE
     );
     // should we move this into zapInDlmmForInitializedPosition method instead?
+    const { minBinId, maxBinId } = binDeltaToMinMaxBinId(
+      binDelta,
+      dlmm.lbPair.activeId
+    );
     const binArrays = getBinArraysRequiredByPositionRange(
       lbPairAddress,
-      new BN(dlmm.lbPair.activeId + minDeltaId), // minBinId
-      new BN(dlmm.lbPair.activeId + maxDeltaId), // maxBinId
+      new BN(minBinId), // minBinId
+      new BN(maxBinId), // maxBinId
       DLMM_PROGRAM_ID
     ).map((item) => ({
       pubkey: item.key,
@@ -1722,8 +1723,8 @@ export class Zap {
       lbPair: lbPairAddress,
       position: positionAddress,
       activeId: dlmm.lbPair.activeId,
-      minDeltaId,
-      maxDeltaId,
+      minDeltaId: -binDelta,
+      maxDeltaId: binDelta,
       maxActiveBinSlippage,
       favorXInActiveId,
       binArrays,

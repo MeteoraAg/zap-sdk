@@ -26,17 +26,22 @@ async function main() {
   const dlmmPool = new PublicKey(
     "HbjYfcWZBjCBYTJpZkLGxqArVmZVu3mQcRudb6Wg1sVh"
   );
-  const inputTokenMint = NATIVE_MINT;
-  const amountUseToAddLiquidity = new BN(0.01 * LAMPORTS_PER_SOL);
+  const inputTokenMint = new PublicKey(
+    "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn"
+  );
+  const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
 
   const zap = new Zap(connection);
   const dlmm = await DLMM.create(connection, dlmmPool);
   const isTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
+  const binDelta = 34;
   const directSwapEstimate = await estimateDirectSwap(
     isTokenX ? amountUseToAddLiquidity : new BN(0),
     isTokenX ? new BN(0) : amountUseToAddLiquidity,
     dlmm,
-    SWAP_SLIPPAGE_BPS
+    SWAP_SLIPPAGE_BPS,
+    binDelta,
+    StrategyType.Spot
   );
 
   const result = await zap.getZapInDlmmDirectParams({
@@ -46,12 +51,12 @@ async function main() {
     amountIn: amountUseToAddLiquidity,
     directSwapEstimate,
     maxActiveBinSlippage: 50,
-    binDeltaId: 34,
+    binDelta,
     strategy: StrategyType.Spot,
     favorXInActiveId: false,
     maxAccounts: 50,
     slippageBps: SWAP_SLIPPAGE_BPS,
-    maxTransferAmountExtendPercentage: 20,
+    maxTransferAmountExtendPercentage: 0,
   });
 
   const position = Keypair.generate();
