@@ -1,4 +1,5 @@
 import DLMM, {
+  BinArrayAccount,
   BinLiquidity,
   StrategyType,
   SwapQuote,
@@ -100,65 +101,50 @@ function estimateSwapOutput(inAmount: BN, effectiveRate: Decimal): BN {
   return new BN(estimatedOutput.floor().toString());
 }
 
-async function getDlmmSwapQuote(
-  dlmm: DLMM,
-  inMint: PublicKey,
-  inAmount: BN,
-  slippageBps: number
-): Promise<SwapQuote | null> {
-  const swapForY = dlmm.lbPair.tokenXMint.equals(inMint);
-  const binArrays = await dlmm.getBinArrayForSwap(swapForY);
-  const quotation = dlmm.swapQuote(
-    inAmount,
-    swapForY,
-    new BN(slippageBps),
-    binArrays
-  );
-
-  return quotation;
-}
-
 async function getBestSwapQuoteJupiterDlmm(
   dlmm: DLMM,
   inMint: PublicKey,
   outMint: PublicKey,
   inAmount: BN,
-  swapSlippageBps: number
+  swapSlippageBps: number,
+  swapForY: boolean,
+  binArrays: BinArrayAccount[]
 ): Promise<SwapQuoteResult | null> {
-  const [dlmmQuoteResult, jupiterQuoteResult] = await Promise.allSettled([
-    getDlmmSwapQuote(dlmm, inMint, inAmount, swapSlippageBps),
-    getJupiterQuote(
-      inMint,
-      outMint,
-      inAmount,
-      50,
-      swapSlippageBps,
-      false,
-      true,
-      true,
-      "https://lite-api.jup.ag"
-    ),
-  ]);
+  const dlmmQuoteResult = dlmm.swapQuote(
+    inAmount,
+    swapForY,
+    new BN(swapSlippageBps),
+    binArrays
+  );
+  const jupiterQuoteResult = await getJupiterQuote(
+    inMint,
+    outMint,
+    inAmount,
+    50,
+    swapSlippageBps,
+    false,
+    true,
+    true,
+    "https://lite-api.jup.ag"
+  );
 
   // normalizing the quote interface
-  const jupiterQuote =
-    jupiterQuoteResult.status === "fulfilled" && jupiterQuoteResult.value
-      ? {
-          inAmount: new BN(jupiterQuoteResult.value.inAmount),
-          outAmount: new BN(jupiterQuoteResult.value.outAmount),
-          route: "jupiter" as const,
-          originalQuote: jupiterQuoteResult.value,
-        }
-      : null;
-  const dlmmQuote =
-    dlmmQuoteResult.status === "fulfilled" && dlmmQuoteResult.value
-      ? {
-          inAmount: dlmmQuoteResult.value.consumedInAmount,
-          outAmount: dlmmQuoteResult.value.minOutAmount,
-          route: "dlmm" as const,
-          originalQuote: dlmmQuoteResult.value,
-        }
-      : null;
+  const jupiterQuote = jupiterQuoteResult
+    ? {
+        inAmount: new BN(jupiterQuoteResult.inAmount),
+        outAmount: new BN(jupiterQuoteResult.outAmount),
+        route: "jupiter" as const,
+        originalQuote: jupiterQuoteResult,
+      }
+    : null;
+  const dlmmQuote = dlmmQuoteResult
+    ? {
+        inAmount: dlmmQuoteResult.consumedInAmount,
+        outAmount: dlmmQuoteResult.minOutAmount,
+        route: "dlmm" as const,
+        originalQuote: dlmmQuoteResult,
+      }
+    : null;
 
   if (!dlmmQuote && !jupiterQuote) return null;
   if (!dlmmQuote) return jupiterQuote;
@@ -204,11 +190,16 @@ function binarySearchRefineDirectSwapAmount(
   bins: BinLiquidity[],
   strategy: StrategyType,
   effectiveSwapRate: Decimal,
-  swapDirection: "xToY" | "yToX"
+  swapDirection: "xToY" | "yToX",
+  route: "dlmm" | "jupiter",
+  swapSlippageBps: number,
+  binArrays: BinArrayAccount[]
 ): BN {
   let left = new BN(0);
   let right = swapDirection === "xToY" ? tokenXAmount : tokenYAmount;
   let best = left.add(right).div(new BN(2));
+  let swapRateToUse = effectiveSwapRate;
+  const swapSlippageBpsBn = new BN(swapSlippageBps);
 
   for (let i = 0; i < BINARY_SEARCH_MAX_ITERATIONS; i++) {
     const mid = left.add(right).div(new BN(2));
@@ -219,7 +210,21 @@ function binarySearchRefineDirectSwapAmount(
       break;
     }
 
-    const estimatedOutput = estimateSwapOutput(mid, effectiveSwapRate);
+    if (route === "dlmm") {
+      // if dlmm route is better, refresh dlmm quote for better accuracy since its fast enough
+      const dlmmQuote = dlmm.swapQuote(
+        mid,
+        swapDirection === "xToY",
+        swapSlippageBpsBn,
+        binArrays
+      );
+
+      swapRateToUse = new Decimal(dlmmQuote.minOutAmount.toString()).div(
+        new Decimal(dlmmQuote.consumedInAmount.toString())
+      );
+    }
+
+    const estimatedOutput = estimateSwapOutput(mid, swapRateToUse);
     const postSwapX =
       swapDirection === "xToY"
         ? tokenXAmount.sub(mid)
@@ -581,12 +586,16 @@ export async function estimateDirectSwap(
     };
   }
 
+  const swapForY = swapDirection === "xToY";
+  const binArrays = await dlmm.getBinArrayForSwap(swapForY);
   const initialQuote = await getBestSwapQuoteJupiterDlmm(
     dlmm,
     inMint,
     outMint,
     initialSwapAmount,
-    swapSlippageBps
+    swapSlippageBps,
+    swapForY,
+    binArrays
   );
 
   if (!initialQuote) {
@@ -649,7 +658,10 @@ export async function estimateDirectSwap(
     binMeta.bins,
     strategy,
     effectiveSwapRate,
-    swapDirection
+    swapDirection,
+    initialQuote.route,
+    swapSlippageBps,
+    binArrays
   );
 
   // get final quote for refinedAmount
@@ -658,7 +670,9 @@ export async function estimateDirectSwap(
     inMint,
     outMint,
     refinedAmount,
-    swapSlippageBps
+    swapSlippageBps,
+    swapForY,
+    binArrays
   );
 
   if (!finalQuote) {
