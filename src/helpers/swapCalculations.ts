@@ -21,6 +21,7 @@ import { binDeltaToMinMaxBinId } from "./dlmm";
 const TOLERANCE = new Decimal(0.0001); // 0.01%
 const BINARY_SEARCH_MAX_ITERATIONS = 20;
 const BINARY_SEARCH_MIN_DELTA = new BN(1000);
+const SWAP_BIN_ARRAY_COUNT = 4;
 
 interface BinAmountDistribution {
   binId: number;
@@ -53,12 +54,19 @@ function getBinAmountDistribution(
     dlmm.tokenY.mint,
     dlmm.clock
   );
-  const binAmountDistribution = bins.map((bin, i) => ({
-    binId: bin.binId,
-    amountX: amountDistribution[i].amountX,
-    amountY: amountDistribution[i].amountY,
-    price: bin.price,
-  }));
+  const binAmountDistribution = bins
+    .filter((bin) => bin.binId >= minBinId && bin.binId <= maxBinId) // direct estimate route passes extra bins so we need to filter them out
+    .map((bin, i) => ({
+      binId: bin.binId,
+      amountX: amountDistribution[i].amountX,
+      amountY: amountDistribution[i].amountY,
+      price: bin.price,
+    }));
+
+  invariant(
+    binAmountDistribution.length === amountDistribution.length,
+    "binAmountDistribution length mismatch"
+  );
 
   return binAmountDistribution;
 }
@@ -182,24 +190,28 @@ function calculateInitialSwapEstimate(
 
 function binarySearchRefineDirectSwapAmount(
   dlmm: DLMM,
-  activeBin: BinLiquidity,
-  minBinId: number,
-  maxBinId: number,
+  initialActiveBin: BinLiquidity,
+  initialMinBinId: number,
+  initialMaxBinId: number,
+  binDelta: number,
   tokenXAmount: BN,
   tokenYAmount: BN,
   bins: BinLiquidity[],
   strategy: StrategyType,
-  effectiveSwapRate: Decimal,
+  initialEffectiveSwapRate: Decimal,
   swapDirection: "xToY" | "yToX",
   route: "dlmm" | "jupiter",
   swapSlippageBps: number,
-  binArrays: BinArrayAccount[]
+  binArrayForSwap: BinArrayAccount[]
 ): BN {
   let left = new BN(0);
   let right = swapDirection === "xToY" ? tokenXAmount : tokenYAmount;
   let best = left.add(right).div(new BN(2));
-  let swapRateToUse = effectiveSwapRate;
   const swapSlippageBpsBn = new BN(swapSlippageBps);
+  let effectiveSwapRate = initialEffectiveSwapRate;
+  let activeBin = initialActiveBin;
+  let minBinId = initialMinBinId;
+  let maxBinId = initialMaxBinId;
 
   for (let i = 0; i < BINARY_SEARCH_MAX_ITERATIONS; i++) {
     const mid = left.add(right).div(new BN(2));
@@ -216,15 +228,30 @@ function binarySearchRefineDirectSwapAmount(
         mid,
         swapDirection === "xToY",
         swapSlippageBpsBn,
-        binArrays
+        binArrayForSwap
       );
-
-      swapRateToUse = new Decimal(dlmmQuote.minOutAmount.toString()).div(
+      effectiveSwapRate = new Decimal(dlmmQuote.minOutAmount.toString()).div(
         new Decimal(dlmmQuote.consumedInAmount.toString())
       );
+      // TODO: if we change the dlmm-sdk to return the activeBin.id, we can diirectly use that
+      const newActiveBin = bins.find(
+        (x) => x.price === dlmmQuote.endPrice.toString()
+      );
+      if (
+        newActiveBin &&
+        Math.abs(newActiveBin.binId - initialActiveBin.binId) <=
+          SWAP_BIN_ARRAY_COUNT // check if new bin will be within the amount of bins that we initially fetched
+      ) {
+        activeBin = newActiveBin;
+        const binId = binDeltaToMinMaxBinId(binDelta, newActiveBin.binId);
+        minBinId = binId.minBinId;
+        maxBinId = binId.maxBinId;
+      } else {
+        // do not refine, the bins that were swapped through exceed the amount of bins that we initially fetched
+      }
     }
 
-    const estimatedOutput = estimateSwapOutput(mid, swapRateToUse);
+    const estimatedOutput = estimateSwapOutput(mid, effectiveSwapRate);
     const postSwapX =
       swapDirection === "xToY"
         ? tokenXAmount.sub(mid)
@@ -517,9 +544,10 @@ export async function estimateDirectSwap(
     binDelta,
     activeBin.binId
   );
+  // get bins between minBinId and maxBinId with SWAP_BIN_ARRAY_COUNT extra bins on each side
   const binMeta = await dlmm.getBinsBetweenLowerAndUpperBound(
-    minBinId,
-    maxBinId
+    minBinId - SWAP_BIN_ARRAY_COUNT,
+    maxBinId + SWAP_BIN_ARRAY_COUNT
   );
   const binAmountDistribution = getBinAmountDistribution(
     dlmm,
@@ -587,7 +615,10 @@ export async function estimateDirectSwap(
   }
 
   const swapForY = swapDirection === "xToY";
-  const binArrays = await dlmm.getBinArrayForSwap(swapForY);
+  const binArrayForSwap = await dlmm.getBinArrayForSwap(
+    swapForY,
+    SWAP_BIN_ARRAY_COUNT
+  );
   const initialQuote = await getBestSwapQuoteJupiterDlmm(
     dlmm,
     inMint,
@@ -595,7 +626,7 @@ export async function estimateDirectSwap(
     initialSwapAmount,
     swapSlippageBps,
     swapForY,
-    binArrays
+    binArrayForSwap
   );
 
   if (!initialQuote) {
@@ -653,6 +684,7 @@ export async function estimateDirectSwap(
     activeBin,
     minBinId,
     maxBinId,
+    binDelta,
     tokenXAmount,
     tokenYAmount,
     binMeta.bins,
@@ -661,7 +693,7 @@ export async function estimateDirectSwap(
     swapDirection,
     initialQuote.route,
     swapSlippageBps,
-    binArrays
+    binArrayForSwap
   );
 
   // get final quote for refinedAmount
@@ -672,7 +704,7 @@ export async function estimateDirectSwap(
     refinedAmount,
     swapSlippageBps,
     swapForY,
-    binArrays
+    binArrayForSwap
   );
 
   if (!finalQuote) {
