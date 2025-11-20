@@ -574,11 +574,7 @@ export class Zap {
     }
 
     const cleanUpInstructions: TransactionInstruction[] = [];
-    if (
-      inputTokenMint.equals(NATIVE_MINT) ||
-      tokenAMint.equals(NATIVE_MINT) ||
-      tokenBMint.equals(NATIVE_MINT)
-    ) {
+    if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
       const closewrapSol = unwrapSOLInstruction(user, user, false);
       closewrapSol && cleanUpInstructions.push(closewrapSol);
     }
