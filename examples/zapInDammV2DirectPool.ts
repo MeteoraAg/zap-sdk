@@ -118,11 +118,10 @@ async function main() {
     payer: user.publicKey,
     lamports: jitoTip.toString(),
   });
-  // finalTx.push(new Transaction().add(jitoTipsTx));
 
-  finalTx.push(
-    new Transaction().add(...[zapInDammV2Tx.setupTransaction, jitoTipsTx])
-  );
+  if (zapInDammV2Tx.setupTransaction) {
+    finalTx.push(zapInDammV2Tx.setupTransaction);
+  }
 
   for (const swapTx of zapInDammV2Tx.swapTransactions) {
     finalTx.push(swapTx);
@@ -132,8 +131,9 @@ async function main() {
     new Transaction().add(
       ...[
         zapInDammV2Tx.ledgerTransaction,
-        zapInDammV2Tx.zapInTx,
-        zapInDammV2Tx.closeLedgerTx,
+        zapInDammV2Tx.zapInTransaction,
+        zapInDammV2Tx.cleanUpTransaction,
+        jitoTipsTx,
       ]
     )
   );

@@ -214,11 +214,10 @@ export type ZapInDammV2InDirectPoolParam = Omit<
 };
 
 export type ZapInDammV2Response = {
-  setupTransaction: Transaction;
+  setupTransaction?: Transaction;
   swapTransactions: Transaction[];
   ledgerTransaction: Transaction;
-  zapInTx: Transaction;
-  closeLedgerTx: Transaction;
+  zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 };
 export interface SwapQuoteResult {
@@ -229,7 +228,6 @@ export interface SwapQuoteResult {
 }
 
 type SwapDirection = "xToY" | "yToX" | "noSwap";
-type DlmmSwapRoute = "jupiter" | "dlmm";
 
 export interface DirectSwapEstimate {
   swapDirection: SwapDirection;
@@ -262,12 +260,11 @@ export interface RebalanceDlmmPositionParams {
 }
 
 export interface RebalanceDlmmPositionResponse {
-  setupTransaction: Transaction;
+  setupTransaction?: Transaction;
   removeLiquidityTransactions: Transaction[];
   swapTransaction?: Transaction;
   ledgerTransaction: Transaction;
-  zapInTx: Transaction;
-  closeLedgerTx: Transaction;
+  zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
   estimation: {
     currentBalances: {
@@ -366,10 +363,9 @@ export type ZapInDlmmDirectPoolParam = {
 };
 
 export type ZapInDlmmResponse = {
-  setupTransaction: Transaction;
+  setupTransaction?: Transaction;
   swapTransactions: Transaction[];
   ledgerTransaction: Transaction;
-  zapInTx: Transaction;
-  closeLedgerTx: Transaction;
+  zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 };
