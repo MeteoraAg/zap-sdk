@@ -31,6 +31,8 @@ import {
   ZapInDlmmIndirectPoolParam,
   ZapInDlmmDirectPoolParam,
   ZapInDlmmResponse,
+  DlmmSwapType,
+  DlmmDirectSwapQuoteRoute,
 } from "./types";
 
 import {
@@ -85,6 +87,7 @@ import DLMM, {
   deriveBinArrayBitmapExtension,
   MAX_ACTIVE_BIN_SLIPPAGE,
   StrategyType,
+  ActionType,
 } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
@@ -1087,22 +1090,26 @@ export class Zap {
     let maxTransferAmount: BN;
 
     if (
-      directSwapEstimate.swapDirection !== "noSwap" &&
+      directSwapEstimate.swapType !== DlmmSwapType.NoSwap &&
       directSwapEstimate.quote
     ) {
       const swapQuote = directSwapEstimate.quote;
-      if (swapQuote.route === "jupiter") {
+      if (swapQuote.route === DlmmDirectSwapQuoteRoute.Jupiter) {
         const { transaction: swapTx } = await buildJupiterSwapTransaction(
           user,
-          directSwapEstimate.swapDirection === "xToY" ? tokenXMint : tokenYMint,
-          directSwapEstimate.swapDirection === "xToY" ? tokenYMint : tokenXMint,
+          directSwapEstimate.swapType === DlmmSwapType.XToY
+            ? tokenXMint
+            : tokenYMint,
+          directSwapEstimate.swapType === DlmmSwapType.XToY
+            ? tokenYMint
+            : tokenXMint,
           directSwapEstimate.swapAmount,
           maxAccounts,
           slippageBps
         );
         swapTransactions.push(swapTx);
       } else {
-        const swapForY = directSwapEstimate.swapDirection === "xToY";
+        const swapForY = directSwapEstimate.swapType === DlmmSwapType.XToY;
         const binArrays = await dlmm.getBinArrayForSwap(swapForY);
         const swapTx = await dlmm.swap({
           inToken: swapForY ? tokenXMint : tokenYMint,
@@ -1190,7 +1197,6 @@ export class Zap {
       swapTransactions,
       cleanUpInstructions,
       binArrays,
-      remainingAccountInfo: { slices: [] },
       binArrayBitmapExtension: binArrayBitmapExtensionData
         ? binArrayBitmapExtension
         : null,
@@ -1343,7 +1349,6 @@ export class Zap {
       swapTransactions,
       cleanUpInstructions,
       binArrays,
-      remainingAccountInfo: { slices: [] },
       binArrayBitmapExtension: binArrayBitmapExtensionData
         ? binArrayBitmapExtension
         : null,
@@ -1373,7 +1378,6 @@ export class Zap {
       swapTransactions,
       cleanUpInstructions,
       binArrays,
-      remainingAccountInfo,
       binArrayBitmapExtension,
       isDirectRoute,
     } = params;
@@ -1474,6 +1478,19 @@ export class Zap {
       ledgerTransaction.add(updateLedgerBalanceTokenXAfterSwapTx);
       ledgerTransaction.add(updateLedgerBalanceTokenYAfterSwapTx);
     }
+
+    const dlmm = await DLMM.create(this.connection, lbPair);
+    const { remainingAccountsInfo: remainingAccountInfo } =
+      await getDlmmRemainingAccounts(
+        this.connection,
+        lbPair,
+        user,
+        tokenXAccount,
+        tokenYAccount,
+        tokenXProgram,
+        tokenYProgram,
+        dlmm.lbPair
+      );
 
     const zapInTransaction = await this.zapInDlmmForUninitializedPosition({
       user,
@@ -1582,10 +1599,10 @@ export class Zap {
     const tokenYAmount = new BN(position.positionData.totalYAmount);
     let swapTransaction: Transaction | undefined;
     if (
-      directSwapEstimate.swapDirection !== "noSwap" &&
+      directSwapEstimate.swapType !== DlmmSwapType.NoSwap &&
       directSwapEstimate.quote
     ) {
-      const isXToY = directSwapEstimate.swapDirection === "xToY";
+      const isXToY = directSwapEstimate.swapType === DlmmSwapType.XToY;
       const inputMint = isXToY
         ? dlmm.lbPair.tokenXMint
         : dlmm.lbPair.tokenYMint;
@@ -1595,7 +1612,9 @@ export class Zap {
       const inputTokenProgram = isXToY ? tokenXProgram : tokenYProgram;
       const outputTokenProgram = isXToY ? tokenYProgram : tokenXProgram;
 
-      if (directSwapEstimate.quote?.route === "jupiter") {
+      if (
+        directSwapEstimate.quote?.route === DlmmDirectSwapQuoteRoute.Jupiter
+      ) {
         const jupiterQuote = directSwapEstimate.quote.originalQuote;
         const jupiterSwapResponse = await getJupiterSwapInstruction(
           user,
@@ -1638,15 +1657,15 @@ export class Zap {
     );
 
     const tokenXAmountAfterSwap =
-      directSwapEstimate.swapDirection === "xToY"
+      directSwapEstimate.swapType === DlmmSwapType.XToY
         ? tokenXAmount.sub(directSwapEstimate.swapAmount)
-        : directSwapEstimate.swapDirection === "yToX"
+        : directSwapEstimate.swapType === DlmmSwapType.YToX
         ? tokenXAmount.add(directSwapEstimate.expectedOutput)
         : tokenXAmount;
     const tokenYAmountAfterSwap =
-      directSwapEstimate.swapDirection === "xToY"
+      directSwapEstimate.swapType === DlmmSwapType.XToY
         ? tokenYAmount.add(directSwapEstimate.expectedOutput)
-        : directSwapEstimate.swapDirection === "yToX"
+        : directSwapEstimate.swapType === DlmmSwapType.YToX
         ? tokenYAmount.sub(directSwapEstimate.swapAmount)
         : tokenYAmount;
 
@@ -1720,6 +1739,18 @@ export class Zap {
       isSigner: false,
       isWritable: true,
     }));
+
+    const { remainingAccountsInfo: remainingAccountInfo } =
+      await getDlmmRemainingAccounts(
+        this.connection,
+        lbPairAddress,
+        user,
+        userTokenX,
+        userTokenY,
+        tokenXProgram,
+        tokenYProgram,
+        dlmm.lbPair
+      );
     // build zap in transaction with compute budget
     const zapInTransaction = await this.zapInDlmmForInitializedPosition({
       user,
@@ -1732,7 +1763,7 @@ export class Zap {
       favorXInActiveId,
       binArrays,
       strategy,
-      remainingAccountInfo: { slices: [] },
+      remainingAccountInfo,
     });
     zapInTransaction.instructions.unshift(
       // based on 1 tx that consumed 462_610. Add 20% for safety and round up to nearest 100,000

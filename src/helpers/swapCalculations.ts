@@ -9,6 +9,8 @@ import {
   DirectSwapEstimate,
   SwapQuoteResult,
   IndirectSwapEstimate,
+  DlmmSwapType,
+  DlmmDirectSwapQuoteRoute,
 } from "../types";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
@@ -141,7 +143,7 @@ async function getBestSwapQuoteJupiterDlmm(
     ? {
         inAmount: new BN(jupiterQuoteResult.inAmount),
         outAmount: new BN(jupiterQuoteResult.outAmount),
-        route: "jupiter" as const,
+        route: DlmmDirectSwapQuoteRoute.Jupiter,
         originalQuote: jupiterQuoteResult,
       }
     : null;
@@ -149,7 +151,7 @@ async function getBestSwapQuoteJupiterDlmm(
     ? {
         inAmount: dlmmQuoteResult.consumedInAmount,
         outAmount: dlmmQuoteResult.minOutAmount,
-        route: "dlmm" as const,
+        route: DlmmDirectSwapQuoteRoute.Dlmm,
         originalQuote: dlmmQuoteResult,
       }
     : null;
@@ -199,13 +201,13 @@ function binarySearchRefineDirectSwapAmount(
   bins: BinLiquidity[],
   strategy: StrategyType,
   initialEffectiveSwapRate: Decimal,
-  swapDirection: "xToY" | "yToX",
-  route: "dlmm" | "jupiter",
+  swapDirection: DlmmSwapType,
+  route: DlmmDirectSwapQuoteRoute,
   swapSlippageBps: number,
   binArrayForSwap: BinArrayAccount[]
 ): BN {
   let left = new BN(0);
-  let right = swapDirection === "xToY" ? tokenXAmount : tokenYAmount;
+  let right = swapDirection === DlmmSwapType.XToY ? tokenXAmount : tokenYAmount;
   let best = left.add(right).div(new BN(2));
   const swapSlippageBpsBn = new BN(swapSlippageBps);
   let effectiveSwapRate = initialEffectiveSwapRate;
@@ -222,11 +224,11 @@ function binarySearchRefineDirectSwapAmount(
       break;
     }
 
-    if (route === "dlmm") {
+    if (route === DlmmDirectSwapQuoteRoute.Dlmm) {
       // if dlmm route is better, refresh dlmm quote for better accuracy since its fast enough
       const dlmmQuote = dlmm.swapQuote(
         mid,
-        swapDirection === "xToY",
+        swapDirection === DlmmSwapType.XToY,
         swapSlippageBpsBn,
         binArrayForSwap
       );
@@ -253,11 +255,11 @@ function binarySearchRefineDirectSwapAmount(
 
     const estimatedOutput = estimateSwapOutput(mid, effectiveSwapRate);
     const postSwapX =
-      swapDirection === "xToY"
+      swapDirection === DlmmSwapType.XToY
         ? tokenXAmount.sub(mid)
         : tokenXAmount.add(estimatedOutput);
     const postSwapY =
-      swapDirection === "xToY"
+      swapDirection === DlmmSwapType.XToY
         ? tokenYAmount.add(estimatedOutput)
         : tokenYAmount.sub(mid);
     const postSwapBinAmountDistribution = getBinAmountDistribution(
@@ -278,7 +280,7 @@ function binarySearchRefineDirectSwapAmount(
     }
 
     // Adjust binary search bounds based on ratio and swap direction
-    if (swapDirection === "xToY") {
+    if (swapDirection === DlmmSwapType.XToY) {
       if (ratio.gt(1)) {
         left = mid; // Too much X, need to swap more X
       } else {
@@ -568,7 +570,7 @@ export async function estimateDirectSwap(
   if (initialRatio.sub(1).abs().lt(TOLERANCE)) {
     return {
       swapAmount: new BN(0),
-      swapDirection: "noSwap",
+      swapType: DlmmSwapType.NoSwap,
       expectedOutput: new BN(0),
       postSwapX: tokenXAmount,
       postSwapY: tokenYAmount,
@@ -576,25 +578,25 @@ export async function estimateDirectSwap(
     };
   }
 
-  let swapDirection: "xToY" | "yToX";
+  let swapType: DlmmSwapType;
   let inMint: PublicKey;
   let outMint: PublicKey;
 
   if (initialRatio.gt(1)) {
     // More X than Y, swap X -> Y
-    swapDirection = "xToY";
+    swapType = DlmmSwapType.XToY;
     inMint = dlmm.lbPair.tokenXMint;
     outMint = dlmm.lbPair.tokenYMint;
   } else {
     // More Y than X, swap Y -> X
-    swapDirection = "yToX";
+    swapType = DlmmSwapType.YToX;
     inMint = dlmm.lbPair.tokenYMint;
     outMint = dlmm.lbPair.tokenXMint;
   }
 
   // Get simple initial estimate using activeBinPrice
   const initialSwapAmount =
-    swapDirection === "xToY"
+    swapType === DlmmSwapType.XToY
       ? calculateInitialSwapEstimate(tokenXAmount, tokenYAmount, activeBinPrice)
       : calculateInitialSwapEstimate(
           tokenYAmount,
@@ -606,7 +608,7 @@ export async function estimateDirectSwap(
   if (initialSwapAmount.isZero()) {
     return {
       swapAmount: new BN(0),
-      swapDirection: "noSwap",
+      swapType: DlmmSwapType.NoSwap,
       expectedOutput: new BN(0),
       postSwapX: tokenXAmount,
       postSwapY: tokenYAmount,
@@ -614,7 +616,7 @@ export async function estimateDirectSwap(
     };
   }
 
-  const swapForY = swapDirection === "xToY";
+  const swapForY = swapType === DlmmSwapType.XToY;
   const binArrayForSwap = await dlmm.getBinArrayForSwap(
     swapForY,
     SWAP_BIN_ARRAY_COUNT
@@ -633,7 +635,7 @@ export async function estimateDirectSwap(
     // if quote fails, return no swap
     return {
       swapAmount: new BN(0),
-      swapDirection: "noSwap",
+      swapType: DlmmSwapType.NoSwap,
       expectedOutput: new BN(0),
       postSwapX: tokenXAmount,
       postSwapY: tokenYAmount,
@@ -647,11 +649,11 @@ export async function estimateDirectSwap(
   );
 
   const postSwapX =
-    swapDirection === "xToY"
+    swapType === DlmmSwapType.XToY
       ? tokenXAmount.sub(initialSwapAmount) // Spent X
       : tokenXAmount.add(initialQuote.outAmount); // Received X
   const postSwapY =
-    swapDirection === "xToY"
+    swapType === DlmmSwapType.XToY
       ? tokenYAmount.add(initialQuote.outAmount) // Received Y
       : tokenYAmount.sub(initialSwapAmount); // Spent Y
   const postSwapBinAmountDistribution = getBinAmountDistribution(
@@ -670,7 +672,7 @@ export async function estimateDirectSwap(
   if (ratio.sub(1).abs().lt(TOLERANCE)) {
     return {
       swapAmount: initialSwapAmount,
-      swapDirection,
+      swapType,
       expectedOutput: initialQuote.outAmount,
       postSwapX,
       postSwapY,
@@ -690,7 +692,7 @@ export async function estimateDirectSwap(
     binMeta.bins,
     strategy,
     effectiveSwapRate,
-    swapDirection,
+    swapType,
     initialQuote.route,
     swapSlippageBps,
     binArrayForSwap
@@ -711,7 +713,7 @@ export async function estimateDirectSwap(
     // if quote fails, return initial quote
     return {
       swapAmount: initialSwapAmount,
-      swapDirection,
+      swapType,
       expectedOutput: initialQuote.outAmount,
       postSwapX,
       postSwapY,
@@ -720,17 +722,17 @@ export async function estimateDirectSwap(
   }
 
   const finalPostSwapX =
-    swapDirection === "xToY"
+    swapType === DlmmSwapType.XToY
       ? tokenXAmount.sub(refinedAmount) // Spent X
       : tokenXAmount.add(finalQuote.outAmount); // Received X
   const finalPostSwapY =
-    swapDirection === "xToY"
+    swapType === DlmmSwapType.XToY
       ? tokenYAmount.add(finalQuote.outAmount) // Received Y
       : tokenYAmount.sub(refinedAmount); // Spent Y
 
   return {
     swapAmount: refinedAmount,
-    swapDirection,
+    swapType,
     expectedOutput: finalQuote.outAmount,
     postSwapX: finalPostSwapX,
     postSwapY: finalPostSwapY,

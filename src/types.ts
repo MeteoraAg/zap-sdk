@@ -197,13 +197,6 @@ export enum SwapExternalType {
   swapToBoth,
 }
 
-export enum DlmmSwapExternalType {
-  swapToX,
-  swapToY,
-  swapToBoth,
-  noSwap,
-}
-
 export type ZapInDammV2InDirectPoolParam = Omit<
   ZapInDammV2DirectPoolParam,
   "maxTransferAmount"
@@ -220,17 +213,27 @@ export type ZapInDammV2Response = {
   zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 };
+
+export enum DlmmDirectSwapQuoteRoute {
+  Jupiter,
+  Dlmm,
+}
+
 export interface SwapQuoteResult {
   inAmount: BN;
   outAmount: BN;
-  route: "jupiter" | "dlmm";
+  route: DlmmDirectSwapQuoteRoute;
   originalQuote: JupiterQuoteResponse | SwapQuote;
 }
 
-type SwapDirection = "xToY" | "yToX" | "noSwap";
+export enum DlmmSwapType {
+  XToY,
+  YToX,
+  NoSwap,
+}
 
 export interface DirectSwapEstimate {
-  swapDirection: SwapDirection;
+  swapType: DlmmSwapType;
   swapAmount: BN;
   expectedOutput: BN;
   postSwapX: BN;
@@ -333,7 +336,6 @@ export type ZapInDlmmIndirectPoolParam = {
   swapTransactions: Transaction[];
   cleanUpInstructions: TransactionInstruction[];
   binArrays: AccountMeta[];
-  remainingAccountInfo: RemainingAccountInfo;
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
 };
@@ -356,7 +358,6 @@ export type ZapInDlmmDirectPoolParam = {
   swapTransactions: Transaction[];
   cleanUpInstructions: TransactionInstruction[];
   binArrays: AccountMeta[];
-  remainingAccountInfo: RemainingAccountInfo;
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
   isTokenX: boolean;
