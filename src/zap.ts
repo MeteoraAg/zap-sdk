@@ -1849,6 +1849,7 @@ export class Zap {
    * @param params.outputTokenProgram - Token program for the output token (defaults to SPL Token)
    * @param params.maxSwapAmount - Maximum amount of input token to swap
    * @param params.percentageToZapOut - Percentage of input token to zap out
+   * @param params.skipUnwrapSOL - A boolean flag that indicates whether to skip unwrapping SOL (default: false)
    * @returns built transaction
    */
   async zapOutThroughJupiter(
@@ -1863,6 +1864,7 @@ export class Zap {
       jupiterSwapResponse,
       maxSwapAmount,
       percentageToZapOut,
+      skipUnwrapSOL = false,
     } = params;
 
     const preInstructions: TransactionInstruction[] = [];
@@ -1932,7 +1934,10 @@ export class Zap {
     const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
 
     // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
-    if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
+    if (
+      (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) &&
+      !skipUnwrapSOL
+    ) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {
@@ -2084,6 +2089,7 @@ export class Zap {
    * @param params.minimumSwapAmountOut - Minimum amount of output token to receive
    * @param params.maxSwapAmount - Maximum amount of input token to swap
    * @param params.percentageToZapOut - Percentage of input token to zap out
+   * @param params.skipUnwrapSOL - A boolean flag that indicates whether to skip unwrapping SOL (default: false)
    */
   async zapOutThroughDlmm(
     params: ZapOutThroughDlmmParams
@@ -2099,6 +2105,7 @@ export class Zap {
       minimumSwapAmountOut,
       maxSwapAmount,
       percentageToZapOut,
+      skipUnwrapSOL = false,
     } = params;
 
     const lbPairState = await getLbPairState(this.connection, lbPairAddress);
@@ -2166,7 +2173,10 @@ export class Zap {
     );
 
     // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
-    if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
+    if (
+      (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) &&
+      !skipUnwrapSOL
+    ) {
       const unwrapInstructions = unwrapSOLInstruction(user, user);
 
       if (unwrapInstructions) {

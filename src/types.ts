@@ -52,6 +52,7 @@ export type ZapOutThroughDlmmParams = {
   minimumSwapAmountOut: BN;
   maxSwapAmount: BN;
   percentageToZapOut: number;
+  skipUnwrapSOL?: boolean;
 };
 
 export interface ZapOutThroughJupiterParams {
@@ -63,6 +64,7 @@ export interface ZapOutThroughJupiterParams {
   jupiterSwapResponse: JupiterSwapInstructionResponse;
   maxSwapAmount: BN;
   percentageToZapOut: number;
+  skipUnwrapSOL?: boolean;
 }
 
 export interface JupiterQuoteResponse {
