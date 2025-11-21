@@ -8,6 +8,11 @@ import {
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
+import {
+  SwapQuote,
+  StrategyType,
+  RemainingAccountInfo,
+} from "@meteora-ag/dlmm";
 
 export type ZapProgram = Program<Zap>;
 
@@ -125,13 +130,7 @@ export interface JupiterSwapInstructionResponse {
   };
 }
 
-export const StrategyType = {
-  spot: { spot: {} },
-  curve: { curve: {} },
-  bidAsk: { bidAsk: {} },
-} as const;
-
-export type DlmmStrategyType = (typeof StrategyType)[keyof typeof StrategyType];
+export type ProgramStrategyType = IdlTypes<Zap>["strategyType"];
 
 export type GetZapInDammV2DirectPoolParams = {
   user: PublicKey;
@@ -208,10 +207,166 @@ export type ZapInDammV2InDirectPoolParam = Omit<
 };
 
 export type ZapInDammV2Response = {
-  setupTransaction: Transaction;
+  setupTransaction?: Transaction;
   swapTransactions: Transaction[];
   ledgerTransaction: Transaction;
-  zapInTx: Transaction;
-  closeLedgerTx: Transaction;
+  zapInTransaction: Transaction;
+  cleanUpTransaction: Transaction;
+};
+
+export enum DlmmDirectSwapQuoteRoute {
+  Jupiter,
+  Dlmm,
+}
+
+export interface SwapQuoteResult {
+  inAmount: BN;
+  outAmount: BN;
+  route: DlmmDirectSwapQuoteRoute;
+  originalQuote: JupiterQuoteResponse | SwapQuote;
+}
+
+export enum DlmmSwapType {
+  XToY,
+  YToX,
+  NoSwap,
+}
+
+export interface DirectSwapEstimate {
+  swapType: DlmmSwapType;
+  swapAmount: BN;
+  expectedOutput: BN;
+  postSwapX: BN;
+  postSwapY: BN;
+  quote: SwapQuoteResult | null;
+}
+
+export interface IndirectSwapEstimate {
+  swapToX: JupiterQuoteResponse | null;
+  swapToY: JupiterQuoteResponse | null;
+  swapAmountToX: BN;
+  swapAmountToY: BN;
+  postSwapX: BN;
+  postSwapY: BN;
+}
+
+///// ZAPIN TYPES /////
+export interface RebalanceDlmmPositionParams {
+  lbPairAddress: PublicKey;
+  positionAddress: PublicKey;
+  user: PublicKey;
+  binDelta: number;
+  liquiditySlippageBps: number;
+  strategy: StrategyType;
+  favorXInActiveId: boolean;
+  directSwapEstimate: DirectSwapEstimate;
+}
+
+export interface RebalanceDlmmPositionResponse {
+  setupTransaction?: Transaction;
+  removeLiquidityTransactions: Transaction[];
+  swapTransaction?: Transaction;
+  ledgerTransaction: Transaction;
+  zapInTransaction: Transaction;
+  cleanUpTransaction: Transaction;
+  estimation: {
+    currentBalances: {
+      tokenX: BN;
+      tokenY: BN;
+    };
+    afterSwap: {
+      tokenX: BN;
+      tokenY: BN;
+    };
+  };
+}
+
+export interface EstimateBalancedSwapThroughJupiterAndDlmmParams {
+  lbPairAddress: PublicKey;
+  tokenXAmount: BN;
+  tokenYAmount: BN;
+  slippage: number;
+}
+
+export interface GetZapInDlmmIndirectParams {
+  user: PublicKey;
+  lbPair: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: BN;
+  maxActiveBinSlippage: number;
+  binDelta: number;
+  strategy: StrategyType;
+  favorXInActiveId: boolean;
+  indirectSwapEstimate: IndirectSwapEstimate;
+  maxAccounts: number;
+  slippageBps: number;
+  maxTransferAmountExtendPercentage: number;
+}
+
+export interface GetZapInDlmmDirectParams {
+  user: PublicKey;
+  lbPair: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: BN;
+  maxActiveBinSlippage: number;
+  binDelta: number;
+  strategy: StrategyType;
+  favorXInActiveId: boolean;
+  maxAccounts: number;
+  slippageBps: number;
+  maxTransferAmountExtendPercentage: number;
+  directSwapEstimate: DirectSwapEstimate;
+}
+
+export type ZapInDlmmIndirectPoolParam = {
+  user: PublicKey;
+  lbPair: PublicKey;
+  tokenXMint: PublicKey;
+  tokenYMint: PublicKey;
+  tokenXProgram: PublicKey;
+  tokenYProgram: PublicKey;
+  activeId: number;
+  binDelta: number;
+  maxActiveBinSlippage: number;
+  favorXInActiveId: boolean;
+  strategy: StrategyType;
+  maxTransferAmountX: BN;
+  maxTransferAmountY: BN;
+  preInstructions: TransactionInstruction[];
+  swapTransactions: Transaction[];
+  cleanUpInstructions: TransactionInstruction[];
+  binArrays: AccountMeta[];
+  binArrayBitmapExtension: PublicKey | null;
+  isDirectRoute: boolean;
+};
+
+export type ZapInDlmmDirectPoolParam = {
+  user: PublicKey;
+  lbPair: PublicKey;
+  tokenXMint: PublicKey;
+  tokenYMint: PublicKey;
+  tokenXProgram: PublicKey;
+  tokenYProgram: PublicKey;
+  activeId: number;
+  binDelta: number;
+  maxActiveBinSlippage: number;
+  favorXInActiveId: boolean;
+  strategy: StrategyType;
+  amount: BN;
+  maxTransferAmount: BN;
+  preInstructions: TransactionInstruction[];
+  swapTransactions: Transaction[];
+  cleanUpInstructions: TransactionInstruction[];
+  binArrays: AccountMeta[];
+  binArrayBitmapExtension: PublicKey | null;
+  isDirectRoute: boolean;
+  isTokenX: boolean;
+};
+
+export type ZapInDlmmResponse = {
+  setupTransaction?: Transaction;
+  swapTransactions: Transaction[];
+  ledgerTransaction: Transaction;
+  zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 };

@@ -12,6 +12,7 @@ import {
   CpAmm,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
+  getTokenDecimals,
   getTokenProgram,
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
@@ -102,6 +103,19 @@ async function main() {
     }
 
     console.log("Fetching quotes from DAMM v2 and Jupiter...");
+
+    const tokenADecimal = await getTokenDecimals(
+      connection,
+      poolState.tokenAMint,
+      TOKEN_PROGRAM_ID
+    );
+
+    const tokenBDecimal = await getTokenDecimals(
+      connection,
+      poolState.tokenBMint,
+      TOKEN_PROGRAM_ID
+    );
+
     const [dammV2Quote, jupiterQuote] = await Promise.allSettled([
       cpAmm.getQuote({
         inAmount: amountARemoved,
@@ -110,6 +124,8 @@ async function main() {
         poolState: poolState,
         currentTime: currentTime ?? 0,
         currentSlot,
+        tokenADecimal,
+        tokenBDecimal,
       }),
       getJupiterQuote(
         inputMint,
