@@ -1563,7 +1563,7 @@ export class Zap {
         dlmm.lbPair.tokenXMint,
         user,
         user,
-        true,
+        false,
         tokenXProgram
       ),
       getOrCreateATAInstruction(
@@ -1571,7 +1571,7 @@ export class Zap {
         dlmm.lbPair.tokenYMint,
         user,
         user,
-        true,
+        false,
         tokenYProgram
       ),
     ]);
@@ -1588,6 +1588,7 @@ export class Zap {
       toBinId: position.positionData.upperBinId,
       bps: new BN(BASIS_POINT_MAX), // remove all liquidity
       shouldClaimAndClose: false,
+      skipUnwrapSOL: true,
     });
 
     // swap tokens to balance if needed
@@ -1626,6 +1627,7 @@ export class Zap {
           jupiterSwapResponse,
           maxSwapAmount: directSwapEstimate.swapAmount,
           percentageToZapOut: 100,
+          skipUnwrapSOL: true,
         });
       } else {
         swapTransaction = await this.zapOutThroughDlmm({
@@ -1639,18 +1641,12 @@ export class Zap {
           minimumSwapAmountOut: directSwapEstimate.expectedOutput,
           maxSwapAmount: directSwapEstimate.swapAmount,
           percentageToZapOut: 100,
+          skipUnwrapSOL: true,
         });
       }
     }
 
-    const preTokenXBalance = await getTokenAccountBalance(
-      this.connection,
-      userTokenX
-    );
-    const preTokenYBalance = await getTokenAccountBalance(
-      this.connection,
-      userTokenY
-    );
+    const ledgerTransaction = new Transaction();
 
     const tokenXAmountAfterSwap =
       directSwapEstimate.swapType === DlmmSwapType.XToY
@@ -1665,38 +1661,21 @@ export class Zap {
         ? tokenYAmount.sub(directSwapEstimate.swapAmount)
         : tokenYAmount;
 
-    // initialize ledger if needed and update balances
-    const ledgerAddress = deriveLedgerAccount(user);
-    const ledgerAccountInfo = await this.connection.getAccountInfo(
-      ledgerAddress
+    const preTokenXBalance = await getTokenAccountBalance(
+      this.connection,
+      userTokenX
     );
-    const ledgerTransaction = new Transaction();
-    if (!ledgerAccountInfo) {
-      // initialize ledger account when it already exists will cause an error
-      const initLedgerTx = await this.initializeLedgerAccount(user, user);
-      ledgerTransaction.add(...initLedgerTx.instructions);
-    }
-    // Wrap SOL if needed before updating ledger
-    if (
-      (dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) &&
-        tokenXAmountAfterSwap.gt(new BN(0))) ||
-      (dlmm.lbPair.tokenYMint.equals(NATIVE_MINT) &&
-        tokenYAmountAfterSwap.gt(new BN(0)))
-    ) {
-      const isTokenXSol = dlmm.lbPair.tokenXMint.equals(NATIVE_MINT);
-      const wrapAmount = BigInt(
-        isTokenXSol
-          ? tokenXAmountAfterSwap.toString()
-          : tokenYAmountAfterSwap.toString()
-      );
-      const wrapIxs = wrapSOLInstruction(
-        user,
-        isTokenXSol ? userTokenX : userTokenY,
-        wrapAmount,
-        isTokenXSol ? tokenXProgram : tokenYProgram
-      );
-      ledgerTransaction.add(...wrapIxs);
-    }
+
+    const preTokenYBalance = await getTokenAccountBalance(
+      this.connection,
+      userTokenY
+    );
+
+    // initialize ledger if needed and update balances
+    const resetOrInitializeLedgerTx = await this.resetOrInitializeLedgerAccount(
+      user
+    );
+    ledgerTransaction.add(resetOrInitializeLedgerTx);
 
     const updateLedgerXTx = await this.updateLedgerBalanceAfterSwap(
       user,
