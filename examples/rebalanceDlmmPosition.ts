@@ -1,7 +1,7 @@
 import DLMM, { StrategyType } from "@meteora-ag/dlmm";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
-import { binDeltaToMinMaxBinId, estimateDirectSwap, Zap } from "../src";
+import { estimateDlmmRebalanceSwap, Zap } from "../src";
 import Decimal from "decimal.js";
 import BN from "bn.js";
 import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
@@ -28,10 +28,8 @@ async function main() {
   const dlmm = await DLMM.create(connection, dlmmPool);
 
   // const activeBin = await dlmm.getActiveBin();
-  // const { minBinId, maxBinId } = binDeltaToMinMaxBinId(
-  //   binDelta,
-  //   activeBin.binId
-  // );
+  // const minBinId = activeBin.binId - binDelta;
+  // const maxBinId = activeBin.binId + binDelta;
   // const isTokenX = usdcMint.equals(dlmm.lbPair.tokenXMint);
   // const amountToAddLiquidity = new BN(5).mul(new BN(10 ** 6)); // 5 USDC
   // const newPosition = Keypair.generate();
@@ -69,11 +67,12 @@ async function main() {
   const tokenXAmount = new BN(position.positionData.totalXAmount);
   const tokenYAmount = new BN(position.positionData.totalYAmount);
 
-  const directSwapEstimate = await estimateDirectSwap(
+  const directSwapEstimate = await estimateDlmmRebalanceSwap(
     tokenXAmount,
     tokenYAmount,
     dlmm,
     SWAP_SLIPPAGE_BPS,
+    -binDelta,
     binDelta,
     StrategyType.Spot
   );
@@ -82,7 +81,8 @@ async function main() {
     lbPairAddress: dlmmPool,
     positionAddress,
     user: user.publicKey,
-    binDelta,
+    minDeltaId: -binDelta,
+    maxDeltaId: binDelta,
     liquiditySlippageBps: 50,
     strategy: StrategyType.Spot,
     favorXInActiveId: false,

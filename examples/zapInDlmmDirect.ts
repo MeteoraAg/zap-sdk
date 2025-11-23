@@ -6,7 +6,7 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
-import { estimateDirectSwap, Zap } from "../src";
+import { estimateDlmmDirectSwap, Zap } from "../src";
 import Decimal from "decimal.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
@@ -35,11 +35,12 @@ async function main() {
   const dlmm = await DLMM.create(connection, dlmmPool);
   const isTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
   const binDelta = 34;
-  const directSwapEstimate = await estimateDirectSwap(
-    isTokenX ? amountUseToAddLiquidity : new BN(0),
-    isTokenX ? new BN(0) : amountUseToAddLiquidity,
+  const directSwapEstimate = await estimateDlmmDirectSwap(
+    amountUseToAddLiquidity,
+    isTokenX,
     dlmm,
     SWAP_SLIPPAGE_BPS,
+    -binDelta,
     binDelta,
     StrategyType.Spot
   );
@@ -51,7 +52,8 @@ async function main() {
     amountIn: amountUseToAddLiquidity,
     directSwapEstimate,
     maxActiveBinSlippage: 50,
-    binDelta,
+    minDeltaId: -binDelta,
+    maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
     favorXInActiveId: false,
     maxAccounts: 50,
