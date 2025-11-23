@@ -1661,6 +1661,33 @@ export class Zap {
         ? tokenYAmount.sub(directSwapEstimate.swapAmount)
         : tokenYAmount;
 
+    if (
+      dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) ||
+      dlmm.lbPair.tokenYMint.equals(NATIVE_MINT)
+    ) {
+      const isTokenXSol = dlmm.lbPair.tokenXMint.equals(NATIVE_MINT);
+      const { ataPubkey: userWrapSolAcc, ix: initializeWrapSolIx } =
+        await getOrCreateATAInstruction(
+          this.connection,
+          isTokenXSol ? dlmm.lbPair.tokenXMint : dlmm.lbPair.tokenYMint,
+          user,
+          user,
+          false,
+          TOKEN_PROGRAM_ID
+        );
+      const wrapSOL = wrapSOLInstruction(
+        user,
+        userWrapSolAcc,
+        BigInt(
+          isTokenXSol
+            ? tokenXAmountAfterSwap.toString()
+            : tokenYAmountAfterSwap.toString()
+        )
+      );
+      initializeWrapSolIx && ledgerTransaction.add(initializeWrapSolIx);
+      ledgerTransaction.add(...wrapSOL);
+    }
+
     const preTokenXBalance = await getTokenAccountBalance(
       this.connection,
       userTokenX
