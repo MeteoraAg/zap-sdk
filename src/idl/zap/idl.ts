@@ -398,8 +398,12 @@ export type Zap = {
       ];
       args: [
         {
-          name: "binDelta";
-          type: "u8";
+          name: "minDeltaId";
+          type: "i32";
+        },
+        {
+          name: "maxDeltaId";
+          type: "i32";
         },
         {
           name: "activeId";

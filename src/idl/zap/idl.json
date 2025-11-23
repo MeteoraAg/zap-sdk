@@ -392,8 +392,12 @@
       ],
       "args": [
         {
-          "name": "bin_delta",
-          "type": "u8"
+          "name": "min_delta_id",
+          "type": "i32"
+        },
+        {
+          "name": "max_delta_id",
+          "type": "i32"
         },
         {
           "name": "active_id",
