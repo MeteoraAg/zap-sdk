@@ -232,6 +232,11 @@ export enum DlmmSwapType {
   NoSwap,
 }
 
+export enum DlmmSingleSided {
+  X,
+  Y,
+}
+
 export interface DirectSwapEstimate {
   swapType: DlmmSwapType;
   swapAmount: BN;
@@ -255,7 +260,8 @@ export interface RebalanceDlmmPositionParams {
   lbPairAddress: PublicKey;
   positionAddress: PublicKey;
   user: PublicKey;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   liquiditySlippageBps: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
@@ -294,13 +300,15 @@ export interface GetZapInDlmmIndirectParams {
   inputTokenMint: PublicKey;
   amountIn: BN;
   maxActiveBinSlippage: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  indirectSwapEstimate: IndirectSwapEstimate;
   maxAccounts: number;
   slippageBps: number;
   maxTransferAmountExtendPercentage: number;
+  indirectSwapEstimate: IndirectSwapEstimate;
+  singleSided?: DlmmSingleSided;
 }
 
 export interface GetZapInDlmmDirectParams {
@@ -309,13 +317,15 @@ export interface GetZapInDlmmDirectParams {
   inputTokenMint: PublicKey;
   amountIn: BN;
   maxActiveBinSlippage: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
   maxAccounts: number;
   slippageBps: number;
   maxTransferAmountExtendPercentage: number;
   directSwapEstimate: DirectSwapEstimate;
+  singleSided?: DlmmSingleSided;
 }
 
 export type ZapInDlmmIndirectPoolParam = {
@@ -326,7 +336,8 @@ export type ZapInDlmmIndirectPoolParam = {
   tokenXProgram: PublicKey;
   tokenYProgram: PublicKey;
   activeId: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   maxActiveBinSlippage: number;
   favorXInActiveId: boolean;
   strategy: StrategyType;
@@ -338,6 +349,7 @@ export type ZapInDlmmIndirectPoolParam = {
   binArrays: AccountMeta[];
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
+  singleSided?: DlmmSingleSided;
 };
 
 export type ZapInDlmmDirectPoolParam = {
@@ -348,7 +360,8 @@ export type ZapInDlmmDirectPoolParam = {
   tokenXProgram: PublicKey;
   tokenYProgram: PublicKey;
   activeId: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   maxActiveBinSlippage: number;
   favorXInActiveId: boolean;
   strategy: StrategyType;
@@ -361,6 +374,7 @@ export type ZapInDlmmDirectPoolParam = {
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
   isTokenX: boolean;
+  singleSided?: DlmmSingleSided;
 };
 
 export type ZapInDlmmResponse = {

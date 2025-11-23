@@ -33,6 +33,7 @@ import {
   ZapInDlmmResponse,
   DlmmSwapType,
   DlmmDirectSwapQuoteRoute,
+  DlmmSingleSided,
 } from "./types";
 
 import {
@@ -55,7 +56,6 @@ import {
   buildJupiterSwapTransaction,
   getJupiterSwapInstruction,
   toProgramStrategyType,
-  binDeltaToMinMaxBinId,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -87,7 +87,6 @@ import DLMM, {
   deriveBinArrayBitmapExtension,
   MAX_ACTIVE_BIN_SLIPPAGE,
   StrategyType,
-  ActionType,
 } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
@@ -347,7 +346,8 @@ export class Zap {
     lbPair: PublicKey;
     position: PublicKey;
     activeId: number;
-    binDelta: number;
+    minDeltaId: number;
+    maxDeltaId: number;
     maxActiveBinSlippage: number;
     favorXInActiveId: boolean;
     binArrayBitmapExtension: PublicKey;
@@ -360,7 +360,8 @@ export class Zap {
       lbPair,
       position,
       activeId,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
       binArrayBitmapExtension,
@@ -396,7 +397,8 @@ export class Zap {
 
     return await this.zapProgram.methods
       .zapInDlmmForUninitializedPosition(
-        binDelta,
+        minDeltaId,
+        maxDeltaId,
         activeId,
         maxActiveBinSlippage,
         favorXInActiveId,
@@ -1041,7 +1043,8 @@ export class Zap {
       lbPair,
       amountIn,
       inputTokenMint,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       strategy,
       favorXInActiveId,
       maxAccounts,
@@ -1049,6 +1052,7 @@ export class Zap {
       maxTransferAmountExtendPercentage,
       maxActiveBinSlippage,
       directSwapEstimate,
+      singleSided,
     } = params;
 
     const dlmm = await DLMM.create(this.connection, lbPair);
@@ -1152,11 +1156,10 @@ export class Zap {
       closewrapSol && cleanUpInstructions.push(closewrapSol);
     }
 
-    const { minBinId, maxBinId } = binDeltaToMinMaxBinId(binDelta, activeId);
     const binArrays = getBinArraysRequiredByPositionRange(
       lbPair,
-      new BN(minBinId),
-      new BN(maxBinId),
+      new BN(activeId + minDeltaId),
+      new BN(activeId + maxDeltaId),
       DLMM_PROGRAM_ID
     ).map((item) => ({
       pubkey: item.key,
@@ -1181,7 +1184,8 @@ export class Zap {
       tokenXProgram,
       tokenYProgram,
       activeId,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
       strategy,
@@ -1196,6 +1200,7 @@ export class Zap {
       binArrayBitmapExtension: binArrayBitmapExtensionData
         ? binArrayBitmapExtension
         : null,
+      singleSided,
     };
   }
 
@@ -1207,7 +1212,8 @@ export class Zap {
       lbPair,
       amountIn,
       inputTokenMint,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       strategy,
       favorXInActiveId,
       indirectSwapEstimate,
@@ -1215,6 +1221,7 @@ export class Zap {
       slippageBps,
       maxTransferAmountExtendPercentage,
       maxActiveBinSlippage,
+      singleSided,
     } = params;
 
     const dlmm = await DLMM.create(this.connection, lbPair);
@@ -1306,11 +1313,10 @@ export class Zap {
       maxTransferAmountExtendPercentage
     );
 
-    const { minBinId, maxBinId } = binDeltaToMinMaxBinId(binDelta, activeId);
     const binArrays = getBinArraysRequiredByPositionRange(
       lbPair,
-      new BN(minBinId),
-      new BN(maxBinId),
+      new BN(activeId + minDeltaId),
+      new BN(activeId + maxDeltaId),
       DLMM_PROGRAM_ID
     ).map((item) => ({
       pubkey: item.key,
@@ -1335,7 +1341,8 @@ export class Zap {
       tokenXProgram,
       tokenYProgram,
       activeId,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
       strategy,
@@ -1349,6 +1356,7 @@ export class Zap {
         ? binArrayBitmapExtension
         : null,
       isDirectRoute: false,
+      singleSided,
     };
   }
 
@@ -1366,7 +1374,8 @@ export class Zap {
       tokenXProgram,
       tokenYProgram,
       activeId,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
       strategy,
@@ -1376,6 +1385,7 @@ export class Zap {
       binArrays,
       binArrayBitmapExtension,
       isDirectRoute,
+      singleSided,
     } = params;
 
     const [
@@ -1418,61 +1428,116 @@ export class Zap {
       const { isTokenX, amount, maxTransferAmount } =
         params as ZapInDlmmDirectPoolParam;
 
-      const setLedgerBalanceTx = await this.setLedgerBalance(
-        user,
-        amount,
-        isTokenX
-      );
-      ledgerTransaction.add(setLedgerBalanceTx);
+      // For single-sided deposits, only update ledger for the deposited token
+      if (singleSided !== undefined) {
+        const singleSidedX = singleSided === DlmmSingleSided.X;
 
-      if (swapTransactions.length > 0) {
-        const swappedTokenAccount = isTokenX ? tokenYAccount : tokenXAccount;
+        if (swapTransactions.length > 0) {
+          const swappedTokenAccount = singleSidedX
+            ? tokenXAccount
+            : tokenYAccount;
+          const preSwappedTokenBalance = await getTokenAccountBalance(
+            this.connection,
+            swappedTokenAccount
+          );
+          const updateLedgerBalanceAfterSwapTx =
+            await this.updateLedgerBalanceAfterSwap(
+              user,
+              swappedTokenAccount,
+              new BN(preSwappedTokenBalance),
+              maxTransferAmount,
+              singleSidedX
+            );
+
+          ledgerTransaction.add(updateLedgerBalanceAfterSwapTx);
+        } else {
+          const setLedgerBalanceTx = await this.setLedgerBalance(
+            user,
+            amount,
+            singleSidedX
+          );
+
+          ledgerTransaction.add(setLedgerBalanceTx);
+        }
+      } else {
+        const setLedgerBalanceTx = await this.setLedgerBalance(
+          user,
+          amount,
+          isTokenX
+        );
+        ledgerTransaction.add(setLedgerBalanceTx);
+
+        if (swapTransactions.length > 0) {
+          const swappedTokenAccount = isTokenX ? tokenYAccount : tokenXAccount;
+          const preSwappedTokenBalance = await getTokenAccountBalance(
+            this.connection,
+            swappedTokenAccount
+          );
+
+          const updateLedgerBalanceAfterSwapTx =
+            await this.updateLedgerBalanceAfterSwap(
+              user,
+              swappedTokenAccount,
+              new BN(preSwappedTokenBalance),
+              maxTransferAmount,
+              !isTokenX
+            );
+
+          ledgerTransaction.add(updateLedgerBalanceAfterSwapTx);
+        }
+      }
+    } else {
+      const { maxTransferAmountX, maxTransferAmountY } =
+        params as ZapInDlmmIndirectPoolParam;
+
+      if (singleSided !== undefined) {
+        const singleSidedX = singleSided === DlmmSingleSided.X;
+        const swappedTokenAccount = singleSidedX
+          ? tokenXAccount
+          : tokenYAccount;
         const preSwappedTokenBalance = await getTokenAccountBalance(
           this.connection,
           swappedTokenAccount
         );
-
         const updateLedgerBalanceAfterSwapTx =
           await this.updateLedgerBalanceAfterSwap(
             user,
             swappedTokenAccount,
             new BN(preSwappedTokenBalance),
-            maxTransferAmount,
-            !isTokenX
+            singleSidedX ? maxTransferAmountX : maxTransferAmountY,
+            singleSidedX
           );
 
         ledgerTransaction.add(updateLedgerBalanceAfterSwapTx);
-      }
-    } else {
-      const { maxTransferAmountX, maxTransferAmountY } =
-        params as ZapInDlmmIndirectPoolParam;
-      const preTokenXBalance = await getTokenAccountBalance(
-        this.connection,
-        tokenXAccount
-      );
-      const preTokenYBalance = await getTokenAccountBalance(
-        this.connection,
-        tokenYAccount
-      );
-      const updateLedgerBalanceTokenXAfterSwapTx =
-        await this.updateLedgerBalanceAfterSwap(
-          user,
-          tokenXAccount,
-          new BN(preTokenXBalance),
-          maxTransferAmountX,
-          true
+      } else {
+        const preTokenXBalance = await getTokenAccountBalance(
+          this.connection,
+          tokenXAccount
         );
-      const updateLedgerBalanceTokenYAfterSwapTx =
-        await this.updateLedgerBalanceAfterSwap(
-          user,
-          tokenYAccount,
-          new BN(preTokenYBalance),
-          maxTransferAmountY,
-          false
+        const preTokenYBalance = await getTokenAccountBalance(
+          this.connection,
+          tokenYAccount
         );
+        const updateLedgerBalanceTokenXAfterSwapTx =
+          await this.updateLedgerBalanceAfterSwap(
+            user,
+            tokenXAccount,
+            new BN(preTokenXBalance),
+            maxTransferAmountX,
+            true
+          );
+        const updateLedgerBalanceTokenYAfterSwapTx =
+          await this.updateLedgerBalanceAfterSwap(
+            user,
+            tokenYAccount,
+            new BN(preTokenYBalance),
+            maxTransferAmountY,
+            false
+          );
 
-      ledgerTransaction.add(updateLedgerBalanceTokenXAfterSwapTx);
-      ledgerTransaction.add(updateLedgerBalanceTokenYAfterSwapTx);
+        ledgerTransaction.add(updateLedgerBalanceTokenXAfterSwapTx);
+        ledgerTransaction.add(updateLedgerBalanceTokenYAfterSwapTx);
+      }
     }
 
     const dlmm = await DLMM.create(this.connection, lbPair);
@@ -1493,7 +1558,8 @@ export class Zap {
       lbPair,
       position,
       activeId,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
       binArrayBitmapExtension:
@@ -1529,7 +1595,8 @@ export class Zap {
    * @param params.lbPairAddress - The DLMM pool address
    * @param params.positionAddress - The position address
    * @param params.user - Public key of the user performing the rebalance
-   * @param params.binDelta - The delta of bins for the rebalanced position relative to the active bin
+   * @param params.minDeltaId - The minimum delta of bins for the rebalanced position relative to the active bin
+   * @param params.maxDeltaId - The maximum delta of bins for the rebalanced position relative to the active bin
    * @param params.liquiditySlippageBps - The maximum slippage in basis points for the rebalance liquidity operation (percentage * 100)
    * @param params.strategy - The strategy to use for the rebalance
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
@@ -1543,7 +1610,8 @@ export class Zap {
       lbPairAddress,
       positionAddress,
       user,
-      binDelta,
+      minDeltaId,
+      maxDeltaId,
       liquiditySlippageBps,
       strategy,
       favorXInActiveId,
@@ -1720,15 +1788,10 @@ export class Zap {
       dlmm.lbPair.binStep,
       MAX_ACTIVE_BIN_SLIPPAGE
     );
-    // should we move this into zapInDlmmForInitializedPosition method instead?
-    const { minBinId, maxBinId } = binDeltaToMinMaxBinId(
-      binDelta,
-      dlmm.lbPair.activeId
-    );
     const binArrays = getBinArraysRequiredByPositionRange(
       lbPairAddress,
-      new BN(minBinId), // minBinId
-      new BN(maxBinId), // maxBinId
+      new BN(dlmm.lbPair.activeId + minDeltaId),
+      new BN(dlmm.lbPair.activeId + maxDeltaId),
       DLMM_PROGRAM_ID
     ).map((item) => ({
       pubkey: item.key,
@@ -1753,8 +1816,8 @@ export class Zap {
       lbPair: lbPairAddress,
       position: positionAddress,
       activeId: dlmm.lbPair.activeId,
-      minDeltaId: -binDelta,
-      maxDeltaId: binDelta,
+      minDeltaId,
+      maxDeltaId,
       maxActiveBinSlippage,
       favorXInActiveId,
       binArrays,
