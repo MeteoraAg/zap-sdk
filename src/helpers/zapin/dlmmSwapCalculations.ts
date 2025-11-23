@@ -11,11 +11,11 @@ import {
   DlmmSwapType,
   DlmmDirectSwapQuoteRoute,
   DlmmSingleSided,
-} from "../types";
+} from "../../types";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
-import { getJupiterQuote } from "./jupiter";
+import { getJupiterQuote } from "../jupiter";
 import invariant from "invariant";
 
 // Constants
