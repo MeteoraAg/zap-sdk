@@ -37,7 +37,8 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
   const indirectSwapEstimate = await estimateDlmmIndirectSwap(
     amountUseToAddLiquidity,
     inputTokenMint,
-    dlmm,
+    dlmmPool,
+    connection,
     SWAP_SLIPPAGE_BPS,
     -binDelta,
     binDelta,

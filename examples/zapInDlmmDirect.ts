@@ -38,7 +38,8 @@ async function main() {
   const directSwapEstimate = await estimateDlmmDirectSwap(
     amountUseToAddLiquidity,
     isTokenX,
-    dlmm,
+    dlmmPool,
+    connection,
     SWAP_SLIPPAGE_BPS,
     -binDelta,
     binDelta,

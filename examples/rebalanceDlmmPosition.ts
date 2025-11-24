@@ -70,7 +70,8 @@ async function main() {
   const directSwapEstimate = await estimateDlmmRebalanceSwap(
     tokenXAmount,
     tokenYAmount,
-    dlmm,
+    dlmmPool,
+    connection,
     SWAP_SLIPPAGE_BPS,
     -binDelta,
     binDelta,
@@ -87,6 +88,7 @@ async function main() {
     strategy: StrategyType.Spot,
     favorXInActiveId: false,
     directSwapEstimate,
+    swapSlippageBps: SWAP_SLIPPAGE_BPS,
   });
 
   // return;
@@ -114,9 +116,14 @@ async function main() {
     finalTx.push(result.setupTransaction);
   }
 
-  for (const removeLiquidityTx of result.removeLiquidityTransactions) {
-    finalTx.push(removeLiquidityTx);
+  if (result.initBinArrayTransaction) {
+    finalTx.push(result.initBinArrayTransaction);
   }
+
+  if (result.rebalancePositionTransaction) {
+    finalTx.push(result.rebalancePositionTransaction);
+  }
+
   if (result.swapTransaction) {
     finalTx.push(result.swapTransaction);
   }

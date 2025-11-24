@@ -12,7 +12,7 @@ import {
   DlmmDirectSwapQuoteRoute,
   DlmmSingleSided,
 } from "../../types";
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
@@ -306,17 +306,30 @@ function binarySearchRefineDirectSwapAmount(
  * Uses Jupiter for swaps since input token is not part of the DLMM pool
  * First tries a 50:50 split (inputToken -> X and inputToken -> Y)
  * then refines using binary search if the resulting X and Y values are not balanced enough.
+ *
+ * @param inputTokenAmount - The amount of input token
+ * @param inputTokenMint - The mint of the input token
+ * @param lbPair - The LB pair address
+ * @param connection - A connection to a fullnode JSON RPC endpoint
+ * @param swapSlippageBps - Slippage tolerance in basis points
+ * @param minDeltaId - Minimum bin delta from active bin
+ * @param maxDeltaId - Maximum bin delta from active bin
+ * @param strategy - Strategy type for the position
+ * @param singleSided - If provided, swaps all input to the specified token (X or Y) instead of balancing
+ * @returns IndirectSwapEstimate with swap details and post-swap token amounts
  */
 export async function estimateDlmmIndirectSwap(
   inputTokenAmount: BN,
   inputTokenMint: PublicKey,
-  dlmm: DLMM,
+  lbPair: PublicKey,
+  connection: Connection,
   swapSlippageBps: number,
   minDeltaId: number,
   maxDeltaId: number,
   strategy: StrategyType,
   singleSided?: DlmmSingleSided
 ): Promise<IndirectSwapEstimate> {
+  const dlmm = await DLMM.create(connection, lbPair);
   const activeBin = await dlmm.getActiveBin();
   const tokenXMint = dlmm.lbPair.tokenXMint;
   const tokenYMint = dlmm.lbPair.tokenYMint;
@@ -572,13 +585,15 @@ export async function estimateDlmmIndirectSwap(
 async function estimateDlmmDirectSwapCore(
   tokenXAmount: BN,
   tokenYAmount: BN,
-  dlmm: DLMM,
+  lbPair: PublicKey,
+  connection: Connection,
   swapSlippageBps: number,
   minDeltaId: number,
   maxDeltaId: number,
   strategy: StrategyType,
   singleSided?: DlmmSingleSided
 ): Promise<DirectSwapEstimate> {
+  const dlmm = await DLMM.create(connection, lbPair);
   if (singleSided !== undefined) {
     // swap all input to target token
     const singleSidedX = singleSided === DlmmSingleSided.X;
@@ -876,7 +891,8 @@ async function estimateDlmmDirectSwapCore(
  *
  * @param tokenAmount - The amount of input token
  * @param isInputTokenX - Whether the input token is tokenX (true) or tokenY (false)
- * @param dlmm - DLMM instance
+ * @param lbPair - The LB pair address
+ * @param connection - A connection to a fullnode JSON RPC endpoint
  * @param swapSlippageBps - Slippage tolerance in basis points
  * @param minDeltaId - Minimum bin delta from active bin
  * @param maxDeltaId - Maximum bin delta from active bin
@@ -887,7 +903,8 @@ async function estimateDlmmDirectSwapCore(
 export async function estimateDlmmDirectSwap(
   tokenAmount: BN,
   isInputTokenX: boolean,
-  dlmm: DLMM,
+  lbPair: PublicKey,
+  connection: Connection,
   swapSlippageBps: number,
   minDeltaId: number,
   maxDeltaId: number,
@@ -900,7 +917,8 @@ export async function estimateDlmmDirectSwap(
   return estimateDlmmDirectSwapCore(
     tokenXAmount,
     tokenYAmount,
-    dlmm,
+    lbPair,
+    connection,
     swapSlippageBps,
     minDeltaId,
     maxDeltaId,
@@ -917,7 +935,8 @@ export async function estimateDlmmDirectSwap(
  *
  * @param tokenXAmount - The amount of tokenX
  * @param tokenYAmount - The amount of tokenY
- * @param dlmm - DLMM instance
+ * @param lbPair - The LB pair address
+ * @param connection - A connection to a fullnode JSON RPC endpoint
  * @param swapSlippageBps - Slippage tolerance in basis points
  * @param minDeltaId - Minimum bin delta from active bin
  * @param maxDeltaId - Maximum bin delta from active bin
@@ -927,7 +946,8 @@ export async function estimateDlmmDirectSwap(
 export async function estimateDlmmRebalanceSwap(
   tokenXAmount: BN,
   tokenYAmount: BN,
-  dlmm: DLMM,
+  lbPair: PublicKey,
+  connection: Connection,
   swapSlippageBps: number,
   minDeltaId: number,
   maxDeltaId: number,
@@ -936,7 +956,8 @@ export async function estimateDlmmRebalanceSwap(
   return estimateDlmmDirectSwapCore(
     tokenXAmount,
     tokenYAmount,
-    dlmm,
+    lbPair,
+    connection,
     swapSlippageBps,
     minDeltaId,
     maxDeltaId,

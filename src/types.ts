@@ -263,14 +263,17 @@ export interface RebalanceDlmmPositionParams {
   minDeltaId: number;
   maxDeltaId: number;
   liquiditySlippageBps: number;
+  swapSlippageBps: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
   directSwapEstimate: DirectSwapEstimate;
+  maxAccounts?: number;
 }
 
 export interface RebalanceDlmmPositionResponse {
   setupTransaction?: Transaction;
-  removeLiquidityTransactions: Transaction[];
+  initBinArrayTransaction?: Transaction;
+  rebalancePositionTransaction?: Transaction;
   swapTransaction?: Transaction;
   ledgerTransaction: Transaction;
   zapInTransaction: Transaction;
