@@ -564,7 +564,7 @@ export class Zap {
       );
       swapTransactions = [result.transaction];
       maxTransferAmount = getExtendMaxAmountTransfer(
-        result.quoteResponse!.outAmount,
+        result.quoteResponse.outAmount,
         maxTransferAmountExtendPercentage
       );
     } else {
@@ -861,11 +861,11 @@ export class Zap {
         tokenBProgram,
         preInstructions,
         maxTransferAmountA: getExtendMaxAmountTransfer(
-          swapToAQuote!.outAmount,
+          swapToAQuote.outAmount,
           maxTransferAmountExtendPercentage
         ),
         maxTransferAmountB: getExtendMaxAmountTransfer(
-          swapToBQuote!.outAmount,
+          swapToBQuote.outAmount,
           maxTransferAmountExtendPercentage
         ),
         swapType: SwapExternalType.swapToBoth,

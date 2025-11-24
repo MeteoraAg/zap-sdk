@@ -357,14 +357,11 @@ export async function estimateDlmmIndirectSwap(
     );
 
     if (!quote) {
-      return {
-        swapToX: null,
-        swapToY: null,
-        swapAmountToX: new BN(0),
-        swapAmountToY: new BN(0),
-        postSwapX: new BN(0),
-        postSwapY: new BN(0),
-      };
+      throw new Error(
+        `Failed to get Jupiter quote for single-sided indirect swap to ${
+          singleSidedX ? "tokenX" : "tokenY"
+        }`
+      );
     }
 
     return {
@@ -409,14 +406,11 @@ export async function estimateDlmmIndirectSwap(
     quoteToYResult.status === "fulfilled" ? quoteToYResult.value : null;
 
   if (!quoteToX || !quoteToY) {
-    return {
-      swapToX: null,
-      swapToY: null,
-      swapAmountToX: new BN(0),
-      swapAmountToY: new BN(0),
-      postSwapX: new BN(0),
-      postSwapY: new BN(0),
-    };
+    throw new Error(
+      `Failed to get Jupiter quotes for indirect swap: ${
+        !quoteToX ? "quoteToX failed" : ""
+      }${!quoteToX && !quoteToY ? " and " : ""}${!quoteToY ? "quoteToY failed" : ""}`
+    );
   }
 
   const initialTokenX = new BN(quoteToX.outAmount);
@@ -611,14 +605,9 @@ async function estimateDlmmDirectSwapCore(
       );
 
       if (!quote) {
-        return {
-          swapType: DlmmSwapType.NoSwap,
-          swapAmount: new BN(0),
-          expectedOutput: new BN(0),
-          postSwapX: tokenXAmount,
-          postSwapY: tokenYAmount,
-          quote: null,
-        };
+        throw new Error(
+          "Failed to get Jupiter quote for single-sided direct swap from Y to X"
+        );
       }
 
       return {
@@ -648,14 +637,9 @@ async function estimateDlmmDirectSwapCore(
       );
 
       if (!quote) {
-        return {
-          swapType: DlmmSwapType.NoSwap,
-          swapAmount: new BN(0),
-          expectedOutput: new BN(0),
-          postSwapX: tokenXAmount,
-          postSwapY: tokenYAmount,
-          quote: null,
-        };
+        throw new Error(
+          "Failed to get Jupiter quote for single-sided direct swap from X to Y"
+        );
       }
 
       return {
@@ -774,15 +758,11 @@ async function estimateDlmmDirectSwapCore(
   );
 
   if (!initialQuote) {
-    // if quote fails, return no swap
-    return {
-      swapAmount: new BN(0),
-      swapType: DlmmSwapType.NoSwap,
-      expectedOutput: new BN(0),
-      postSwapX: tokenXAmount,
-      postSwapY: tokenYAmount,
-      quote: null,
-    };
+    throw new Error(
+      `Failed to get initial swap quote for balanced direct swap (${
+        swapType === DlmmSwapType.XToY ? "X to Y" : "Y to X"
+      })`
+    );
   }
 
   // calculate effective rate from initialQuote

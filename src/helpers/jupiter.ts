@@ -100,7 +100,7 @@ export async function buildJupiterSwapTransaction(
   slippageBps: number
 ): Promise<{
   transaction: Transaction;
-  quoteResponse: JupiterQuoteResponse | null;
+  quoteResponse: JupiterQuoteResponse;
 }> {
   const quoteResponse = await getJupiterQuote(
     inputMint,
@@ -113,6 +113,12 @@ export async function buildJupiterSwapTransaction(
     true,
     "https://lite-api.jup.ag"
   );
+
+  if (!quoteResponse) {
+    throw new Error(
+      `Failed to get Jupiter quote for swap from ${inputMint.toBase58()} to ${outputMint.toBase58()}`
+    );
+  }
 
   const swapInstructionResponse = await getJupiterSwapInstruction(
     user,
