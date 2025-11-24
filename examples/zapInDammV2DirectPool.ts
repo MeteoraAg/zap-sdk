@@ -1,4 +1,9 @@
-import { CpAmm, getTokenDecimals } from "@meteora-ag/cp-amm-sdk";
+import {
+  CpAmm,
+  derivePositionAddress,
+  derivePositionNftAccount,
+  getTokenDecimals,
+} from "@meteora-ag/cp-amm-sdk";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { Zap } from "../src";
@@ -6,6 +11,7 @@ import Decimal from "decimal.js";
 import { getJupAndDammV2Quotes } from "../src/helpers/zapin";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { createJitoTipIx, sendJitoBundle } from "./helpers";
+import BN from "bn.js";
 
 const MAINNET_RPC_URL = "";
 
@@ -21,7 +27,7 @@ async function main() {
   const usdcMint = new PublicKey(
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
   );
-  // const poolState = await dammV2Instance.fetchPoolState(pool);
+  const poolState = await dammV2Instance.fetchPoolState(pool);
 
   // const positionNft = Keypair.generate();
   // const createPositionTx = await dammV2Instance.createPosition({
@@ -44,17 +50,14 @@ async function main() {
 
   // return;
 
-  const position = new PublicKey(
-    "DzLAYMrP2yyYssXMFzY7577ejDnFCC2cboCRdvxUYqjt"
-  );
-  const positionNftAccount = new PublicKey(
-    "Gptio8g1YyFAwxDf7YEA8ykPDMzZ9hYe2VDcdjMDnbTn"
-  );
+  const positionNftMint = new PublicKey("ENTER POSITION NFT MINT");
+  const position = derivePositionAddress(positionNftMint);
+  const positionNftAccount = derivePositionNftAccount(positionNftMint);
 
-  const amountUseToAddLiquidity = new Decimal(5); // 5 USDC
+  const usdcDecimal = 6; // USDC has 6 decimals
+  const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
 
   const zap = new Zap(connection);
-  const poolState = await dammV2Instance.fetchPoolState(pool);
 
   const { tokenAMint, tokenBMint } = poolState;
 

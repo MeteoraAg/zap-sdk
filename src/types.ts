@@ -135,7 +135,7 @@ export type ProgramStrategyType = IdlTypes<Zap>["strategyType"];
 export type GetZapInDammV2DirectPoolParams = {
   user: PublicKey;
   inputTokenMint: PublicKey;
-  amountIn: Decimal;
+  amountIn: BN;
   pool: PublicKey;
   position: PublicKey;
   positionNftAccount: PublicKey;
@@ -157,7 +157,7 @@ export type GetZapInDammV2DirectPoolParams = {
 export type GetZapInDammV2InDirectPoolParams = {
   user: PublicKey;
   inputTokenMint: PublicKey;
-  amountIn: Decimal;
+  amountIn: BN;
   pool: PublicKey;
   position: PublicKey;
   positionNftAccount: PublicKey;

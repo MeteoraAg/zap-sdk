@@ -1,11 +1,14 @@
 import { CpAmm, getTokenDecimals, PoolState } from "@meteora-ag/cp-amm-sdk";
-import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
 import { JupiterQuoteResponse } from "../../types";
-import { convertUiAmountToLamports } from "../common";
+import {
+  convertUiAmountToLamports,
+  convertLamportsToUiAmount,
+} from "../common";
 
 // SOL is token A
 // (amount - x) / A = x * p / B
@@ -15,43 +18,69 @@ import { convertUiAmountToLamports } from "../common";
 // x * p / A = (amount -x ) / B
 // x = amount * A / (p * B + A)
 export function calculateDirectPoolSwapAmount(
-  amount: Decimal,
+  amount: BN,
+  amountDecimals: number,
   currentPrice: Decimal,
   poolBalanceTokenA: Decimal,
   poolBalanceTokenB: Decimal,
   isInputTokenA: boolean
-): Decimal {
+): BN {
+  const amountDecimal = convertLamportsToUiAmount(
+    new Decimal(amount.toString()),
+    amountDecimals
+  );
+
+  let swapAmountDecimal: Decimal;
   if (isInputTokenA) {
-    const numerator = amount.mul(poolBalanceTokenB);
+    const numerator = amountDecimal.mul(poolBalanceTokenB);
     const denominator = currentPrice
       .mul(poolBalanceTokenA)
       .add(poolBalanceTokenB);
 
-    return numerator.div(denominator);
-  }
-  const numerator = amount.mul(poolBalanceTokenA);
-  const denominator = currentPrice
-    .mul(poolBalanceTokenB)
-    .add(poolBalanceTokenA);
+    swapAmountDecimal = numerator.div(denominator);
+  } else {
+    const numerator = amountDecimal.mul(poolBalanceTokenA);
+    const denominator = currentPrice
+      .mul(poolBalanceTokenB)
+      .add(poolBalanceTokenA);
 
-  return numerator.div(denominator);
+    swapAmountDecimal = numerator.div(denominator);
+  }
+
+  return new BN(
+    convertUiAmountToLamports(swapAmountDecimal, amountDecimals)
+      .floor()
+      .toString()
+  );
 }
 
 // x * p1 / A = (amount - x) * p2 / B
 // x = amount * p2 * A / (p1 * B + p2 * A)
 export function calculateIndirectPoolSwapAmount(
-  amount: Decimal,
+  amount: BN,
+  amountDecimals: number,
   price1: Decimal, // sol/tokenA
   price2: Decimal, // sol tokenB
   poolBalanceTokenA: Decimal,
   poolBalanceTokenB: Decimal
-): Decimal {
-  const numerator = amount.mul(price2).mul(poolBalanceTokenA);
+): BN {
+  const amountDecimal = convertLamportsToUiAmount(
+    new Decimal(amount.toString()),
+    amountDecimals
+  );
+
+  const numerator = amountDecimal.mul(price2).mul(poolBalanceTokenA);
   const denominator = price1
     .mul(poolBalanceTokenB)
     .add(price2.mul(poolBalanceTokenA));
 
-  return numerator.div(denominator);
+  const swapAmountDecimal = numerator.div(denominator);
+
+  return new BN(
+    convertUiAmountToLamports(swapAmountDecimal, amountDecimals)
+      .floor()
+      .toString()
+  );
 }
 
 export async function getJupAndDammV2Quotes(

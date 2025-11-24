@@ -1,4 +1,8 @@
-import { CpAmm } from "@meteora-ag/cp-amm-sdk";
+import {
+  CpAmm,
+  derivePositionAddress,
+  derivePositionNftAccount,
+} from "@meteora-ag/cp-amm-sdk";
 import {
   Keypair,
   LAMPORTS_PER_SOL,
@@ -26,8 +30,8 @@ const keypairPath = "";
   const usdcMint = new PublicKey(
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
   );
+  const poolState = await dammV2Instance.fetchPoolState(pool);
 
-  // const poolState = await dammV2Instance.fetchPoolState(pool);
   // const positionNft = Keypair.generate();
   // const createPositionTx = await dammV2Instance.createPosition({
   //   owner: user.publicKey,
@@ -49,18 +53,14 @@ const keypairPath = "";
 
   // return;
 
-  const position = new PublicKey(
-    "ESn3eEkbpKqjjdusLJJN68y9RXWrhmiCQCc9dvKBChhC"
-  );
-  const positionNftAccount = new PublicKey(
-    "FsqhsNGhoRBKcvJbJ8MKsCiDVX9vELmmW3zce3ijRzd7"
-  );
+  const positionNftMint = new PublicKey("ENTER POSITION NFT MINT");
+  const position = derivePositionAddress(positionNftMint);
+  const positionNftAccount = derivePositionNftAccount(positionNftMint);
 
-  const amountUseToAddLiquidity = new Decimal(5); // 5 USDC
+  const usdcDecimal = 6; // USDC has 6 decimals
+  const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
 
   const zap = new Zap(connection);
-
-  const poolState = await dammV2Instance.fetchPoolState(pool);
 
   const jupiterQuoteToA = await getJupiterQuote(
     NATIVE_MINT,

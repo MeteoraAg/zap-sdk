@@ -51,7 +51,6 @@ import {
   deriveDammV2EventAuthority,
   deriveDammV2PoolAuthority,
   deriveDlmmEventAuthority,
-  convertUiAmountToLamports,
   convertLamportsToUiAmount,
   buildJupiterSwapTransaction,
   toProgramStrategyType,
@@ -486,7 +485,7 @@ export class Zap {
       const wrapSOL = wrapSOLInstruction(
         user,
         userWrapSolAcc,
-        BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
+        BigInt(amountIn.toString())
       );
 
       preInstructions.push(...wrapSOL);
@@ -536,7 +535,8 @@ export class Zap {
 
       const swapAmount = calculateDirectPoolSwapAmount(
         amountIn,
-        new Decimal(price),
+        inputTokenDecimal,
+        price,
         convertLamportsToUiAmount(
           new Decimal(poolBalanceTokenA.toString()),
           tokenADecimal
@@ -550,15 +550,11 @@ export class Zap {
 
       amount = amountIn.sub(swapAmount);
 
-      const swapAmountInLamports = new BN(
-        convertUiAmountToLamports(swapAmount, tokenADecimal).floor().toString()
-      );
-
       const result = await buildJupiterSwapTransaction(
         user,
         inputTokenMint,
         tokenAMint.equals(inputTokenMint) ? tokenBMint : tokenAMint,
-        swapAmountInLamports,
+        swapAmount,
         maxAccounts,
         slippageBps
       );
@@ -583,9 +579,7 @@ export class Zap {
 
     return {
       user,
-      amount: new BN(
-        convertUiAmountToLamports(amount, inputTokenDecimal).floor().toString()
-      ),
+      amount,
       pool,
       position,
       positionNftAccount,
@@ -674,7 +668,7 @@ export class Zap {
       const wrapSOL = wrapSOLInstruction(
         user,
         userWrapSolAcc,
-        BigInt(amountIn.mul(LAMPORTS_PER_SOL).floor().toString())
+        BigInt(amountIn.toString())
       );
       initializeWrapSOLAta && preInstructions.push(initializeWrapSOLAta);
       preInstructions.push(...wrapSOL);
@@ -704,16 +698,12 @@ export class Zap {
     );
 
     if (jupiterQuoteToA && jupiterQuoteToB === null) {
-      const amountInLamports = convertUiAmountToLamports(
-        amountIn,
-        inputTokenDecimal
-      );
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
           inputTokenMint,
           tokenAMint,
-          new BN(amountInLamports.floor().toString()),
+          amountIn,
           maxAccounts,
           slippageBps
         );
@@ -746,16 +736,12 @@ export class Zap {
     }
 
     if (jupiterQuoteToB && jupiterQuoteToA === null) {
-      const amountInLamports = convertUiAmountToLamports(
-        amountIn,
-        inputTokenDecimal
-      );
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
           inputTokenMint,
           tokenBMint,
-          new BN(amountInLamports.floor().toString()),
+          amountIn,
           maxAccounts,
           slippageBps
         );
@@ -800,6 +786,7 @@ export class Zap {
 
       const swapAmountToA = calculateIndirectPoolSwapAmount(
         amountIn,
+        inputTokenDecimal,
         priceA,
         priceB,
         convertLamportsToUiAmount(
@@ -814,24 +801,12 @@ export class Zap {
 
       const swapAmountToB = amountIn.sub(swapAmountToA);
 
-      const swapAmountToAInLamports = new BN(
-        convertUiAmountToLamports(swapAmountToA, inputTokenDecimal)
-          .floor()
-          .toString()
-      );
-
-      const swapAmountToBInLamports = new BN(
-        convertUiAmountToLamports(swapAmountToB, inputTokenDecimal)
-          .floor()
-          .toString()
-      );
-
       const { transaction: swapToATransaction, quoteResponse: swapToAQuote } =
         await buildJupiterSwapTransaction(
           user,
           inputTokenMint,
           tokenAMint,
-          swapAmountToAInLamports,
+          swapAmountToA,
           maxAccounts,
           slippageBps
         );
@@ -841,7 +816,7 @@ export class Zap {
           user,
           inputTokenMint,
           tokenBMint,
-          swapAmountToBInLamports,
+          swapAmountToB,
           maxAccounts,
           slippageBps
         );
