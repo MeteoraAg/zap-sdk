@@ -150,7 +150,7 @@ export type GetZapInDammV2DirectPoolParams = {
     minSwapOutAmount: BN;
     totalFee: BN;
     priceImpact: Decimal;
-  };
+  } | null;
   jupiterQuote: JupiterQuoteResponse | null;
 };
 

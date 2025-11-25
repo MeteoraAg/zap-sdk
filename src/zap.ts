@@ -524,9 +524,14 @@ export class Zap {
     let swapTransactions: Transaction[] = [];
     let maxTransferAmount;
 
+    if (dammV2Quote === null && jupiterQuote === null) {
+      throw new Error("No Jupiter or DAMM v2 quote found, unable to proceed");
+    }
+
     if (
       jupiterQuote !== null &&
-      new BN(jupiterQuote.outAmount).gte(dammV2Quote.swapOutAmount)
+      (dammV2Quote === null ||
+        new BN(jupiterQuote.outAmount).gte(dammV2Quote.swapOutAmount))
     ) {
       const price = convertLamportsToUiAmount(
         new Decimal(jupiterQuote.outAmount),
@@ -566,7 +571,7 @@ export class Zap {
     } else {
       amount = amountIn;
       maxTransferAmount = getExtendMaxAmountTransfer(
-        dammV2Quote.swapOutAmount.toString(),
+        dammV2Quote!.swapOutAmount.toString(), // we know dammV2Quote is not null here
         maxTransferAmountExtendPercentage
       );
     }

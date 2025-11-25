@@ -100,7 +100,7 @@ export async function getJupAndDammV2Quotes(
     minSwapOutAmount: BN;
     totalFee: BN;
     priceImpact: Decimal;
-  };
+  } | null;
   jupiterQuote: JupiterQuoteResponse | null;
 }> {
   const currentSlot = await connection.getSlot();
@@ -117,16 +117,23 @@ export async function getJupAndDammV2Quotes(
     new Decimal(1),
     inputTokenDecimal
   );
-  const dammV2Quote = dammV2.getQuote({
-    inAmount: new BN(ONE_TOKEN.floor().toString()),
-    inputTokenMint,
-    slippage: dammV2SlippageBps,
-    poolState,
-    currentSlot,
-    currentTime,
-    tokenADecimal,
-    tokenBDecimal,
-  });
+
+  let dammV2Quote = null;
+  try {
+    dammV2Quote = dammV2.getQuote({
+      inAmount: new BN(ONE_TOKEN.floor().toString()),
+      inputTokenMint,
+      slippage: dammV2SlippageBps,
+      poolState,
+      currentSlot,
+      currentTime,
+      tokenADecimal,
+      tokenBDecimal,
+    });
+  } catch (error) {
+    // dammV2 quote can fail, for example if the pool has no liquidity
+    console.error("Error getting DAMM v2 quote:", error);
+  }
 
   const jupiterQuote = await getJupiterQuote(
     inputTokenMint,

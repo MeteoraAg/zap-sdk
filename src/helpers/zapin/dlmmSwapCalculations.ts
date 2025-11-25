@@ -119,12 +119,18 @@ async function getBestSwapQuoteJupiterDlmm(
   swapForY: boolean,
   binArrays: BinArrayAccount[]
 ): Promise<SwapQuoteResult | null> {
-  const dlmmQuoteResult = dlmm.swapQuote(
-    inAmount,
-    swapForY,
-    new BN(swapSlippageBps),
-    binArrays
-  );
+  let dlmmQuoteResult = null;
+  try {
+    dlmmQuoteResult = dlmm.swapQuote(
+      inAmount,
+      swapForY,
+      new BN(swapSlippageBps),
+      binArrays
+    );
+  } catch (error) {
+    // dlmm quote can fail, if the pool has insufficient liquidity
+    console.error("Error getting DLMM quote, using jupiter quote only:", error);
+  }
   const jupiterQuoteResult = await getJupiterQuote(
     inMint,
     outMint,
@@ -202,7 +208,7 @@ function binarySearchRefineDirectSwapAmount(
   strategy: StrategyType,
   initialEffectiveSwapRate: Decimal,
   swapDirection: DlmmSwapType,
-  route: DlmmDirectSwapQuoteRoute,
+  initialRoute: DlmmDirectSwapQuoteRoute,
   swapSlippageBps: number,
   binArrayForSwap: BinArrayAccount[]
 ): BN {
@@ -214,6 +220,7 @@ function binarySearchRefineDirectSwapAmount(
   let activeBin = initialActiveBin;
   let minBinId = initialMinBinId;
   let maxBinId = initialMaxBinId;
+  let route = initialRoute;
 
   for (let i = 0; i < BINARY_SEARCH_MAX_ITERATIONS; i++) {
     const mid = left.add(right).div(new BN(2));
@@ -226,29 +233,38 @@ function binarySearchRefineDirectSwapAmount(
 
     if (route === DlmmDirectSwapQuoteRoute.Dlmm) {
       // if dlmm route is better, refresh dlmm quote for better accuracy since its fast enough
-      const dlmmQuote = dlmm.swapQuote(
-        mid,
-        swapDirection === DlmmSwapType.XToY,
-        swapSlippageBpsBn,
-        binArrayForSwap
-      );
-      effectiveSwapRate = new Decimal(dlmmQuote.minOutAmount.toString()).div(
-        new Decimal(dlmmQuote.consumedInAmount.toString())
-      );
-      // TODO: if we change the dlmm-sdk to return the activeBin.id, we can diirectly use that
-      const newActiveBin = bins.find(
-        (x) => x.price === dlmmQuote.endPrice.toString()
-      );
-      if (
-        newActiveBin &&
-        Math.abs(newActiveBin.binId - initialActiveBin.binId) <=
-          SWAP_BIN_ARRAY_COUNT // check if new bin will be within the amount of bins that we initially fetched
-      ) {
-        activeBin = newActiveBin;
-        minBinId = newActiveBin.binId + minDeltaId;
-        maxBinId = newActiveBin.binId + maxDeltaId;
-      } else {
-        // do not refine, the bins that were swapped through exceed the amount of bins that we initially fetched
+      try {
+        const dlmmQuote = dlmm.swapQuote(
+          mid,
+          swapDirection === DlmmSwapType.XToY,
+          swapSlippageBpsBn,
+          binArrayForSwap
+        );
+        effectiveSwapRate = new Decimal(dlmmQuote.minOutAmount.toString()).div(
+          new Decimal(dlmmQuote.consumedInAmount.toString())
+        );
+        // TODO: if we change the dlmm-sdk to return the activeBin.id, we can diirectly use that
+        const newActiveBin = bins.find(
+          (x) => x.price === dlmmQuote.endPrice.toString()
+        );
+        if (
+          newActiveBin &&
+          Math.abs(newActiveBin.binId - initialActiveBin.binId) <=
+            SWAP_BIN_ARRAY_COUNT // check if new bin will be within the amount of bins that we initially fetched
+        ) {
+          activeBin = newActiveBin;
+          minBinId = newActiveBin.binId + minDeltaId;
+          maxBinId = newActiveBin.binId + maxDeltaId;
+        } else {
+          // do not refine, the bins that were swapped through exceed the amount of bins that we initially fetched
+        }
+      } catch (error) {
+        // dlmm quote can fail, if the pool has insufficient liquidity
+        console.error(
+          "Error getting DLMM quote, using jupiter quote only:",
+          error
+        );
+        route = DlmmDirectSwapQuoteRoute.Jupiter;
       }
     }
 
@@ -409,7 +425,9 @@ export async function estimateDlmmIndirectSwap(
     throw new Error(
       `Failed to get Jupiter quotes for indirect swap: ${
         !quoteToX ? "quoteToX failed" : ""
-      }${!quoteToX && !quoteToY ? " and " : ""}${!quoteToY ? "quoteToY failed" : ""}`
+      }${!quoteToX && !quoteToY ? " and " : ""}${
+        !quoteToY ? "quoteToY failed" : ""
+      }`
     );
   }
 
