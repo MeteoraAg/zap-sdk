@@ -512,6 +512,8 @@ export class Zap {
     let amount;
     let swapTransactions: Transaction[] = [];
     let maxTransferAmount;
+    let swapInAmount: BN;
+    let swapOutAmount: BN;
 
     if (dammV2Quote === null && jupiterQuote === null) {
       throw new Error("No Jupiter or DAMM v2 quote found, unable to proceed");
@@ -527,7 +529,7 @@ export class Zap {
         tokenAMint.equals(inputTokenMint) ? tokenBDecimal : tokenADecimal
       );
 
-      const swapAmount = calculateDirectPoolSwapAmount(
+      swapInAmount = calculateDirectPoolSwapAmount(
         amountIn,
         inputTokenDecimal,
         price,
@@ -542,16 +544,17 @@ export class Zap {
         tokenAMint.equals(inputTokenMint)
       );
 
-      amount = amountIn.sub(swapAmount);
+      amount = amountIn.sub(swapInAmount);
 
       const result = await buildJupiterSwapTransaction(
         user,
         inputTokenMint,
         tokenAMint.equals(inputTokenMint) ? tokenBMint : tokenAMint,
-        swapAmount,
+        swapInAmount,
         maxAccounts,
         slippageBps
       );
+      swapOutAmount = new BN(result.quoteResponse.outAmount);
       swapTransactions = [result.transaction];
       maxTransferAmount = getExtendMaxAmountTransfer(
         result.quoteResponse.outAmount,
@@ -559,6 +562,8 @@ export class Zap {
       );
     } else {
       amount = amountIn;
+      swapInAmount = dammV2Quote!.consumedInAmount;
+      swapOutAmount = new BN(dammV2Quote!.swapOutAmount);
       maxTransferAmount = getExtendMaxAmountTransfer(
         dammV2Quote!.swapOutAmount.toString(), // we know dammV2Quote is not null here
         maxTransferAmountExtendPercentage
@@ -591,6 +596,10 @@ export class Zap {
       preInstructions,
       swapTransactions,
       cleanUpInstructions,
+      swapQuote: {
+        inAmount: swapInAmount,
+        outAmount: swapOutAmount,
+      },
     };
   }
 
@@ -726,6 +735,12 @@ export class Zap {
         preInstructions,
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
+        swapQuote: {
+          inAmountA: new BN(jupiterQuoteToA.inAmount),
+          outAmountA: new BN(jupiterQuoteToA.outAmount),
+          inAmountB: new BN(0),
+          outAmountB: new BN(0),
+        },
       };
     }
 
@@ -764,6 +779,12 @@ export class Zap {
         preInstructions,
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
+        swapQuote: {
+          inAmountA: new BN(0),
+          outAmountA: new BN(0),
+          inAmountB: new BN(jupiterQuoteToB.inAmount),
+          outAmountB: new BN(jupiterQuoteToB.outAmount),
+        },
       };
     }
 
@@ -841,10 +862,18 @@ export class Zap {
         preSqrtPrice: poolState.sqrtPrice,
         swapTransactions: [swapToATransaction, swapToBTransaction],
         cleanUpInstructions,
+        swapQuote: {
+          inAmountA: new BN(swapToAQuote.inAmount),
+          outAmountA: new BN(swapToAQuote.outAmount),
+          inAmountB: new BN(swapToBQuote.inAmount),
+          outAmountB: new BN(swapToBQuote.outAmount),
+        },
       };
     }
     // jupiterQuoteTokenA & jupiterQuoteTokenB both is null
-    return null;
+    throw new Error(
+      "No Jupiter quote found for both tokens, unable to proceed"
+    );
   }
 
   async buildZapInDammV2Transaction(
