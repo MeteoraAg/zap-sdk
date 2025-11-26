@@ -179,6 +179,8 @@ export class Zap {
     tokenBVault: PublicKey;
     tokenAProgram: PublicKey;
     tokenBProgram: PublicKey;
+    tokenAAccount: PublicKey;
+    tokenBAccount: PublicKey;
   }): Promise<Transaction> {
     const {
       user,
@@ -193,22 +195,9 @@ export class Zap {
       tokenBVault,
       tokenAProgram,
       tokenBProgram,
+      tokenAAccount,
+      tokenBAccount,
     } = params;
-
-    // we don't need to handle init ata account if not exist here
-    // because it already initialized in swap tx
-    const tokenAAccount = getAssociatedTokenAddressSync(
-      tokenAMint,
-      user,
-      false,
-      tokenAProgram
-    );
-    const tokenBAccount = getAssociatedTokenAddressSync(
-      tokenBMint,
-      user,
-      false,
-      tokenAProgram
-    );
 
     return await this.zapProgram.methods
       .zapInDammV2(preSqrtPrice, maxSqrtPriceChangeBps)
@@ -997,6 +986,8 @@ export class Zap {
       tokenBVault,
       tokenAProgram,
       tokenBProgram,
+      tokenAAccount,
+      tokenBAccount,
     });
 
     const cleanUpTransaction = new Transaction();
