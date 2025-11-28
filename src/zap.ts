@@ -86,6 +86,8 @@ import DLMM, {
   deriveBinArrayBitmapExtension,
   MAX_ACTIVE_BIN_SLIPPAGE,
   StrategyType,
+  buildLiquidityStrategyParameters,
+  getLiquidityStrategyParameterBuilder,
 } from "@meteora-ag/dlmm";
 import Decimal from "decimal.js";
 import {
@@ -1652,13 +1654,36 @@ export class Zap {
     userTokenXIx && setupTransaction.add(userTokenXIx);
     userTokenYIx && setupTransaction.add(userTokenYIx);
 
+    const strategyParamBuilder = getLiquidityStrategyParameterBuilder(strategy);
+    const { x0, y0, deltaX, deltaY } = buildLiquidityStrategyParameters(
+      new BN(0),
+      new BN(0),
+      new BN(minDeltaId),
+      new BN(maxDeltaId),
+      new BN(dlmm.lbPair.binStep),
+      favorXInActiveId,
+      new BN(dlmm.lbPair.activeId),
+      strategyParamBuilder
+    );
     const { rebalancePosition, simulationResult } =
       await dlmm.simulateRebalancePosition(
         positionAddress,
         position.positionData,
         true,
         true,
-        [], // no deposit
+        [
+          // we are not depositing any liquidity, but we're still providing this
+          // so the rebalancePosition will properly initialize any uninitialized bins
+          {
+            x0,
+            y0,
+            deltaX,
+            deltaY,
+            minDeltaId: new BN(minDeltaId),
+            maxDeltaId: new BN(maxDeltaId),
+            favorXInActiveBin: favorXInActiveId,
+          },
+        ],
         [
           {
             minBinId: new BN(position.positionData.lowerBinId),
