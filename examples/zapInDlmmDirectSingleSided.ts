@@ -41,17 +41,17 @@ async function main() {
   const maxDeltaId = isSingleSidedX ? binDelta : 0;
   const favorXInActiveId = isSingleSidedX;
 
-  const directSwapEstimate = await estimateDlmmDirectSwap(
-    amountUseToAddLiquidity,
-    isInputTokenX,
-    dlmmPool,
+  const directSwapEstimate = await estimateDlmmDirectSwap({
+    tokenAmount: amountUseToAddLiquidity,
+    isInputTokenX: isInputTokenX,
+    lbPair: dlmmPool,
     connection,
-    SWAP_SLIPPAGE_BPS,
+    swapSlippageBps: SWAP_SLIPPAGE_BPS,
     minDeltaId,
     maxDeltaId,
-    StrategyType.Spot,
-    singleSided
-  );
+    strategy: StrategyType.Spot,
+    singleSided,
+  });
 
   const result = await zap.getZapInDlmmDirectParams({
     user: user.publicKey,

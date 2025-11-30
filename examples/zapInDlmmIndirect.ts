@@ -34,16 +34,16 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
-  const indirectSwapEstimate = await estimateDlmmIndirectSwap(
-    amountUseToAddLiquidity,
-    inputTokenMint,
-    dlmmPool,
+  const indirectSwapEstimate = await estimateDlmmIndirectSwap({
+    inputTokenAmount: amountUseToAddLiquidity,
+    inputTokenMint: inputTokenMint,
+    lbPair: dlmmPool,
     connection,
-    SWAP_SLIPPAGE_BPS,
-    -binDelta,
-    binDelta,
-    StrategyType.Spot
-  );
+    swapSlippageBps: SWAP_SLIPPAGE_BPS,
+    minDeltaId: -binDelta,
+    maxDeltaId: binDelta,
+    strategy: StrategyType.Spot,
+  });
 
   const result = await zap.getZapInDlmmIndirectParams({
     user: user.publicKey,

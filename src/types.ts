@@ -1,6 +1,7 @@
 import { Program, IdlTypes } from "@coral-xyz/anchor";
 import {
   AccountMeta,
+  Connection,
   PublicKey,
   Transaction,
   TransactionInstruction,
@@ -132,6 +133,8 @@ export interface JupiterSwapInstructionResponse {
 
 export type ProgramStrategyType = IdlTypes<Zap>["strategyType"];
 
+//#region ZapIn Types
+
 export type GetZapInDammV2DirectPoolParams = {
   user: PublicKey;
   inputTokenMint: PublicKey;
@@ -251,6 +254,29 @@ export enum DlmmSingleSided {
   Y,
 }
 
+export interface EstimateDlmmDirectSwapParams {
+  tokenAmount: BN;
+  isInputTokenX: boolean;
+  lbPair: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface EstimateDlmmRebalanceSwapParams {
+  tokenXAmount: BN;
+  tokenYAmount: BN;
+  lbPair: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+}
+
 export interface DirectSwapEstimate {
   swapType: DlmmSwapType;
   swapAmount: BN;
@@ -258,6 +284,18 @@ export interface DirectSwapEstimate {
   postSwapX: BN;
   postSwapY: BN;
   quote: SwapQuoteResult | null;
+}
+
+export interface EstimateDlmmIndirectSwapParams {
+  inputTokenAmount: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
 }
 
 export interface IndirectSwapEstimate {
@@ -269,7 +307,6 @@ export interface IndirectSwapEstimate {
   postSwapY: BN;
 }
 
-///// ZAPIN TYPES /////
 export interface RebalanceDlmmPositionParams {
   lbPairAddress: PublicKey;
   positionAddress: PublicKey;
@@ -401,3 +438,5 @@ export type ZapInDlmmResponse = {
   zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 };
+
+//#endregion ZapIn Types
