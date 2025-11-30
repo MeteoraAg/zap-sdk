@@ -421,8 +421,28 @@ export class Zap {
       .transaction();
   }
 
-  /////// ZAPIN FUNCTION ////////
-
+  //#region Zap In
+  /**
+   * Get the parameters for building a DAMM v2 zap in transaction through a direct route
+   * Direct route means the input token matches either tokenA or tokenB in the pool
+   * so we can swap directly using the pool when it's the optimal route
+   *
+   * @param params.user - The user's public key
+   * @param params.pool - The pool's public key
+   * @param params.amountIn - The amount of input token
+   * @param params.inputTokenMint - The input token mint
+   * @param params.position - The position's public key
+   * @param params.positionNftAccount - The position NFT account's public key
+   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
+   * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
+   * @param params.slippageBps - The swap slippage tolerance in basis points
+   * @param params.dammV2Quote - The DAMM V2 swap quote
+   * @param params.jupiterQuote - The Jupiter swap quote
+   * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
+   * @returns The zap-in transaction parameters for a DAMM V2 direct pool
+   * @throws if input token mint matches either tokenA or tokenB in the pool
+   * @throws if failed to get both Jupiter and DAMM v2 swap quotes
+   */
   async getZapInDammV2DirectPoolParams(
     params: GetZapInDammV2DirectPoolParams
   ): Promise<ZapInDammV2DirectPoolParam> {
@@ -605,6 +625,27 @@ export class Zap {
     };
   }
 
+  /**
+   * Get the parameters for building a DAMM v2 zap in transaction through an indirect route
+   * Indirect route means the input token does not match either tokenA or tokenB in the pool
+   * so we swap the input token to tokenA and tokenB through Jupiter
+   *
+   * @param params.user - The user's public key
+   * @param params.pool - The pool's public key
+   * @param params.amountIn - The amount of input token
+   * @param params.inputTokenMint - The input token mint
+   * @param params.position - The position's public key
+   * @param params.positionNftAccount - The position NFT account's public key
+   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
+   * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
+   * @param params.slippageBps - The swap slippage tolerance in basis points
+   * @param params.jupiterQuoteToA - The Jupiter quote for swapping to tokenA
+   * @param params.jupiterQuoteToB - The Jupiter quote for swapping to tokenB
+   * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
+   * @returns The zap-in transaction parameters for a DAMM V2 indirect pool
+   * @throws if input token mint matches either tokenA or tokenB in the pool
+   * @throws if no Jupiter quote provided for both tokens
+   */
   async getZapInDammV2IndirectPoolParams(
     params: GetZapInDammV2InDirectPoolParams
   ): Promise<ZapInDammV2InDirectPoolParam | null> {
@@ -878,6 +919,28 @@ export class Zap {
     );
   }
 
+  /**
+   * Build DAMM v2 zap-in transaction
+   *
+   * @param params.user - The user's public key
+   * @param params.pool - The pool's public key
+   * @param params.position - The position's public key
+   * @param params.positionNftAccount - The position NFT account's public key
+   * @param params.tokenAMint - The token A mint
+   * @param params.tokenBMint - The token B mint
+   * @param params.tokenAVault - The token A vault
+   * @param params.tokenBVault - The token B vault
+   * @param params.tokenAProgram - The token A program
+   * @param params.tokenBProgram - The token B program
+   * @param params.isDirectPool - Whether this is a direct pool route
+   * @param params.amount - The amount to deposit
+   * @param params.preSqrtPrice - The sqrt price before the operation
+   * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
+   * @param params.preInstructions - Instructions to run before the zap in
+   * @param params.swapTransactions - Swap transactions to execute
+   * @param params.cleanUpInstructions - Instructions to run after the zap in
+   * @returns Response containing transaction components
+   */
   async buildZapInDammV2Transaction(
     params: ZapInDammV2DirectPoolParam | ZapInDammV2InDirectPoolParam
   ): Promise<ZapInDammV2Response> {
@@ -1037,6 +1100,28 @@ export class Zap {
     };
   }
 
+  /**
+   * Get the parameters for building a DLMM zap in transaction through a direct route
+   * Direct route means the input token matches either tokenX or tokenY in the pool
+   * so we can use the pool directly for swaps when it's the optimal route
+   *
+   * @param params.user - The user's public key
+   * @param params.lbPair - The DLMM pool's public key
+   * @param params.amountIn - The amount of input token
+   * @param params.inputTokenMint - The input token mint
+   * @param params.minDeltaId - The bin delta relative to the active bin for the lower bin position
+   * @param params.maxDeltaId - The bin delta relative to the active bin for the upper bin position
+   * @param params.strategy - The liquidity distribution strategy
+   * @param params.favorXInActiveId - Whether to favor token X in the active bin
+   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
+   * @param params.slippageBps - The swap slippage tolerance in basis points
+   * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
+   * @param params.maxActiveBinSlippage - The maximum active bin slippage
+   * @param params.directSwapEstimate - The result from the direct swap estimate
+   * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+   * @returns The zap-in transaction parameters for a DLMM direct pool
+   * @throws if input token mint does not match either tokenX or tokenY in the pool
+   */
   async getZapInDlmmDirectParams(
     params: GetZapInDlmmDirectParams
   ): Promise<ZapInDlmmDirectPoolParam> {
@@ -1206,6 +1291,28 @@ export class Zap {
     };
   }
 
+  /**
+   * Get the parameters for building a DLMM zap in transaction through an indirect route
+   * Indirect route means the input token does not match either tokenX or tokenY in the pool
+   * so we swap the input token to tokenX and tokenY through Jupiter when needed
+   *
+   * @param params.user - The user's public key
+   * @param params.lbPair - The DLMM pool's public key
+   * @param params.amountIn - The amount of input token
+   * @param params.inputTokenMint - The input token mint
+   * @param params.minDeltaId - The bin delta relative to the active bin for the lower bin position
+   * @param params.maxDeltaId - The bin delta relative to the active bin for the upper bin position
+   * @param params.strategy - The liquidity distribution strategy
+   * @param params.favorXInActiveId - Whether to favor token X in the active bin
+   * @param params.indirectSwapEstimate - The result from the indirect swap estimate
+   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
+   * @param params.slippageBps - The swap slippage tolerance in basis points
+   * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
+   * @param params.maxActiveBinSlippage - The maximum active bin slippage
+   * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+   * @returns The zap-in transaction parameters for a DLMM indirect pool
+   * @throws if input token mint matches either tokenX or tokenY in the pool
+   */
   async getZapInDlmmIndirectParams(
     params: GetZapInDlmmIndirectParams
   ): Promise<ZapInDlmmIndirectPoolParam> {
@@ -1362,6 +1469,31 @@ export class Zap {
     };
   }
 
+  /**
+   * Builds a DLMM zap-in transaction
+   *
+   * @param params.user - The user's public key
+   * @param params.lbPair - The DLMM pool's public key
+   * @param params.position - The position's public key
+   * @param params.tokenXMint - The token X mint
+   * @param params.tokenYMint - The token Y mint
+   * @param params.tokenXProgram - The token X program
+   * @param params.tokenYProgram - The token Y program
+   * @param params.activeId - The active bin ID
+   * @param params.minDeltaId - The bin delta relative to the active bin for the lower bin position
+   * @param params.maxDeltaId - The bin delta relative to the active bin for the upper bin position
+   * @param params.maxActiveBinSlippage - The maximum active bin slippage
+   * @param params.favorXInActiveId - Whether to favor token X in the active bin
+   * @param params.strategy - The liquidity distribution strategy
+   * @param params.preInstructions - Instructions to run before the zap in
+   * @param params.swapTransactions - Swap transactions to execute
+   * @param params.cleanUpInstructions - Instructions to run after the zap in
+   * @param params.binArrays - The bin arrays required for the position
+   * @param params.binArrayBitmapExtension - The bin array bitmap extension account if it exists
+   * @param params.isDirectRoute - Whether this is a direct route
+   * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+   * @returns Response containing transaction components
+   */
   async buildZapInDlmmTransaction(
     params: (ZapInDlmmIndirectPoolParam | ZapInDlmmDirectPoolParam) & {
       position: PublicKey;
@@ -1922,6 +2054,7 @@ export class Zap {
       },
     };
   }
+  //#endregion Zap In
 
   /////// ZAPOUT FUNTIONS ///////
 
