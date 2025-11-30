@@ -626,68 +626,64 @@ async function estimateDlmmDirectSwapCore({
     // swap all input to target token
     const singleSidedX = singleSided === DlmmSingleSided.X;
     if (singleSidedX && tokenYAmount.gt(new BN(0))) {
-      const quote = await getJupiterQuote(
+      const swapForY = false;
+      const binArrayForSwap = await dlmm.getBinArrayForSwap(
+        false,
+        SWAP_BIN_ARRAY_COUNT
+      );
+      const quote = await getBestSwapQuoteJupiterDlmm(
+        dlmm,
         dlmm.lbPair.tokenYMint,
         dlmm.lbPair.tokenXMint,
         tokenYAmount,
-        50,
         swapSlippageBps,
-        false,
-        true,
-        true,
-        "https://lite-api.jup.ag"
+        swapForY,
+        binArrayForSwap
       );
 
       if (!quote) {
         throw new Error(
-          "Failed to get Jupiter quote for single-sided direct swap from Y to X"
+          "Failed to get swap quote for single-sided direct swap from Y to X"
         );
       }
 
       return {
         swapType: DlmmSwapType.YToX,
         swapAmount: tokenYAmount,
-        expectedOutput: new BN(quote.outAmount),
-        postSwapX: tokenXAmount.add(new BN(quote.outAmount)),
+        expectedOutput: quote.outAmount,
+        postSwapX: tokenXAmount.add(quote.outAmount),
         postSwapY: new BN(0),
-        quote: {
-          inAmount: new BN(quote.inAmount),
-          outAmount: new BN(quote.outAmount),
-          route: DlmmDirectSwapQuoteRoute.Jupiter,
-          originalQuote: quote,
-        },
+        quote,
       };
     } else if (!singleSidedX && tokenXAmount.gt(new BN(0))) {
-      const quote = await getJupiterQuote(
+      const swapForY = true; // X to Y swap
+      const binArrayForSwap = await dlmm.getBinArrayForSwap(
+        swapForY,
+        SWAP_BIN_ARRAY_COUNT
+      );
+      const quote = await getBestSwapQuoteJupiterDlmm(
+        dlmm,
         dlmm.lbPair.tokenXMint,
         dlmm.lbPair.tokenYMint,
         tokenXAmount,
-        50,
         swapSlippageBps,
-        false,
-        true,
-        true,
-        "https://lite-api.jup.ag"
+        swapForY,
+        binArrayForSwap
       );
 
       if (!quote) {
         throw new Error(
-          "Failed to get Jupiter quote for single-sided direct swap from X to Y"
+          "Failed to get swap quote for single-sided direct swap from X to Y"
         );
       }
 
       return {
         swapType: DlmmSwapType.XToY,
         swapAmount: tokenXAmount,
-        expectedOutput: new BN(quote.outAmount),
+        expectedOutput: quote.outAmount,
         postSwapX: new BN(0),
-        postSwapY: tokenYAmount.add(new BN(quote.outAmount)),
-        quote: {
-          inAmount: new BN(quote.inAmount),
-          outAmount: new BN(quote.outAmount),
-          route: DlmmDirectSwapQuoteRoute.Jupiter,
-          originalQuote: quote,
-        },
+        postSwapY: tokenYAmount.add(quote.outAmount),
+        quote,
       };
     } else {
       // No swap needed, already have the correct token
