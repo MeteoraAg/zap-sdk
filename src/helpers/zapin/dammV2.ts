@@ -59,8 +59,8 @@ export function calculateDirectPoolSwapAmount(
 export function calculateIndirectPoolSwapAmount(
   amount: BN,
   amountDecimals: number,
-  price1: Decimal, // sol/tokenA
-  price2: Decimal, // sol tokenB
+  price1: Decimal, // in terms of tokenA per inputToken
+  price2: Decimal, // in terms of tokenB per inputToken
   poolBalanceTokenA: Decimal,
   poolBalanceTokenB: Decimal
 ): BN {

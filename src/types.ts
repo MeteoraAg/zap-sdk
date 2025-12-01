@@ -194,7 +194,7 @@ export type ZapInDammV2DirectPoolParam = {
   swapTransactions: Transaction[];
   cleanUpInstructions: TransactionInstruction[];
   isTokenA?: boolean;
-  swapInformation: {
+  swapInEstimate: {
     inAmount: BN;
     route: ZapInDammV2DirectPoolSwapRoute;
   };
@@ -206,21 +206,19 @@ export enum SwapExternalType {
   swapToBoth,
 }
 
-export type ZapInDammV2IndirectSwapQuote = {
-  inAmountA: BN;
-  outAmountA: BN;
-  inAmountB: BN;
-  outAmountB: BN;
-};
-
 export type ZapInDammV2InDirectPoolParam = Omit<
   ZapInDammV2DirectPoolParam,
-  "maxTransferAmount" | "swapInformation"
+  "maxTransferAmount" | "swapInEstimate"
 > & {
   swapType: SwapExternalType;
   maxTransferAmountA: BN;
   maxTransferAmountB: BN;
-  swapQuote: ZapInDammV2IndirectSwapQuote;
+  swapInEstimate: {
+    inAmountA: BN;
+    inAmountB: BN;
+    routeA: ZapInDammV2DirectPoolSwapRoute;
+    routeB: ZapInDammV2DirectPoolSwapRoute;
+  };
 };
 
 export type ZapInDammV2Response = {

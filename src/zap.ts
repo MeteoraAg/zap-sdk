@@ -72,6 +72,7 @@ import {
   getTokenDecimals,
   getTokenProgram,
   Rounding,
+  getPriceFromSqrtPrice,
 } from "@meteora-ag/cp-amm-sdk";
 import {
   getAssociatedTokenAddressSync,
@@ -617,7 +618,7 @@ export class Zap {
       preInstructions,
       swapTransactions,
       cleanUpInstructions,
-      swapInformation: {
+      swapInEstimate: {
         inAmount: swapInAmount,
         route: swapRoute,
       },
@@ -722,6 +723,32 @@ export class Zap {
     );
 
     if (jupiterQuoteToA && jupiterQuoteToB === null) {
+      const priceA = convertLamportsToUiAmount(
+        new Decimal(jupiterQuoteToA.outAmount),
+        tokenADecimal
+      );
+      const tokenAToBRate = getPriceFromSqrtPrice(
+        poolState.sqrtPrice,
+        tokenADecimal,
+        tokenBDecimal
+      );
+      const priceB = priceA.mul(tokenAToBRate);
+      const swapAmountToA = calculateIndirectPoolSwapAmount(
+        amountIn,
+        inputTokenDecimal,
+        priceA,
+        priceB,
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenA.toString()),
+          tokenADecimal
+        ),
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenB.toString()),
+          tokenBDecimal
+        )
+      );
+      const swapAmountToB = amountIn.sub(swapAmountToA);
+
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
@@ -756,16 +783,42 @@ export class Zap {
         preInstructions,
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
-        swapQuote: {
-          inAmountA: new BN(jupiterQuoteToA.inAmount),
-          outAmountA: new BN(jupiterQuoteToA.outAmount),
-          inAmountB: new BN(0),
-          outAmountB: new BN(0),
+        swapInEstimate: {
+          inAmountA: swapAmountToA,
+          inAmountB: swapAmountToB,
+          routeA: ZapInDammV2DirectPoolSwapRoute.Jupiter,
+          routeB: ZapInDammV2DirectPoolSwapRoute.DammV2,
         },
       };
     }
 
     if (jupiterQuoteToB && jupiterQuoteToA === null) {
+      const priceB = convertLamportsToUiAmount(
+        new Decimal(jupiterQuoteToB.outAmount),
+        tokenBDecimal
+      );
+      const tokenAToBRate = getPriceFromSqrtPrice(
+        poolState.sqrtPrice,
+        tokenADecimal,
+        tokenBDecimal
+      );
+      const priceA = priceB.div(tokenAToBRate);
+      const swapAmountToA = calculateIndirectPoolSwapAmount(
+        amountIn,
+        inputTokenDecimal,
+        priceA,
+        priceB,
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenA.toString()),
+          tokenADecimal
+        ),
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenB.toString()),
+          tokenBDecimal
+        )
+      );
+      const swapAmountToB = amountIn.sub(swapAmountToA);
+
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
@@ -800,11 +853,11 @@ export class Zap {
         preInstructions,
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
-        swapQuote: {
-          inAmountA: new BN(0),
-          outAmountA: new BN(0),
-          inAmountB: new BN(jupiterQuoteToB.inAmount),
-          outAmountB: new BN(jupiterQuoteToB.outAmount),
+        swapInEstimate: {
+          inAmountA: swapAmountToA,
+          inAmountB: swapAmountToB,
+          routeA: ZapInDammV2DirectPoolSwapRoute.DammV2,
+          routeB: ZapInDammV2DirectPoolSwapRoute.Jupiter,
         },
       };
     }
@@ -883,11 +936,11 @@ export class Zap {
         preSqrtPrice: poolState.sqrtPrice,
         swapTransactions: [swapToATransaction, swapToBTransaction],
         cleanUpInstructions,
-        swapQuote: {
-          inAmountA: new BN(swapToAQuote.inAmount),
-          outAmountA: new BN(swapToAQuote.outAmount),
-          inAmountB: new BN(swapToBQuote.inAmount),
-          outAmountB: new BN(swapToBQuote.outAmount),
+        swapInEstimate: {
+          inAmountA: swapAmountToA,
+          inAmountB: swapAmountToB,
+          routeA: ZapInDammV2DirectPoolSwapRoute.Jupiter,
+          routeB: ZapInDammV2DirectPoolSwapRoute.Jupiter,
         },
       };
     }
