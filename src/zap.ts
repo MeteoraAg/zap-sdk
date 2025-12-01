@@ -34,6 +34,7 @@ import {
   DlmmSwapType,
   DlmmDirectSwapQuoteRoute,
   DlmmSingleSided,
+  ZapInDammV2DirectPoolSwapRoute,
 } from "./types";
 
 import {
@@ -515,7 +516,7 @@ export class Zap {
     let swapTransactions: Transaction[] = [];
     let maxTransferAmount;
     let swapInAmount: BN;
-    let swapOutAmount: BN;
+    let swapRoute: ZapInDammV2DirectPoolSwapRoute;
 
     if (dammV2Quote === null && jupiterQuote === null) {
       throw new Error("No Jupiter or DAMM v2 quote found, unable to proceed");
@@ -556,20 +557,38 @@ export class Zap {
         maxAccounts,
         slippageBps
       );
-      swapOutAmount = new BN(result.quoteResponse.outAmount);
       swapTransactions = [result.transaction];
       maxTransferAmount = getExtendMaxAmountTransfer(
         result.quoteResponse.outAmount,
         maxTransferAmountExtendPercentage
       );
+      swapRoute = ZapInDammV2DirectPoolSwapRoute.Jupiter;
     } else {
+      const quote = dammV2Quote!; // we know dammV2Quote is not null here
       amount = amountIn;
-      swapInAmount = dammV2Quote!.consumedInAmount;
-      swapOutAmount = new BN(dammV2Quote!.swapOutAmount);
+      const price = convertLamportsToUiAmount(
+        new Decimal(quote.swapOutAmount.toString()),
+        tokenADecimal
+      );
+      swapInAmount = calculateDirectPoolSwapAmount(
+        amountIn,
+        inputTokenDecimal,
+        price,
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenA.toString()),
+          tokenADecimal
+        ),
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenB.toString()),
+          tokenBDecimal
+        ),
+        tokenAMint.equals(inputTokenMint)
+      );
       maxTransferAmount = getExtendMaxAmountTransfer(
-        dammV2Quote!.swapOutAmount.toString(), // we know dammV2Quote is not null here
+        quote.swapOutAmount.toString(),
         maxTransferAmountExtendPercentage
       );
+      swapRoute = ZapInDammV2DirectPoolSwapRoute.DammV2;
     }
 
     const cleanUpInstructions: TransactionInstruction[] = [];
@@ -598,9 +617,9 @@ export class Zap {
       preInstructions,
       swapTransactions,
       cleanUpInstructions,
-      swapQuote: {
+      swapInformation: {
         inAmount: swapInAmount,
-        outAmount: swapOutAmount,
+        route: swapRoute,
       },
     };
   }

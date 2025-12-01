@@ -169,10 +169,10 @@ export type GetZapInDammV2InDirectPoolParams = {
   jupiterQuoteToB: JupiterQuoteResponse | null;
 };
 
-export type ZapInDammV2DirectSwapQuote = {
-  inAmount: BN;
-  outAmount: BN;
-};
+export enum ZapInDammV2DirectPoolSwapRoute {
+  Jupiter = "jupiter",
+  DammV2 = "dammV2",
+}
 
 export type ZapInDammV2DirectPoolParam = {
   user: PublicKey;
@@ -194,7 +194,10 @@ export type ZapInDammV2DirectPoolParam = {
   swapTransactions: Transaction[];
   cleanUpInstructions: TransactionInstruction[];
   isTokenA?: boolean;
-  swapQuote: ZapInDammV2DirectSwapQuote;
+  swapInformation: {
+    inAmount: BN;
+    route: ZapInDammV2DirectPoolSwapRoute;
+  };
 };
 
 export enum SwapExternalType {
@@ -212,7 +215,7 @@ export type ZapInDammV2IndirectSwapQuote = {
 
 export type ZapInDammV2InDirectPoolParam = Omit<
   ZapInDammV2DirectPoolParam,
-  "maxTransferAmount" | "swapQuote"
+  "maxTransferAmount" | "swapInformation"
 > & {
   swapType: SwapExternalType;
   maxTransferAmountA: BN;
