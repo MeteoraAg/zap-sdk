@@ -14,10 +14,10 @@ import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
 import {
   GetZapInDammV2DirectPoolParams,
-  GetZapInDammV2InDirectPoolParams,
+  GetZapInDammV2IndirectPoolParams,
   SwapExternalType,
   ZapInDammV2DirectPoolParam,
-  ZapInDammV2InDirectPoolParam,
+  ZapInDammV2IndirectPoolParam,
   ZapInDammV2Response,
   ZapOutParams,
   ZapOutThroughDammV2Params,
@@ -34,6 +34,7 @@ import {
   DlmmSwapType,
   DlmmDirectSwapQuoteRoute,
   DlmmSingleSided,
+  ZapInDammV2PoolSwapRoute,
 } from "./types";
 
 import {
@@ -73,6 +74,7 @@ import {
   getTokenDecimals,
   getTokenProgram,
   Rounding,
+  getPriceFromSqrtPrice,
 } from "@meteora-ag/cp-amm-sdk";
 import {
   getAssociatedTokenAddressSync,
@@ -537,7 +539,7 @@ export class Zap {
     let swapTransactions: Transaction[] = [];
     let maxTransferAmount;
     let swapInAmount: BN;
-    let swapOutAmount: BN;
+    let swapRoute: ZapInDammV2PoolSwapRoute;
 
     if (dammV2Quote === null && jupiterQuote === null) {
       throw new Error("No Jupiter or DAMM v2 quote found, unable to proceed");
@@ -578,20 +580,38 @@ export class Zap {
         maxAccounts,
         slippageBps
       );
-      swapOutAmount = new BN(result.quoteResponse.outAmount);
       swapTransactions = [result.transaction];
       maxTransferAmount = getExtendMaxAmountTransfer(
         result.quoteResponse.outAmount,
         maxTransferAmountExtendPercentage
       );
+      swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
     } else {
+      const quote = dammV2Quote!; // we know dammV2Quote is not null here
       amount = amountIn;
-      swapInAmount = dammV2Quote!.consumedInAmount;
-      swapOutAmount = new BN(dammV2Quote!.swapOutAmount);
+      const price = convertLamportsToUiAmount(
+        new Decimal(quote.swapOutAmount.toString()),
+        tokenADecimal
+      );
+      swapInAmount = calculateDirectPoolSwapAmount(
+        amountIn,
+        inputTokenDecimal,
+        price,
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenA.toString()),
+          tokenADecimal
+        ),
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenB.toString()),
+          tokenBDecimal
+        ),
+        tokenAMint.equals(inputTokenMint)
+      );
       maxTransferAmount = getExtendMaxAmountTransfer(
-        dammV2Quote!.swapOutAmount.toString(), // we know dammV2Quote is not null here
+        quote.swapOutAmount.toString(),
         maxTransferAmountExtendPercentage
       );
+      swapRoute = ZapInDammV2PoolSwapRoute.DammV2;
     }
 
     const cleanUpInstructions: TransactionInstruction[] = [];
@@ -620,9 +640,9 @@ export class Zap {
       preInstructions,
       swapTransactions,
       cleanUpInstructions,
-      swapQuote: {
+      swapInEstimate: {
         inAmount: swapInAmount,
-        outAmount: swapOutAmount,
+        route: swapRoute,
       },
     };
   }
@@ -648,8 +668,8 @@ export class Zap {
    * @throws if no Jupiter quote provided for both tokens
    */
   async getZapInDammV2IndirectPoolParams(
-    params: GetZapInDammV2InDirectPoolParams
-  ): Promise<ZapInDammV2InDirectPoolParam | null> {
+    params: GetZapInDammV2IndirectPoolParams
+  ): Promise<ZapInDammV2IndirectPoolParam | null> {
     const {
       user,
       inputTokenMint,
@@ -781,11 +801,11 @@ export class Zap {
         preInstructions,
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
-        swapQuote: {
-          inAmountA: new BN(jupiterQuoteToA.inAmount),
-          outAmountA: new BN(jupiterQuoteToA.outAmount),
+        swapInEstimate: {
+          inAmountA: amountIn,
           inAmountB: new BN(0),
-          outAmountB: new BN(0),
+          routeA: ZapInDammV2PoolSwapRoute.Jupiter,
+          routeB: ZapInDammV2PoolSwapRoute.DammV2,
         },
       };
     }
@@ -825,11 +845,11 @@ export class Zap {
         preInstructions,
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
-        swapQuote: {
+        swapInEstimate: {
           inAmountA: new BN(0),
-          outAmountA: new BN(0),
-          inAmountB: new BN(jupiterQuoteToB.inAmount),
-          outAmountB: new BN(jupiterQuoteToB.outAmount),
+          inAmountB: amountIn,
+          routeA: ZapInDammV2PoolSwapRoute.DammV2,
+          routeB: ZapInDammV2PoolSwapRoute.Jupiter,
         },
       };
     }
@@ -908,11 +928,11 @@ export class Zap {
         preSqrtPrice: poolState.sqrtPrice,
         swapTransactions: [swapToATransaction, swapToBTransaction],
         cleanUpInstructions,
-        swapQuote: {
-          inAmountA: new BN(swapToAQuote.inAmount),
-          outAmountA: new BN(swapToAQuote.outAmount),
-          inAmountB: new BN(swapToBQuote.inAmount),
-          outAmountB: new BN(swapToBQuote.outAmount),
+        swapInEstimate: {
+          inAmountA: swapAmountToA,
+          inAmountB: swapAmountToB,
+          routeA: ZapInDammV2PoolSwapRoute.Jupiter,
+          routeB: ZapInDammV2PoolSwapRoute.Jupiter,
         },
       };
     }
@@ -945,7 +965,7 @@ export class Zap {
    * @returns Response containing transaction components
    */
   async buildZapInDammV2Transaction(
-    params: ZapInDammV2DirectPoolParam | ZapInDammV2InDirectPoolParam
+    params: ZapInDammV2DirectPoolParam | ZapInDammV2IndirectPoolParam
   ): Promise<ZapInDammV2Response> {
     const {
       user,
@@ -1045,7 +1065,7 @@ export class Zap {
           user,
           tokenAAccount,
           new BN(preTokenABalance),
-          (params as ZapInDammV2InDirectPoolParam).maxTransferAmountA,
+          (params as ZapInDammV2IndirectPoolParam).maxTransferAmountA,
           true // is token A
         );
 
@@ -1054,10 +1074,10 @@ export class Zap {
           user,
           tokenBAccount,
           new BN(preTokenBBalance),
-          (params as ZapInDammV2InDirectPoolParam).maxTransferAmountB,
+          (params as ZapInDammV2IndirectPoolParam).maxTransferAmountB,
           false // isn't token A
         );
-      const swapType = (params as ZapInDammV2InDirectPoolParam).swapType;
+      const swapType = (params as ZapInDammV2IndirectPoolParam).swapType;
 
       if (swapType == SwapExternalType.swapToA) {
         ledgerTransaction.add(updateLedgerBalanceTokenAAfterSwapTx);
