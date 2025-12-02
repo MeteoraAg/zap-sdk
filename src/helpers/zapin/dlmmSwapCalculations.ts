@@ -5,17 +5,20 @@ import DLMM, {
   toAmountsBothSideByStrategy,
 } from "@meteora-ag/dlmm";
 import {
-  DirectSwapEstimate,
   SwapQuoteResult,
-  IndirectSwapEstimate,
+  DlmmIndirectSwapEstimate,
   DlmmSwapType,
   DlmmDirectSwapQuoteRoute,
   DlmmSingleSided,
   EstimateDlmmDirectSwapParams,
   EstimateDlmmIndirectSwapParams,
   EstimateDlmmRebalanceSwapParams,
+  DlmmIndirectSwapEstimateContext,
+  DlmmDirectRebalanceEstimate,
+  DlmmDirectSwapEstimate,
+  DlmmDirectEstimateResult,
 } from "../../types";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
@@ -32,6 +35,17 @@ interface BinAmountDistribution {
   amountX: BN;
   amountY: BN;
   price: string;
+}
+
+interface EstimateDlmmDirectSwapCoreParams {
+  tokenXAmount: BN;
+  tokenYAmount: BN;
+  dlmm: DLMM;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
 }
 
 function getBinAmountDistribution(
@@ -327,7 +341,7 @@ function binarySearchRefineDirectSwapAmount(
  * then refines using binary search if the resulting X and Y values are not balanced enough.
  *
  * @param params - Parameters for estimating indirect swap
- * @param params.inputTokenAmount - The amount of input token
+ * @param params.amountIn - The amount of input token
  * @param params.inputTokenMint - The mint of the input token
  * @param params.lbPair - The LB pair address
  * @param params.connection - A connection to a fullnode JSON RPC endpoint
@@ -341,7 +355,7 @@ function binarySearchRefineDirectSwapAmount(
  * @throws if failed to get Jupiter swap quote
  */
 export async function estimateDlmmIndirectSwap({
-  inputTokenAmount,
+  amountIn,
   inputTokenMint,
   lbPair,
   connection,
@@ -350,11 +364,21 @@ export async function estimateDlmmIndirectSwap({
   maxDeltaId,
   strategy,
   singleSided,
-}: EstimateDlmmIndirectSwapParams): Promise<IndirectSwapEstimate> {
+}: EstimateDlmmIndirectSwapParams): Promise<DlmmIndirectSwapEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
   const activeBin = await dlmm.getActiveBin();
   const tokenXMint = dlmm.lbPair.tokenXMint;
   const tokenYMint = dlmm.lbPair.tokenYMint;
+  const context: DlmmIndirectSwapEstimateContext = {
+    amountIn,
+    inputTokenMint,
+    lbPair,
+    swapSlippageBps,
+    minDeltaId,
+    maxDeltaId,
+    strategy,
+    singleSided,
+  };
 
   invariant(
     !inputTokenMint.equals(tokenXMint) && !inputTokenMint.equals(tokenYMint),
@@ -369,7 +393,7 @@ export async function estimateDlmmIndirectSwap({
     const quote = await getJupiterQuote(
       inputTokenMint,
       outputTokenMint,
-      inputTokenAmount,
+      amountIn,
       50,
       swapSlippageBps,
       false,
@@ -387,16 +411,19 @@ export async function estimateDlmmIndirectSwap({
     }
 
     return {
-      swapToX: singleSidedX ? quote : null,
-      swapToY: singleSidedX ? null : quote,
-      swapAmountToX: singleSidedX ? inputTokenAmount : new BN(0),
-      swapAmountToY: singleSidedX ? new BN(0) : inputTokenAmount,
-      postSwapX: singleSidedX ? new BN(quote.outAmount) : new BN(0),
-      postSwapY: singleSidedX ? new BN(0) : new BN(quote.outAmount),
+      result: {
+        swapToX: singleSidedX ? quote : null,
+        swapToY: singleSidedX ? null : quote,
+        swapAmountToX: singleSidedX ? amountIn : new BN(0),
+        swapAmountToY: singleSidedX ? new BN(0) : amountIn,
+        postSwapX: singleSidedX ? new BN(quote.outAmount) : new BN(0),
+        postSwapY: singleSidedX ? new BN(0) : new BN(quote.outAmount),
+      },
+      context,
     };
   }
 
-  const halfAmount = inputTokenAmount.div(new BN(2));
+  const halfAmount = amountIn.div(new BN(2));
   const [quoteToXResult, quoteToYResult] = await Promise.allSettled([
     getJupiterQuote(
       inputTokenMint,
@@ -460,12 +487,15 @@ export async function estimateDlmmIndirectSwap({
   // return early if initial split is balanced enough
   if (initialRatio.sub(1).abs().lt(TOLERANCE)) {
     return {
-      swapToX: quoteToX,
-      swapToY: quoteToY,
-      swapAmountToX: halfAmount,
-      swapAmountToY: halfAmount,
-      postSwapX: initialTokenX,
-      postSwapY: initialTokenY,
+      result: {
+        swapToX: quoteToX,
+        swapToY: quoteToY,
+        swapAmountToX: halfAmount,
+        swapAmountToY: halfAmount,
+        postSwapX: initialTokenX,
+        postSwapY: initialTokenY,
+      },
+      context,
     };
   }
 
@@ -487,7 +517,7 @@ export async function estimateDlmmIndirectSwap({
   } else {
     // Too much Y value, need to swap more to X
     left = halfAmount;
-    right = inputTokenAmount;
+    right = amountIn;
   }
 
   let bestAmountToX = halfAmount;
@@ -495,7 +525,7 @@ export async function estimateDlmmIndirectSwap({
 
   for (let i = 0; i < BINARY_SEARCH_MAX_ITERATIONS; i++) {
     const midAmountToX = left.add(right).div(new BN(2));
-    const midAmountToY = inputTokenAmount.sub(midAmountToX);
+    const midAmountToY = amountIn.sub(midAmountToX);
 
     if (right.sub(left).lte(BINARY_SEARCH_MIN_DELTA)) {
       bestAmountToX = midAmountToX;
@@ -573,12 +603,15 @@ export async function estimateDlmmIndirectSwap({
   if (!finalQuoteToX || !finalQuoteToY) {
     // Fallback to initial 50:50 quotes
     return {
-      swapToX: quoteToX,
-      swapToY: quoteToY,
-      swapAmountToX: halfAmount,
-      swapAmountToY: halfAmount,
-      postSwapX: initialTokenX,
-      postSwapY: initialTokenY,
+      result: {
+        swapToX: quoteToX,
+        swapToY: quoteToY,
+        swapAmountToX: halfAmount,
+        swapAmountToY: halfAmount,
+        postSwapX: initialTokenX,
+        postSwapY: initialTokenY,
+      },
+      context,
     };
   }
 
@@ -586,25 +619,16 @@ export async function estimateDlmmIndirectSwap({
   const finalTokenY = new BN(finalQuoteToY.outAmount);
 
   return {
-    swapToX: finalQuoteToX,
-    swapToY: finalQuoteToY,
-    swapAmountToX: bestAmountToX,
-    swapAmountToY: bestAmountToY,
-    postSwapX: finalTokenX,
-    postSwapY: finalTokenY,
+    result: {
+      swapToX: finalQuoteToX,
+      swapToY: finalQuoteToY,
+      swapAmountToX: bestAmountToX,
+      swapAmountToY: bestAmountToY,
+      postSwapX: finalTokenX,
+      postSwapY: finalTokenY,
+    },
+    context,
   };
-}
-
-interface EstimateDlmmDirectSwapCoreParams {
-  tokenXAmount: BN;
-  tokenYAmount: BN;
-  lbPair: PublicKey;
-  connection: Connection;
-  swapSlippageBps: number;
-  minDeltaId: number;
-  maxDeltaId: number;
-  strategy: StrategyType;
-  singleSided?: DlmmSingleSided;
 }
 
 /**
@@ -615,15 +639,13 @@ interface EstimateDlmmDirectSwapCoreParams {
 async function estimateDlmmDirectSwapCore({
   tokenXAmount,
   tokenYAmount,
-  lbPair,
-  connection,
+  dlmm,
   swapSlippageBps,
   minDeltaId,
   maxDeltaId,
   strategy,
   singleSided,
-}: EstimateDlmmDirectSwapCoreParams): Promise<DirectSwapEstimate> {
-  const dlmm = await DLMM.create(connection, lbPair);
+}: EstimateDlmmDirectSwapCoreParams): Promise<DlmmDirectEstimateResult> {
   if (singleSided !== undefined) {
     // swap all input to target token
     const singleSidedX = singleSided === DlmmSingleSided.X;
@@ -915,8 +937,8 @@ async function estimateDlmmDirectSwapCore({
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */
 export async function estimateDlmmDirectSwap({
-  tokenAmount,
-  isInputTokenX,
+  amountIn,
+  inputTokenMint,
   lbPair,
   connection,
   swapSlippageBps,
@@ -924,21 +946,43 @@ export async function estimateDlmmDirectSwap({
   maxDeltaId,
   strategy,
   singleSided,
-}: EstimateDlmmDirectSwapParams): Promise<DirectSwapEstimate> {
-  const tokenXAmount = isInputTokenX ? tokenAmount : new BN(0);
-  const tokenYAmount = isInputTokenX ? new BN(0) : tokenAmount;
+}: EstimateDlmmDirectSwapParams): Promise<DlmmDirectSwapEstimate> {
+  const dlmm = await DLMM.create(connection, lbPair);
 
-  return estimateDlmmDirectSwapCore({
+  invariant(
+    inputTokenMint.equals(dlmm.lbPair.tokenXMint) ||
+      inputTokenMint.equals(dlmm.lbPair.tokenYMint),
+    "Input token must be tokenX or tokenY for direct route"
+  );
+
+  const isInputTokenX = inputTokenMint === dlmm.lbPair.tokenXMint;
+  const tokenXAmount = isInputTokenX ? amountIn : new BN(0);
+  const tokenYAmount = isInputTokenX ? new BN(0) : amountIn;
+
+  const result = await estimateDlmmDirectSwapCore({
     tokenXAmount,
     tokenYAmount,
-    lbPair,
-    connection,
+    dlmm,
     swapSlippageBps,
     minDeltaId,
     maxDeltaId,
     strategy,
     singleSided,
   });
+
+  return {
+    result,
+    context: {
+      lbPair,
+      inputTokenMint,
+      amountIn,
+      swapSlippageBps,
+      minDeltaId,
+      maxDeltaId,
+      strategy,
+      singleSided,
+    },
+  };
 }
 
 /**
@@ -948,9 +992,8 @@ export async function estimateDlmmDirectSwap({
  * excess of one token to the other using either the DLMM pool or Jupiter
  *
  * @param params - Parameters for estimating rebalance swap
- * @param params.tokenXAmount - The amount of tokenX
- * @param params.tokenYAmount - The amount of tokenY
  * @param params.lbPair - The LB pair address
+ * @param params.position - The position address
  * @param params.connection - A connection to a fullnode JSON RPC endpoint
  * @param params.swapSlippageBps - Slippage tolerance in basis points
  * @param params.minDeltaId - Minimum bin delta from active bin
@@ -960,24 +1003,37 @@ export async function estimateDlmmDirectSwap({
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */
 export async function estimateDlmmRebalanceSwap({
-  tokenXAmount,
-  tokenYAmount,
   lbPair,
+  position,
   connection,
   swapSlippageBps,
   minDeltaId,
   maxDeltaId,
   strategy,
-}: EstimateDlmmRebalanceSwapParams): Promise<DirectSwapEstimate> {
-  return estimateDlmmDirectSwapCore({
-    tokenXAmount,
-    tokenYAmount,
-    lbPair,
-    connection,
+}: EstimateDlmmRebalanceSwapParams): Promise<DlmmDirectRebalanceEstimate> {
+  const dlmm = await DLMM.create(connection, lbPair);
+  const userPosition = await dlmm.getPosition(position);
+
+  const result = await estimateDlmmDirectSwapCore({
+    tokenXAmount: new BN(userPosition.positionData.totalXAmount),
+    tokenYAmount: new BN(userPosition.positionData.totalYAmount),
+    dlmm,
     swapSlippageBps,
     minDeltaId,
     maxDeltaId,
     strategy,
     singleSided: undefined, // rebalance does not use single-sided deposits
   });
+
+  return {
+    result,
+    context: {
+      lbPair,
+      position,
+      swapSlippageBps,
+      minDeltaId,
+      maxDeltaId,
+      strategy,
+    },
+  };
 }

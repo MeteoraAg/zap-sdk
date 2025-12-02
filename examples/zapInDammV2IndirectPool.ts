@@ -54,8 +54,6 @@ const keypairPath = "";
   // return;
 
   const positionNftMint = new PublicKey("ENTER POSITION NFT MINT");
-  const position = derivePositionAddress(positionNftMint);
-  const positionNftAccount = derivePositionNftAccount(positionNftMint);
 
   const usdcDecimal = 6; // USDC has 6 decimals
   const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
@@ -91,8 +89,7 @@ const keypairPath = "";
     inputTokenMint: usdcMint,
     amountIn: amountUseToAddLiquidity,
     pool,
-    position,
-    positionNftAccount,
+    positionNftMint,
     maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps,
     maxAccounts: 50,
     slippageBps: 300,

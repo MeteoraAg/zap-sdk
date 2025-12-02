@@ -41,8 +41,8 @@ async function main() {
   const favorXInActiveId = isSingleSidedX;
 
   // Pass singleSided to estimateIndirectSwap
-  const indirectSwapEstimate = await estimateDlmmIndirectSwap({
-    inputTokenAmount: amountUseToAddLiquidity,
+  const estimate = await estimateDlmmIndirectSwap({
+    amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,
     connection: connection,
@@ -55,19 +55,13 @@ async function main() {
 
   const result = await zap.getZapInDlmmIndirectParams({
     user: user.publicKey,
-    lbPair: dlmmPool,
-    inputTokenMint: inputTokenMint,
-    amountIn: amountUseToAddLiquidity,
     maxActiveBinSlippage: 50,
-    minDeltaId,
-    maxDeltaId,
-    strategy: StrategyType.Spot,
     favorXInActiveId,
-    indirectSwapEstimate,
+    indirectSwapEstimate: estimate.result,
     maxAccounts: 50,
-    slippageBps: SWAP_SLIPPAGE_BPS,
     maxTransferAmountExtendPercentage: 0,
     singleSided,
+    ...estimate.context,
   });
 
   const position = Keypair.generate();

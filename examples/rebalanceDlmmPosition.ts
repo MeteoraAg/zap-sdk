@@ -62,33 +62,23 @@ async function main() {
   const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
 
   const zap = new Zap(connection);
-  const position = await dlmm.getPosition(positionAddress);
 
-  const tokenXAmount = new BN(position.positionData.totalXAmount);
-  const tokenYAmount = new BN(position.positionData.totalYAmount);
-
-  const directSwapEstimate = await estimateDlmmRebalanceSwap(
-    tokenXAmount,
-    tokenYAmount,
-    dlmmPool,
+  const estimate = await estimateDlmmRebalanceSwap({
+    lbPair: dlmmPool,
+    position: positionAddress,
     connection,
-    SWAP_SLIPPAGE_BPS,
-    -binDelta,
-    binDelta,
-    StrategyType.Spot
-  );
-
-  const result = await zap.rebalanceDlmmPosition({
-    lbPairAddress: dlmmPool,
-    positionAddress,
-    user: user.publicKey,
+    swapSlippageBps: SWAP_SLIPPAGE_BPS,
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
-    liquiditySlippageBps: 50,
     strategy: StrategyType.Spot,
+  });
+
+  const result = await zap.rebalanceDlmmPosition({
+    user: user.publicKey,
+    liquiditySlippageBps: 50,
     favorXInActiveId: false,
-    directSwapEstimate,
-    swapSlippageBps: SWAP_SLIPPAGE_BPS,
+    directSwapEstimate: estimate.result,
+    ...estimate.context,
   });
 
   // return;

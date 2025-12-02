@@ -140,8 +140,7 @@ export type GetZapInDammV2DirectPoolParams = {
   inputTokenMint: PublicKey;
   amountIn: BN;
   pool: PublicKey;
-  position: PublicKey;
-  positionNftAccount: PublicKey;
+  positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
   maxAccounts: number;
@@ -162,8 +161,7 @@ export type GetZapInDammV2InDirectPoolParams = {
   inputTokenMint: PublicKey;
   amountIn: BN;
   pool: PublicKey;
-  position: PublicKey;
-  positionNftAccount: PublicKey;
+  positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
   maxAccounts: number;
@@ -255,39 +253,7 @@ export enum DlmmSingleSided {
 }
 
 export interface EstimateDlmmDirectSwapParams {
-  tokenAmount: BN;
-  isInputTokenX: boolean;
-  lbPair: PublicKey;
-  connection: Connection;
-  swapSlippageBps: number;
-  minDeltaId: number;
-  maxDeltaId: number;
-  strategy: StrategyType;
-  singleSided?: DlmmSingleSided;
-}
-
-export interface EstimateDlmmRebalanceSwapParams {
-  tokenXAmount: BN;
-  tokenYAmount: BN;
-  lbPair: PublicKey;
-  connection: Connection;
-  swapSlippageBps: number;
-  minDeltaId: number;
-  maxDeltaId: number;
-  strategy: StrategyType;
-}
-
-export interface DirectSwapEstimate {
-  swapType: DlmmSwapType;
-  swapAmount: BN;
-  expectedOutput: BN;
-  postSwapX: BN;
-  postSwapY: BN;
-  quote: SwapQuoteResult | null;
-}
-
-export interface EstimateDlmmIndirectSwapParams {
-  inputTokenAmount: BN;
+  amountIn: BN;
   inputTokenMint: PublicKey;
   lbPair: PublicKey;
   connection: Connection;
@@ -298,7 +264,69 @@ export interface EstimateDlmmIndirectSwapParams {
   singleSided?: DlmmSingleSided;
 }
 
-export interface IndirectSwapEstimate {
+export interface DlmmDirectSwapEstimateContext {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmDirectEstimateResult {
+  swapType: DlmmSwapType;
+  swapAmount: BN;
+  expectedOutput: BN;
+  postSwapX: BN;
+  postSwapY: BN;
+  quote: SwapQuoteResult | null;
+}
+
+export interface DlmmDirectSwapEstimate {
+  result: DlmmDirectEstimateResult;
+  context: DlmmDirectSwapEstimateContext;
+}
+
+export interface EstimateDlmmRebalanceSwapParams {
+  position: PublicKey;
+  lbPair: PublicKey;
+  connection: Connection;
+  minDeltaId: number;
+  maxDeltaId: number;
+  swapSlippageBps: number;
+  strategy: StrategyType;
+}
+
+export interface DlmmDirectRebalanceEstimateContext {
+  lbPair: PublicKey;
+  position: PublicKey;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmDirectRebalanceEstimate {
+  result: DlmmDirectEstimateResult;
+  context: DlmmDirectRebalanceEstimateContext;
+}
+
+export interface EstimateDlmmIndirectSwapParams {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmIndirectSwapEstimateResult {
   swapToX: JupiterQuoteResponse | null;
   swapToY: JupiterQuoteResponse | null;
   swapAmountToX: BN;
@@ -307,9 +335,25 @@ export interface IndirectSwapEstimate {
   postSwapY: BN;
 }
 
+export interface DlmmIndirectSwapEstimateContext {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmIndirectSwapEstimate {
+  result: DlmmIndirectSwapEstimateResult;
+  context: DlmmIndirectSwapEstimateContext;
+}
+
 export interface RebalanceDlmmPositionParams {
-  lbPairAddress: PublicKey;
-  positionAddress: PublicKey;
+  lbPair: PublicKey;
+  position: PublicKey;
   user: PublicKey;
   minDeltaId: number;
   maxDeltaId: number;
@@ -317,7 +361,7 @@ export interface RebalanceDlmmPositionParams {
   swapSlippageBps: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  directSwapEstimate: DirectSwapEstimate;
+  directSwapEstimate: DlmmDirectEstimateResult;
   maxAccounts?: number;
 }
 
@@ -341,13 +385,6 @@ export interface RebalanceDlmmPositionResponse {
   };
 }
 
-export interface EstimateBalancedSwapThroughJupiterAndDlmmParams {
-  lbPairAddress: PublicKey;
-  tokenXAmount: BN;
-  tokenYAmount: BN;
-  slippage: number;
-}
-
 export interface GetZapInDlmmIndirectParams {
   user: PublicKey;
   lbPair: PublicKey;
@@ -359,9 +396,9 @@ export interface GetZapInDlmmIndirectParams {
   strategy: StrategyType;
   favorXInActiveId: boolean;
   maxAccounts: number;
-  slippageBps: number;
+  swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
-  indirectSwapEstimate: IndirectSwapEstimate;
+  indirectSwapEstimate: DlmmIndirectSwapEstimateResult;
   singleSided?: DlmmSingleSided;
 }
 
@@ -376,9 +413,9 @@ export interface GetZapInDlmmDirectParams {
   strategy: StrategyType;
   favorXInActiveId: boolean;
   maxAccounts: number;
-  slippageBps: number;
+  swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
-  directSwapEstimate: DirectSwapEstimate;
+  directSwapEstimate: DlmmDirectEstimateResult;
   singleSided?: DlmmSingleSided;
 }
 

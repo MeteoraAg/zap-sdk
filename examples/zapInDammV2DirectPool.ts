@@ -51,8 +51,6 @@ async function main() {
   // return;
 
   const positionNftMint = new PublicKey("ENTER POSITION NFT MINT");
-  const position = derivePositionAddress(positionNftMint);
-  const positionNftAccount = derivePositionNftAccount(positionNftMint);
 
   const usdcDecimal = 6; // USDC has 6 decimals
   const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
@@ -89,8 +87,7 @@ async function main() {
     inputTokenMint: usdcMint,
     amountIn: amountUseToAddLiquidity,
     pool,
-    position,
-    positionNftAccount,
+    positionNftMint,
     maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps
     maxAccounts: 40,
     maxTransferAmountExtendPercentage: 20,

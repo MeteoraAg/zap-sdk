@@ -33,11 +33,10 @@ async function main() {
 
   const zap = new Zap(connection);
   const dlmm = await DLMM.create(connection, dlmmPool);
-  const isTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
   const binDelta = 34;
-  const directSwapEstimate = await estimateDlmmDirectSwap({
-    tokenAmount: amountUseToAddLiquidity,
-    isInputTokenX: isTokenX,
+  const estimate = await estimateDlmmDirectSwap({
+    amountIn: amountUseToAddLiquidity,
+    inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,
     connection,
     swapSlippageBps: SWAP_SLIPPAGE_BPS,
@@ -48,18 +47,12 @@ async function main() {
 
   const result = await zap.getZapInDlmmDirectParams({
     user: user.publicKey,
-    lbPair: dlmmPool,
-    inputTokenMint: inputTokenMint,
-    amountIn: amountUseToAddLiquidity,
-    directSwapEstimate,
+    directSwapEstimate: estimate.result,
     maxActiveBinSlippage: 50,
-    minDeltaId: -binDelta,
-    maxDeltaId: binDelta,
-    strategy: StrategyType.Spot,
     favorXInActiveId: false,
     maxAccounts: 50,
-    slippageBps: SWAP_SLIPPAGE_BPS,
     maxTransferAmountExtendPercentage: 0,
+    ...estimate.context,
   });
 
   const position = Keypair.generate();

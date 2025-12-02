@@ -66,6 +66,8 @@ import {
   MEMO_PROGRAM_ID,
 } from "./constants";
 import {
+  derivePositionAddress,
+  derivePositionNftAccount,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
   getTokenDecimals,
@@ -431,8 +433,7 @@ export class Zap {
    * @param params.pool - The pool's public key
    * @param params.amountIn - The amount of input token
    * @param params.inputTokenMint - The input token mint
-   * @param params.position - The position's public key
-   * @param params.positionNftAccount - The position NFT account's public key
+   * @param params.positionNftMint - The position NFT mint account's public key
    * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
    * @param params.slippageBps - The swap slippage tolerance in basis points
@@ -451,8 +452,7 @@ export class Zap {
       pool,
       inputTokenMint,
       amountIn,
-      position,
-      positionNftAccount,
+      positionNftMint,
       maxAccounts,
       maxSqrtPriceChangeBps,
       slippageBps,
@@ -470,16 +470,18 @@ export class Zap {
       tokenBFlag,
     } = poolState;
 
-    const tokenAProgram = getTokenProgram(tokenAFlag);
-    const tokenBProgram = getTokenProgram(tokenBFlag);
-
-    const preInstructions: TransactionInstruction[] = [];
-
     invariant(
       inputTokenMint.equals(tokenAMint) || inputTokenMint.equals(tokenBMint),
       "Invalid input token mint"
     );
 
+    const position = derivePositionAddress(positionNftMint);
+    const positionNftAccount = derivePositionNftAccount(positionNftMint);
+
+    const tokenAProgram = getTokenProgram(tokenAFlag);
+    const tokenBProgram = getTokenProgram(tokenBFlag);
+
+    const preInstructions: TransactionInstruction[] = [];
     if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
       const { ataPubkey: userWrapSolAcc, ix: initializeUserWrapSOLAta } =
         await getOrCreateATAInstruction(
@@ -634,8 +636,7 @@ export class Zap {
    * @param params.pool - The pool's public key
    * @param params.amountIn - The amount of input token
    * @param params.inputTokenMint - The input token mint
-   * @param params.position - The position's public key
-   * @param params.positionNftAccount - The position NFT account's public key
+   * @param params.positionNftMint - The position NFT mint account's public key
    * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
    * @param params.slippageBps - The swap slippage tolerance in basis points
@@ -653,8 +654,7 @@ export class Zap {
       user,
       inputTokenMint,
       pool,
-      position,
-      positionNftAccount,
+      positionNftMint,
       amountIn,
       maxAccounts,
       maxSqrtPriceChangeBps,
@@ -677,6 +677,9 @@ export class Zap {
       !inputTokenMint.equals(tokenAMint) && !inputTokenMint.equals(tokenBMint),
       "Invalid input token mint"
     );
+
+    const position = derivePositionAddress(positionNftMint);
+    const positionNftAccount = derivePositionNftAccount(positionNftMint);
 
     const tokenAProgram = getTokenProgram(tokenAFlag);
     const tokenBProgram = getTokenProgram(tokenBFlag);
@@ -1114,7 +1117,7 @@ export class Zap {
    * @param params.strategy - The liquidity distribution strategy
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
    * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
-   * @param params.slippageBps - The swap slippage tolerance in basis points
+   * @param params.swapSlippageBps - The swap slippage tolerance in basis points
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @param params.maxActiveBinSlippage - The maximum active bin slippage
    * @param params.directSwapEstimate - The result from the direct swap estimate
@@ -1135,7 +1138,7 @@ export class Zap {
       strategy,
       favorXInActiveId,
       maxAccounts,
-      slippageBps,
+      swapSlippageBps,
       maxTransferAmountExtendPercentage,
       maxActiveBinSlippage,
       directSwapEstimate,
@@ -1192,7 +1195,7 @@ export class Zap {
             : tokenXMint,
           directSwapEstimate.swapAmount,
           maxAccounts,
-          slippageBps
+          swapSlippageBps
         );
         swapTransactions.push(swapTx);
       } else {
@@ -1306,7 +1309,7 @@ export class Zap {
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
    * @param params.indirectSwapEstimate - The result from the indirect swap estimate
    * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
-   * @param params.slippageBps - The swap slippage tolerance in basis points
+   * @param params.swapSlippageBps - The swap slippage tolerance in basis points
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @param params.maxActiveBinSlippage - The maximum active bin slippage
    * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
@@ -1327,7 +1330,7 @@ export class Zap {
       favorXInActiveId,
       indirectSwapEstimate,
       maxAccounts,
-      slippageBps,
+      swapSlippageBps,
       maxTransferAmountExtendPercentage,
       maxActiveBinSlippage,
       singleSided,
@@ -1392,7 +1395,7 @@ export class Zap {
           tokenXMint,
           swapAmountToXInLamports,
           maxAccounts,
-          slippageBps
+          swapSlippageBps
         );
       swapTransactions.push(swapToXTransaction);
     }
@@ -1408,7 +1411,7 @@ export class Zap {
           tokenYMint,
           swapAmountToYInLamports,
           maxAccounts,
-          slippageBps
+          swapSlippageBps
         );
       swapTransactions.push(swapToYTransaction);
     }
@@ -1743,8 +1746,8 @@ export class Zap {
     params: RebalanceDlmmPositionParams
   ): Promise<RebalanceDlmmPositionResponse> {
     const {
-      lbPairAddress,
-      positionAddress,
+      lbPair,
+      position,
       user,
       minDeltaId,
       maxDeltaId,
@@ -1756,8 +1759,8 @@ export class Zap {
       maxAccounts = 50,
     } = params;
 
-    const dlmm = await DLMM.create(this.connection, lbPairAddress);
-    const position = await dlmm.getPosition(positionAddress);
+    const dlmm = await DLMM.create(this.connection, lbPair);
+    const userPosition = await dlmm.getPosition(position);
     const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
 
     const [
@@ -1799,8 +1802,8 @@ export class Zap {
     );
     const { rebalancePosition, simulationResult } =
       await dlmm.simulateRebalancePosition(
-        positionAddress,
-        position.positionData,
+        position,
+        userPosition.positionData,
         true,
         true,
         [
@@ -1818,8 +1821,8 @@ export class Zap {
         ],
         [
           {
-            minBinId: new BN(position.positionData.lowerBinId),
-            maxBinId: new BN(position.positionData.upperBinId),
+            minBinId: new BN(userPosition.positionData.lowerBinId),
+            maxBinId: new BN(userPosition.positionData.upperBinId),
             bps: new BN(BASIS_POINT_MAX), // remove all liquidity
           },
         ]
@@ -1852,8 +1855,8 @@ export class Zap {
     }
 
     // swap tokens to balance if needed
-    const tokenXAmount = new BN(position.positionData.totalXAmount);
-    const tokenYAmount = new BN(position.positionData.totalYAmount);
+    const tokenXAmount = new BN(userPosition.positionData.totalXAmount);
+    const tokenYAmount = new BN(userPosition.positionData.totalYAmount);
     let swapTransaction: Transaction | undefined;
     if (
       directSwapEstimate.swapType !== DlmmSwapType.NoSwap &&
@@ -1882,7 +1885,7 @@ export class Zap {
           outToken: swapForY ? dlmm.lbPair.tokenYMint : dlmm.lbPair.tokenXMint,
           inAmount: directSwapEstimate.swapAmount,
           minOutAmount: directSwapEstimate.expectedOutput,
-          lbPair: lbPairAddress,
+          lbPair,
           user,
           binArraysPubkey: binArrays.map((item) => item.publicKey),
         });
@@ -1973,7 +1976,7 @@ export class Zap {
     ledgerTransaction.add(...updateLedgerYTx.instructions);
 
     const binArrays = getBinArraysRequiredByPositionRange(
-      lbPairAddress,
+      lbPair,
       new BN(dlmm.lbPair.activeId + minDeltaId),
       new BN(dlmm.lbPair.activeId + maxDeltaId),
       DLMM_PROGRAM_ID
@@ -1986,7 +1989,7 @@ export class Zap {
     const { remainingAccountsInfo: remainingAccountInfo } =
       await getDlmmRemainingAccounts(
         this.connection,
-        lbPairAddress,
+        lbPair,
         user,
         userTokenX,
         userTokenY,
@@ -1997,8 +2000,8 @@ export class Zap {
     // build zap in transaction with compute budget
     const zapInTransaction = await this.zapInDlmmForInitializedPosition({
       user,
-      lbPair: lbPairAddress,
-      position: positionAddress,
+      lbPair,
+      position,
       activeId: dlmm.lbPair.activeId,
       minDeltaId,
       maxDeltaId,
