@@ -437,8 +437,8 @@ export class Zap {
    * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
    * @param params.slippageBps - The swap slippage tolerance in basis points
-   * @param params.dammV2Quote - The DAMM V2 swap quote
-   * @param params.jupiterQuote - The Jupiter swap quote
+   * @param params.dammV2Quote - The DAMM V2 swap quote for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
+   * @param params.jupiterQuote - The Jupiter swap quote for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @returns The zap-in transaction parameters for a DAMM V2 direct pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
@@ -640,8 +640,8 @@ export class Zap {
    * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
    * @param params.slippageBps - The swap slippage tolerance in basis points
-   * @param params.jupiterQuoteToA - The Jupiter quote for swapping to tokenA
-   * @param params.jupiterQuoteToB - The Jupiter quote for swapping to tokenB
+   * @param params.jupiterQuoteToA - The Jupiter quote for swapping to tokenA for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
+   * @param params.jupiterQuoteToB - The Jupiter quote for swapping to tokenB for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @returns The zap-in transaction parameters for a DAMM V2 indirect pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
