@@ -955,7 +955,7 @@ export async function estimateDlmmDirectSwap({
     "Input token must be tokenX or tokenY for direct route"
   );
 
-  const isInputTokenX = inputTokenMint === dlmm.lbPair.tokenXMint;
+  const isInputTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
   const tokenXAmount = isInputTokenX ? amountIn : new BN(0);
   const tokenYAmount = isInputTokenX ? new BN(0) : amountIn;
 
