@@ -723,32 +723,6 @@ export class Zap {
     );
 
     if (jupiterQuoteToA && jupiterQuoteToB === null) {
-      const priceA = convertLamportsToUiAmount(
-        new Decimal(jupiterQuoteToA.outAmount),
-        tokenADecimal
-      );
-      const tokenAToBRate = getPriceFromSqrtPrice(
-        poolState.sqrtPrice,
-        tokenADecimal,
-        tokenBDecimal
-      );
-      const priceB = priceA.mul(tokenAToBRate);
-      const swapAmountToA = calculateIndirectPoolSwapAmount(
-        amountIn,
-        inputTokenDecimal,
-        priceA,
-        priceB,
-        convertLamportsToUiAmount(
-          new Decimal(poolBalanceTokenA.toString()),
-          tokenADecimal
-        ),
-        convertLamportsToUiAmount(
-          new Decimal(poolBalanceTokenB.toString()),
-          tokenBDecimal
-        )
-      );
-      const swapAmountToB = amountIn.sub(swapAmountToA);
-
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
@@ -784,8 +758,8 @@ export class Zap {
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
         swapInEstimate: {
-          inAmountA: swapAmountToA,
-          inAmountB: swapAmountToB,
+          inAmountA: amountIn,
+          inAmountB: new BN(0),
           routeA: ZapInDammV2PoolSwapRoute.Jupiter,
           routeB: ZapInDammV2PoolSwapRoute.DammV2,
         },
@@ -793,32 +767,6 @@ export class Zap {
     }
 
     if (jupiterQuoteToB && jupiterQuoteToA === null) {
-      const priceB = convertLamportsToUiAmount(
-        new Decimal(jupiterQuoteToB.outAmount),
-        tokenBDecimal
-      );
-      const tokenAToBRate = getPriceFromSqrtPrice(
-        poolState.sqrtPrice,
-        tokenADecimal,
-        tokenBDecimal
-      );
-      const priceA = priceB.div(tokenAToBRate);
-      const swapAmountToA = calculateIndirectPoolSwapAmount(
-        amountIn,
-        inputTokenDecimal,
-        priceA,
-        priceB,
-        convertLamportsToUiAmount(
-          new Decimal(poolBalanceTokenA.toString()),
-          tokenADecimal
-        ),
-        convertLamportsToUiAmount(
-          new Decimal(poolBalanceTokenB.toString()),
-          tokenBDecimal
-        )
-      );
-      const swapAmountToB = amountIn.sub(swapAmountToA);
-
       const { transaction: swapTransaction } =
         await buildJupiterSwapTransaction(
           user,
@@ -854,8 +802,8 @@ export class Zap {
         swapTransactions: [swapTransaction],
         cleanUpInstructions,
         swapInEstimate: {
-          inAmountA: swapAmountToA,
-          inAmountB: swapAmountToB,
+          inAmountA: new BN(0),
+          inAmountB: amountIn,
           routeA: ZapInDammV2PoolSwapRoute.DammV2,
           routeB: ZapInDammV2PoolSwapRoute.Jupiter,
         },
