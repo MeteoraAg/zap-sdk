@@ -349,7 +349,7 @@ function binarySearchRefineDirectSwapAmount(
  * @param params.minDeltaId - Minimum bin delta from active bin
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
- * @param params.singleSided - If provided, swaps all input to the specified token (X or Y) instead of balancing
+ * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
  * @returns IndirectSwapEstimate with swap details and post-swap token amounts
  * @throws if inputTokenMint matches any token in the DLMM pool
  * @throws if failed to get Jupiter swap quote
@@ -932,7 +932,7 @@ async function estimateDlmmDirectSwapCore({
  * @param params.minDeltaId - Minimum bin delta from active bin
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
- * @param params.singleSided - If provided, swaps all input to the specified token (X or Y) instead of balancing
+ * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */

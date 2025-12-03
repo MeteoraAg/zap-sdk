@@ -133,7 +133,7 @@ export interface JupiterSwapInstructionResponse {
 
 export type ProgramStrategyType = IdlTypes<Zap>["strategyType"];
 
-//#region ZapIn Types
+//#region Zap In Types
 
 export type GetZapInDammV2DirectPoolParams = {
   user: PublicKey;
@@ -477,4 +477,4 @@ export type ZapInDlmmResponse = {
   cleanUpTransaction: Transaction;
 };
 
-//#endregion ZapIn Types
+//#endregion Zap In Types

@@ -2,7 +2,6 @@ import {
   AccountMeta,
   ComputeBudgetProgram,
   Connection,
-  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -445,6 +444,7 @@ export class Zap {
    * @returns The zap-in transaction parameters for a DAMM V2 direct pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
    * @throws if failed to get both Jupiter and DAMM v2 swap quotes
+   * @throws if fail to get jupiter quote or jupiter swap instruction
    */
   async getZapInDammV2DirectPoolParams(
     params: GetZapInDammV2DirectPoolParams
@@ -666,6 +666,7 @@ export class Zap {
    * @returns The zap-in transaction parameters for a DAMM V2 indirect pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
    * @throws if no Jupiter quote provided for both tokens
+   * @throws if fail to get jupiter quote or jupiter swap instruction
    */
   async getZapInDammV2IndirectPoolParams(
     params: GetZapInDammV2IndirectPoolParams
@@ -1144,6 +1145,7 @@ export class Zap {
    * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
    * @returns The zap-in transaction parameters for a DLMM direct pool
    * @throws if input token mint does not match either tokenX or tokenY in the pool
+   * @throws if fail to get jupiter quote or jupiter swap instruction
    */
   async getZapInDlmmDirectParams(
     params: GetZapInDlmmDirectParams
@@ -1335,6 +1337,7 @@ export class Zap {
    * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
    * @returns The zap-in transaction parameters for a DLMM indirect pool
    * @throws if input token mint matches either tokenX or tokenY in the pool
+   * @throws if fail to get jupiter quote or jupiter swap instruction
    */
   async getZapInDlmmIndirectParams(
     params: GetZapInDlmmIndirectParams
@@ -1761,6 +1764,7 @@ export class Zap {
    * @param params.directSwapEstimate - The estimate of the direct swap operation
    * @param params.maxAccounts - The maximum number of accounts to use for the swap operation
    * @returns Response containing transactions and estimation details
+   * @throws if fail to get jupiter quote or jupiter swap instruction
    */
   async rebalanceDlmmPosition(
     params: RebalanceDlmmPositionParams
