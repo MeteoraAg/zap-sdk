@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/zap.json`.
  */
 export type Zap = {
-  address: "TzaptpzVczx3Q3rwujjXdhx1HFBXLP7UApACiqWujtA";
+  address: "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz";
   metadata: {
     name: "zap";
     version: "0.2.0";
@@ -333,7 +333,7 @@ export type Zap = {
           name: "position";
           docs: [
             "user position",
-            "Check it is different from owner to advoid user to pass owner address wrongly"
+            "Check it is different from owner to avoid user to pass owner address wrongly"
           ];
           writable: true;
           signer: true;
@@ -508,6 +508,16 @@ export type Zap = {
       code: 6006;
       name: "exceededSlippage";
       msg: "Exceeded slippage tolerance";
+    },
+    {
+      code: 6007;
+      name: "invalidDlmmZapInParameters";
+      msg: "Invalid dlmm zap in parameters";
+    },
+    {
+      code: 6008;
+      name: "unsupportedFeeMode";
+      msg: "Unsupported fee mode";
     }
   ];
   types: [
