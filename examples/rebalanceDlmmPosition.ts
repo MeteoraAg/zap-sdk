@@ -1,7 +1,7 @@
 import DLMM, { StrategyType } from "@meteora-ag/dlmm";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
-import { binDeltaToMinMaxBinId, estimateDirectSwap, Zap } from "../src";
+import { estimateDlmmRebalanceSwap, Zap } from "../src";
 import Decimal from "decimal.js";
 import BN from "bn.js";
 import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
@@ -28,10 +28,8 @@ async function main() {
   const dlmm = await DLMM.create(connection, dlmmPool);
 
   // const activeBin = await dlmm.getActiveBin();
-  // const { minBinId, maxBinId } = binDeltaToMinMaxBinId(
-  //   binDelta,
-  //   activeBin.binId
-  // );
+  // const minBinId = activeBin.binId - binDelta;
+  // const maxBinId = activeBin.binId + binDelta;
   // const isTokenX = usdcMint.equals(dlmm.lbPair.tokenXMint);
   // const amountToAddLiquidity = new BN(5).mul(new BN(10 ** 6)); // 5 USDC
   // const newPosition = Keypair.generate();
@@ -64,29 +62,23 @@ async function main() {
   const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
 
   const zap = new Zap(connection);
-  const position = await dlmm.getPosition(positionAddress);
 
-  const tokenXAmount = new BN(position.positionData.totalXAmount);
-  const tokenYAmount = new BN(position.positionData.totalYAmount);
-
-  const directSwapEstimate = await estimateDirectSwap(
-    tokenXAmount,
-    tokenYAmount,
-    dlmm,
-    SWAP_SLIPPAGE_BPS,
-    binDelta,
-    StrategyType.Spot
-  );
+  const estimate = await estimateDlmmRebalanceSwap({
+    lbPair: dlmmPool,
+    position: positionAddress,
+    connection,
+    swapSlippageBps: SWAP_SLIPPAGE_BPS,
+    minDeltaId: -binDelta,
+    maxDeltaId: binDelta,
+    strategy: StrategyType.Spot,
+  });
 
   const result = await zap.rebalanceDlmmPosition({
-    lbPairAddress: dlmmPool,
-    positionAddress,
     user: user.publicKey,
-    binDelta,
     liquiditySlippageBps: 50,
-    strategy: StrategyType.Spot,
     favorXInActiveId: false,
-    directSwapEstimate,
+    directSwapEstimate: estimate.result,
+    ...estimate.context,
   });
 
   // return;
@@ -114,9 +106,14 @@ async function main() {
     finalTx.push(result.setupTransaction);
   }
 
-  for (const removeLiquidityTx of result.removeLiquidityTransactions) {
-    finalTx.push(removeLiquidityTx);
+  if (result.initBinArrayTransaction) {
+    finalTx.push(result.initBinArrayTransaction);
   }
+
+  if (result.rebalancePositionTransaction) {
+    finalTx.push(result.rebalancePositionTransaction);
+  }
+
   if (result.swapTransaction) {
     finalTx.push(result.swapTransaction);
   }

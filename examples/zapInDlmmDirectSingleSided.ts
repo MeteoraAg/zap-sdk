@@ -6,52 +6,60 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
-import { Zap, estimateDlmmIndirectSwap } from "../src";
+import { estimateDlmmDirectSwap, Zap, DlmmSingleSided } from "../src";
 import Decimal from "decimal.js";
-import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
 import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
-const keypairPath = "";
-
 const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
-(async () => {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
-  // const user = getKeypairFromSeed(process.env.SEED_PHRASE!);
-  const user = Keypair.fromSecretKey(Uint8Array.from([]));
-  // MET-USDC pool
-  const dlmmPool = new PublicKey(
-    "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd"
-  );
-  const inputTokenMint = NATIVE_MINT;
+const SEED_PHRASE = process.env.SEED_PHRASE!;
 
-  const amountUseToAddLiquidity = new BN(0.001 * LAMPORTS_PER_SOL);
+async function main() {
+  const connection = new Connection("https://api.mainnet-beta.solana.com");
+  // const user = getKeypairFromSeed(SEED_PHRASE);
+  const user = Keypair.fromSecretKey(Uint8Array.from([]));
+  // PUMP-SOL (x = PUMP, y = SOL)
+  const dlmmPool = new PublicKey(
+    "HbjYfcWZBjCBYTJpZkLGxqArVmZVu3mQcRudb6Wg1sVh"
+  );
+  const inputTokenMint = new PublicKey(
+    "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn"
+  );
+  const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
 
   const zap = new Zap(connection);
-
   const dlmm = await DLMM.create(connection, dlmmPool);
-  const binDelta = 34;
-  const estimate = await estimateDlmmIndirectSwap({
+  const binDelta = 68;
+  const isInputTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
+  const singleSided = DlmmSingleSided.Y; // SOL
+  // @ts-ignore this is intentional
+  const isSingleSidedX = singleSided === DlmmSingleSided.X;
+  const minDeltaId = isSingleSidedX ? 0 : -binDelta;
+  const maxDeltaId = isSingleSidedX ? binDelta : 0;
+  const favorXInActiveId = isSingleSidedX;
+
+  const estimate = await estimateDlmmDirectSwap({
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,
     connection,
     swapSlippageBps: SWAP_SLIPPAGE_BPS,
-    minDeltaId: -binDelta,
-    maxDeltaId: binDelta,
+    minDeltaId,
+    maxDeltaId,
     strategy: StrategyType.Spot,
+    singleSided,
   });
 
-  const result = await zap.getZapInDlmmIndirectParams({
+  const result = await zap.getZapInDlmmDirectParams({
     user: user.publicKey,
     maxActiveBinSlippage: 50,
-    favorXInActiveId: false,
-    indirectSwapEstimate: estimate.result,
+    favorXInActiveId,
     maxAccounts: 50,
     maxTransferAmountExtendPercentage: 0,
+    directSwapEstimate: estimate.result,
     ...estimate.context,
   });
 
@@ -60,8 +68,6 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
     ...result,
     position: position.publicKey,
   });
-
-  // return;
 
   const finalTx = [];
   const res: { landed50: number } = (await fetch(
@@ -122,8 +128,10 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
   // return;
 
-  console.log("Sending zap transaction...");
+  console.log("Sending single-sided zap transaction (X only)...");
   const jitoBundleResult = await sendJitoBundle(finalTx, JITO_PRIVATE_KEY);
   console.log(jitoBundleResult);
   console.log(`Zap bundle sent: ${jitoBundleResult?.result}`);
-})();
+}
+
+main();

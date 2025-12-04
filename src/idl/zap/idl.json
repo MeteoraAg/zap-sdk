@@ -1,5 +1,5 @@
 {
-  "address": "TzaptpzVczx3Q3rwujjXdhx1HFBXLP7UApACiqWujtA",
+  "address": "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz",
   "metadata": {
     "name": "zap",
     "version": "0.2.0",
@@ -327,7 +327,7 @@
           "name": "position",
           "docs": [
             "user position",
-            "Check it is different from owner to advoid user to pass owner address wrongly"
+            "Check it is different from owner to avoid user to pass owner address wrongly"
           ],
           "writable": true,
           "signer": true
@@ -392,8 +392,12 @@
       ],
       "args": [
         {
-          "name": "bin_delta",
-          "type": "u8"
+          "name": "min_delta_id",
+          "type": "i32"
+        },
+        {
+          "name": "max_delta_id",
+          "type": "i32"
         },
         {
           "name": "active_id",
@@ -498,6 +502,16 @@
       "code": 6006,
       "name": "ExceededSlippage",
       "msg": "Exceeded slippage tolerance"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidDlmmZapInParameters",
+      "msg": "Invalid dlmm zap in parameters"
+    },
+    {
+      "code": 6008,
+      "name": "UnsupportedFeeMode",
+      "msg": "Unsupported fee mode"
     }
   ],
   "types": [

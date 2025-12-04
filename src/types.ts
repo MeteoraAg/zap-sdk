@@ -1,6 +1,7 @@
 import { Program, IdlTypes } from "@coral-xyz/anchor";
 import {
   AccountMeta,
+  Connection,
   PublicKey,
   Transaction,
   TransactionInstruction,
@@ -132,13 +133,14 @@ export interface JupiterSwapInstructionResponse {
 
 export type ProgramStrategyType = IdlTypes<Zap>["strategyType"];
 
+//#region Zap In Types
+
 export type GetZapInDammV2DirectPoolParams = {
   user: PublicKey;
   inputTokenMint: PublicKey;
-  amountIn: Decimal;
+  amountIn: BN;
   pool: PublicKey;
-  position: PublicKey;
-  positionNftAccount: PublicKey;
+  positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
   maxAccounts: number;
@@ -150,17 +152,16 @@ export type GetZapInDammV2DirectPoolParams = {
     minSwapOutAmount: BN;
     totalFee: BN;
     priceImpact: Decimal;
-  };
+  } | null;
   jupiterQuote: JupiterQuoteResponse | null;
 };
 
-export type GetZapInDammV2InDirectPoolParams = {
+export type GetZapInDammV2IndirectPoolParams = {
   user: PublicKey;
   inputTokenMint: PublicKey;
-  amountIn: Decimal;
+  amountIn: BN;
   pool: PublicKey;
-  position: PublicKey;
-  positionNftAccount: PublicKey;
+  positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
   maxAccounts: number;
@@ -168,6 +169,11 @@ export type GetZapInDammV2InDirectPoolParams = {
   jupiterQuoteToA: JupiterQuoteResponse | null;
   jupiterQuoteToB: JupiterQuoteResponse | null;
 };
+
+export enum ZapInDammV2PoolSwapRoute {
+  Jupiter = "jupiter",
+  DammV2 = "dammV2",
+}
 
 export type ZapInDammV2DirectPoolParam = {
   user: PublicKey;
@@ -189,6 +195,10 @@ export type ZapInDammV2DirectPoolParam = {
   swapTransactions: Transaction[];
   cleanUpInstructions: TransactionInstruction[];
   isTokenA?: boolean;
+  swapInEstimate: {
+    inAmount: BN;
+    route: ZapInDammV2PoolSwapRoute;
+  };
 };
 
 export enum SwapExternalType {
@@ -197,13 +207,19 @@ export enum SwapExternalType {
   swapToBoth,
 }
 
-export type ZapInDammV2InDirectPoolParam = Omit<
+export type ZapInDammV2IndirectPoolParam = Omit<
   ZapInDammV2DirectPoolParam,
-  "maxTransferAmount"
+  "maxTransferAmount" | "swapInEstimate"
 > & {
   swapType: SwapExternalType;
   maxTransferAmountA: BN;
   maxTransferAmountB: BN;
+  swapInEstimate: {
+    inAmountA: BN;
+    inAmountB: BN;
+    routeA: ZapInDammV2PoolSwapRoute;
+    routeB: ZapInDammV2PoolSwapRoute;
+  };
 };
 
 export type ZapInDammV2Response = {
@@ -232,7 +248,35 @@ export enum DlmmSwapType {
   NoSwap,
 }
 
-export interface DirectSwapEstimate {
+export enum DlmmSingleSided {
+  X,
+  Y,
+}
+
+export interface EstimateDlmmDirectSwapParams {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmDirectSwapEstimateContext {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmDirectEstimateResult {
   swapType: DlmmSwapType;
   swapAmount: BN;
   expectedOutput: BN;
@@ -241,7 +285,49 @@ export interface DirectSwapEstimate {
   quote: SwapQuoteResult | null;
 }
 
-export interface IndirectSwapEstimate {
+export interface DlmmDirectSwapEstimate {
+  result: DlmmDirectEstimateResult;
+  context: DlmmDirectSwapEstimateContext;
+}
+
+export interface EstimateDlmmRebalanceSwapParams {
+  position: PublicKey;
+  lbPair: PublicKey;
+  connection: Connection;
+  minDeltaId: number;
+  maxDeltaId: number;
+  swapSlippageBps: number;
+  strategy: StrategyType;
+}
+
+export interface DlmmDirectRebalanceEstimateContext {
+  lbPair: PublicKey;
+  position: PublicKey;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmDirectRebalanceEstimate {
+  result: DlmmDirectEstimateResult;
+  context: DlmmDirectRebalanceEstimateContext;
+}
+
+export interface EstimateDlmmIndirectSwapParams {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmIndirectSwapEstimateResult {
   swapToX: JupiterQuoteResponse | null;
   swapToY: JupiterQuoteResponse | null;
   swapAmountToX: BN;
@@ -250,21 +336,40 @@ export interface IndirectSwapEstimate {
   postSwapY: BN;
 }
 
-///// ZAPIN TYPES /////
+export interface DlmmIndirectSwapEstimateContext {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  lbPair: PublicKey;
+  swapSlippageBps: number;
+  minDeltaId: number;
+  maxDeltaId: number;
+  strategy: StrategyType;
+  singleSided?: DlmmSingleSided;
+}
+
+export interface DlmmIndirectSwapEstimate {
+  result: DlmmIndirectSwapEstimateResult;
+  context: DlmmIndirectSwapEstimateContext;
+}
+
 export interface RebalanceDlmmPositionParams {
-  lbPairAddress: PublicKey;
-  positionAddress: PublicKey;
+  lbPair: PublicKey;
+  position: PublicKey;
   user: PublicKey;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   liquiditySlippageBps: number;
+  swapSlippageBps: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  directSwapEstimate: DirectSwapEstimate;
+  directSwapEstimate: DlmmDirectEstimateResult;
+  maxAccounts?: number;
 }
 
 export interface RebalanceDlmmPositionResponse {
   setupTransaction?: Transaction;
-  removeLiquidityTransactions: Transaction[];
+  initBinArrayTransaction?: Transaction;
+  rebalancePositionTransaction?: Transaction;
   swapTransaction?: Transaction;
   ledgerTransaction: Transaction;
   zapInTransaction: Transaction;
@@ -281,26 +386,21 @@ export interface RebalanceDlmmPositionResponse {
   };
 }
 
-export interface EstimateBalancedSwapThroughJupiterAndDlmmParams {
-  lbPairAddress: PublicKey;
-  tokenXAmount: BN;
-  tokenYAmount: BN;
-  slippage: number;
-}
-
 export interface GetZapInDlmmIndirectParams {
   user: PublicKey;
   lbPair: PublicKey;
   inputTokenMint: PublicKey;
   amountIn: BN;
   maxActiveBinSlippage: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  indirectSwapEstimate: IndirectSwapEstimate;
   maxAccounts: number;
-  slippageBps: number;
+  swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
+  indirectSwapEstimate: DlmmIndirectSwapEstimateResult;
+  singleSided?: DlmmSingleSided;
 }
 
 export interface GetZapInDlmmDirectParams {
@@ -309,13 +409,15 @@ export interface GetZapInDlmmDirectParams {
   inputTokenMint: PublicKey;
   amountIn: BN;
   maxActiveBinSlippage: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
   maxAccounts: number;
-  slippageBps: number;
+  swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
-  directSwapEstimate: DirectSwapEstimate;
+  directSwapEstimate: DlmmDirectEstimateResult;
+  singleSided?: DlmmSingleSided;
 }
 
 export type ZapInDlmmIndirectPoolParam = {
@@ -326,7 +428,8 @@ export type ZapInDlmmIndirectPoolParam = {
   tokenXProgram: PublicKey;
   tokenYProgram: PublicKey;
   activeId: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   maxActiveBinSlippage: number;
   favorXInActiveId: boolean;
   strategy: StrategyType;
@@ -338,6 +441,7 @@ export type ZapInDlmmIndirectPoolParam = {
   binArrays: AccountMeta[];
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
+  singleSided?: DlmmSingleSided;
 };
 
 export type ZapInDlmmDirectPoolParam = {
@@ -348,7 +452,8 @@ export type ZapInDlmmDirectPoolParam = {
   tokenXProgram: PublicKey;
   tokenYProgram: PublicKey;
   activeId: number;
-  binDelta: number;
+  minDeltaId: number;
+  maxDeltaId: number;
   maxActiveBinSlippage: number;
   favorXInActiveId: boolean;
   strategy: StrategyType;
@@ -361,6 +466,7 @@ export type ZapInDlmmDirectPoolParam = {
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
   isTokenX: boolean;
+  singleSided?: DlmmSingleSided;
 };
 
 export type ZapInDlmmResponse = {
@@ -370,3 +476,5 @@ export type ZapInDlmmResponse = {
   zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 };
+
+//#endregion Zap In Types
