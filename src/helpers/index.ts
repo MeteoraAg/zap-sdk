@@ -5,3 +5,4 @@ export * from "./common";
 export * from "./token";
 export * from "./dlmm";
 export * from "./token2022";
+export * from "./zapin/dlmmSwapCalculations";

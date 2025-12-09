@@ -1,12 +1,9 @@
 import {
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
-  getAccount,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
   TOKEN_PROGRAM_ID,
-  TokenAccountNotFoundError,
-  TokenInvalidAccountOwnerError,
 } from "@solana/spl-token";
 import {
   Connection,
@@ -90,7 +87,15 @@ export async function getTokenAccountBalance(
   connection: Connection,
   tokenAccount: PublicKey
 ): Promise<string> {
-  return (await connection.getTokenAccountBalance(tokenAccount)).value.amount;
+  let balance: string;
+  try {
+    balance = (await connection.getTokenAccountBalance(tokenAccount)).value
+      .amount;
+  } catch {
+    balance = "0";
+  }
+
+  return balance;
 }
 
 /**
@@ -125,4 +130,25 @@ export function wrapSOLInstruction(
       programId: tokenProgram,
     }),
   ];
+}
+
+// SPL Token program CloseAccount instruction discriminator. Variant 9 in TokenInstruction enum
+// https://github.com/solana-labs/solana-program-library/blob/d72289c79/token/js/src/instructions/types.ts#L12
+const CLOSE_ACCOUNT_DISCRIMINATOR = 9;
+
+/**
+ * Filters out SPL Token CloseAccount instructions from a list of instructions.
+ * helpful when building transactions that need to keep temporary token accounts open
+ * @param instructions - Array of transaction instructions to filter
+ * @returns Filtered array with CloseAccount instructions removed
+ */
+export function filterOutCloseSplTokenAccountInstructions(
+  instructions: TransactionInstruction[]
+): TransactionInstruction[] {
+  return instructions.filter((ix) => {
+    if (ix.programId.equals(TOKEN_PROGRAM_ID)) {
+      return ix.data[0] !== CLOSE_ACCOUNT_DISCRIMINATOR;
+    }
+    return true;
+  });
 }

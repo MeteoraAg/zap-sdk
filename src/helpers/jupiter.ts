@@ -1,6 +1,14 @@
-import { PublicKey } from "@solana/web3.js";
+import {
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import BN from "bn.js";
-import { JupiterQuoteResponse, JupiterSwapInstructionResponse } from "../types";
+import {
+  JupiterInstruction,
+  JupiterQuoteResponse,
+  JupiterSwapInstructionResponse,
+} from "../types";
 
 export async function getJupiterQuote(
   inputMint: PublicKey,
@@ -13,7 +21,7 @@ export async function getJupiterQuote(
   restrictIntermediateTokens: boolean,
   apiUrl: string = "https://lite-api.jup.ag",
   apiKey?: string
-): Promise<JupiterQuoteResponse> {
+): Promise<JupiterQuoteResponse | null> {
   const params = new URLSearchParams({
     inputMint: inputMint.toString(),
     outputMint: outputMint.toString(),
@@ -38,8 +46,9 @@ export async function getJupiterQuote(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
+    // const errorText = await response.text();
+    // throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
+    return null;
   }
 
   const result = (await response.json()) as JupiterQuoteResponse;
@@ -80,4 +89,52 @@ export async function getJupiterSwapInstruction(
   const result = (await response.json()) as JupiterSwapInstructionResponse;
 
   return result;
+}
+
+export async function buildJupiterSwapTransaction(
+  user: PublicKey,
+  inputMint: PublicKey,
+  outputMint: PublicKey,
+  amount: BN,
+  maxAccounts: number,
+  slippageBps: number
+): Promise<{
+  transaction: Transaction;
+  quoteResponse: JupiterQuoteResponse;
+}> {
+  const quoteResponse = await getJupiterQuote(
+    inputMint,
+    outputMint,
+    amount,
+    maxAccounts,
+    slippageBps,
+    false,
+    true,
+    true,
+    "https://lite-api.jup.ag"
+  );
+
+  if (!quoteResponse) {
+    throw new Error(
+      `Failed to get Jupiter quote for swap from ${inputMint.toBase58()} to ${outputMint.toBase58()}`
+    );
+  }
+
+  const swapInstructionResponse = await getJupiterSwapInstruction(
+    user,
+    quoteResponse
+  );
+  const instruction = new TransactionInstruction({
+    keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {
+      return {
+        pubkey: new PublicKey(item.pubkey),
+        isSigner: item.isSigner,
+        isWritable: item.isWritable,
+      };
+    }),
+    programId: new PublicKey(swapInstructionResponse.swapInstruction.programId),
+    data: Buffer.from(swapInstructionResponse.swapInstruction.data, "base64"),
+  });
+
+  return { transaction: new Transaction().add(instruction), quoteResponse };
 }

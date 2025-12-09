@@ -17,8 +17,10 @@ import DLMM, {
   deriveBinArrayBitmapExtension,
   deriveOracle,
   deriveEventAuthority,
+  StrategyType,
 } from "@meteora-ag/dlmm";
 import { getExtraAccountMetasForTransferHook } from "./token2022";
+import { ProgramStrategyType } from "../types";
 
 export async function getLbPairState(
   connection: Connection,
@@ -342,4 +344,19 @@ export function createDlmmSwapPayload(
     sliceCount,
     slicesData,
   ]);
+}
+
+export function toProgramStrategyType(
+  strategy: StrategyType
+): ProgramStrategyType {
+  switch (strategy) {
+    case StrategyType.Spot:
+      return { spot: {} };
+    case StrategyType.Curve:
+      return { curve: {} };
+    case StrategyType.BidAsk:
+      return { bidAsk: {} };
+    default:
+      throw new Error(`Unknown strategy: ${strategy}`);
+  }
 }
