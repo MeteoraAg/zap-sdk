@@ -235,12 +235,19 @@ export enum DlmmDirectSwapQuoteRoute {
   Dlmm,
 }
 
-export interface SwapQuoteResult {
-  inAmount: BN;
-  outAmount: BN;
-  route: DlmmDirectSwapQuoteRoute;
-  originalQuote: JupiterQuoteResponse | SwapQuote;
-}
+export type SwapQuoteResult =
+  | {
+      inAmount: BN;
+      outAmount: BN;
+      route: DlmmDirectSwapQuoteRoute.Jupiter;
+      originalQuote: JupiterQuoteResponse;
+    }
+  | {
+      inAmount: BN;
+      outAmount: BN;
+      route: DlmmDirectSwapQuoteRoute.Dlmm;
+      originalQuote: SwapQuote;
+    };
 
 export enum DlmmSwapType {
   XToY,

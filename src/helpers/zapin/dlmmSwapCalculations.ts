@@ -165,7 +165,7 @@ async function getBestSwapQuoteJupiterDlmm(
     ? {
         inAmount: new BN(jupiterQuoteResult.inAmount),
         outAmount: new BN(jupiterQuoteResult.outAmount),
-        route: DlmmDirectSwapQuoteRoute.Jupiter,
+        route: DlmmDirectSwapQuoteRoute.Jupiter as const,
         originalQuote: jupiterQuoteResult,
       }
     : null;
@@ -173,7 +173,7 @@ async function getBestSwapQuoteJupiterDlmm(
     ? {
         inAmount: dlmmQuoteResult.consumedInAmount,
         outAmount: dlmmQuoteResult.minOutAmount,
-        route: DlmmDirectSwapQuoteRoute.Dlmm,
+        route: DlmmDirectSwapQuoteRoute.Dlmm as const,
         originalQuote: dlmmQuoteResult,
       }
     : null;

@@ -18,7 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Security
 
-## [1.1.0] - 2025-12-04
+## [1.1.1] - [PR #24](https://github.com/MeteoraAg/zap-sdk/pull/24)
+
+### Fixed
+
+- Properly handle network errors in `getJupiterQuote` and `getJupiterSwapInstruction`
+- Reuse estimate quote in `buildJupiterSwapTransaction` instead of fetching new one where possible, which is all dlmm zap in
+
+## [1.1.0] - [PR #18](https://github.com/MeteoraAg/zap-sdk/pull/18)
 
 ### Added
 
@@ -33,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - `estimateDlmmIndirectSwap` function. It calculates the swap amounts for indirect route zap-in to achieve balanced token amounts for the position.
 - `estimateDlmmRebalanceSwap` function. It calculates the swap amount for position rebalancing to achieve balanced token amounts.
 
-## [1.0.4] - 2025-08-14
+## [1.0.4] - [PR #14](https://github.com/MeteoraAg/zap-sdk/pull/14)
 
 ### Added
 

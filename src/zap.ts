@@ -1217,7 +1217,8 @@ export class Zap {
             : tokenXMint,
           directSwapEstimate.swapAmount,
           maxAccounts,
-          swapSlippageBps
+          swapSlippageBps,
+          swapQuote.originalQuote
         );
         swapTransactions.push(swapTx);
       } else {
@@ -1418,7 +1419,8 @@ export class Zap {
           tokenXMint,
           swapAmountToXInLamports,
           maxAccounts,
-          swapSlippageBps
+          swapSlippageBps,
+          indirectSwapEstimate.swapToX
         );
       swapTransactions.push(swapToXTransaction);
     }
@@ -1434,7 +1436,8 @@ export class Zap {
           tokenYMint,
           swapAmountToYInLamports,
           maxAccounts,
-          swapSlippageBps
+          swapSlippageBps,
+          indirectSwapEstimate.swapToY
         );
       swapTransactions.push(swapToYTransaction);
     }
@@ -1898,7 +1901,8 @@ export class Zap {
             : dlmm.lbPair.tokenXMint,
           directSwapEstimate.swapAmount,
           maxAccounts,
-          swapSlippageBps
+          swapSlippageBps,
+          swapQuote.originalQuote
         );
         swapTransaction = swapTx;
       } else {
