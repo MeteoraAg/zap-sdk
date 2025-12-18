@@ -105,12 +105,15 @@ export async function buildJupiterSwapTransaction(
   outputMint: PublicKey,
   amount: BN,
   maxAccounts: number,
-  slippageBps: number
+  slippageBps: number,
+  jupiterQuoteResponse?: JupiterQuoteResponse
 ): Promise<{
   transaction: Transaction;
   quoteResponse: JupiterQuoteResponse;
 }> {
-  const quoteResponse = await getJupiterQuote(
+  const quoteResponse =
+    jupiterQuoteResponse ??
+    (await getJupiterQuote(
       inputMint,
       outputMint,
       amount,
@@ -120,7 +123,7 @@ export async function buildJupiterSwapTransaction(
       true,
       true,
       "https://lite-api.jup.ag"
-  );
+    ));
 
   if (!quoteResponse) {
     throw new Error(

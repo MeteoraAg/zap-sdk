@@ -22,7 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
-- fix `getJupiterQuote` and `getJupiterSwapInstruction` not properly handling `fetch` function throwing when network error happens (not 4xx/5xx)
+- Properly handle network errors in `getJupiterQuote` and `getJupiterSwapInstruction`
+- Reuse estimate quote in `buildJupiterSwapTransaction` instead of fetching new one where possible, which is all dlmm zap in
 
 ## [1.1.0] - 2025-12-04
 
