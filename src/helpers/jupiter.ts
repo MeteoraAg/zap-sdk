@@ -35,19 +35,22 @@ export async function getJupiterQuote(
 
   const url = `${apiUrl}/swap/v1/quote?${params.toString()}`;
 
-  console.log(url);
+  let response = null;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        ...(apiKey ? { "x-api-key": apiKey } : {}),
+      },
+    });
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...(apiKey ? { "x-api-key": apiKey } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    // const errorText = await response.text();
-    // throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
+    if (!response.ok) {
+      // const errorText = await response.text();
+      // throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
+      return null;
+    }
+  } catch (error) {
     return null;
   }
 
@@ -69,21 +72,26 @@ export async function getJupiterSwapInstruction(
     quoteResponse,
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(apiKey ? { "x-api-key": apiKey } : {}),
-    },
-    body: JSON.stringify(requestBody),
-  });
+  let response = null;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(apiKey ? { "x-api-key": apiKey } : {}),
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Jupiter swap instruction failed (${response.status}): ${errorText}`
-    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Jupiter swap instruction failed (${response.status}): ${errorText}`
+      );
+    }
+  } catch (error) {
+    throw new Error(`Jupiter swap instruction failed to fetch`);
   }
 
   const result = (await response.json()) as JupiterSwapInstructionResponse;
@@ -103,15 +111,15 @@ export async function buildJupiterSwapTransaction(
   quoteResponse: JupiterQuoteResponse;
 }> {
   const quoteResponse = await getJupiterQuote(
-    inputMint,
-    outputMint,
-    amount,
-    maxAccounts,
-    slippageBps,
-    false,
-    true,
-    true,
-    "https://lite-api.jup.ag"
+      inputMint,
+      outputMint,
+      amount,
+      maxAccounts,
+      slippageBps,
+      false,
+      true,
+      true,
+      "https://lite-api.jup.ag"
   );
 
   if (!quoteResponse) {

@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [1.1.1]
 
+### Fixed
+
+- fix `getJupiterQuote` and `getJupiterSwapInstruction` not properly handling `fetch` function throwing when network error happens (not 4xx/5xx)
+
 ## [1.1.0] - 2025-12-04
 
 ### Added
