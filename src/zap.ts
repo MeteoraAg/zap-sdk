@@ -1964,27 +1964,6 @@ export class Zap {
       const initLedgerTx = await this.initializeLedgerAccount(user, user);
       ledgerTransaction.add(...initLedgerTx.instructions);
     }
-    // Wrap SOL if needed before updating ledger
-    if (
-      (dlmm.lbPair.tokenXMint.equals(NATIVE_MINT) &&
-        tokenXAmountAfterSwap.gt(new BN(0))) ||
-      (dlmm.lbPair.tokenYMint.equals(NATIVE_MINT) &&
-        tokenYAmountAfterSwap.gt(new BN(0)))
-    ) {
-      const isTokenXSol = dlmm.lbPair.tokenXMint.equals(NATIVE_MINT);
-      const wrapAmount = BigInt(
-        isTokenXSol
-          ? tokenXAmountAfterSwap.toString()
-          : tokenYAmountAfterSwap.toString()
-      );
-      const wrapIxs = wrapSOLInstruction(
-        user,
-        isTokenXSol ? userTokenX : userTokenY,
-        wrapAmount,
-        isTokenXSol ? tokenXProgram : tokenYProgram
-      );
-      ledgerTransaction.add(...wrapIxs);
-    }
 
     const updateLedgerXTx = await this.updateLedgerBalanceAfterSwap(
       user,
