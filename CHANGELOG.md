@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Security
 
+## [1.1.2]
+
+### Fixed
+
+- Remove unecessary WrapSOL instruction in `rebalanceDlmmPosition` since we already filter out the instruction to close the WSOL account, the SOL will be kept in WSOL form until the end of rebalancing. This unecessary instruction causes the transaction to fail if user has less SOL balance than the calculated SOL after swap.
+
 ## [1.1.1] - [PR #24](https://github.com/MeteoraAg/zap-sdk/pull/24)
 
 ### Fixed
