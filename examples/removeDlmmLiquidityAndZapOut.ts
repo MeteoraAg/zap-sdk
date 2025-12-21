@@ -11,6 +11,7 @@ import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
 import DLMM, { getTokenProgramId } from "@meteora-ag/dlmm";
 import { DLMM_PROGRAM_ID } from "../src";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -29,7 +30,7 @@ async function main() {
     "9NRifL3nKQU84hMTbhE7spakkGy5vq4AvNHNQYr8LkW7"
   );
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
   const dlmm = await DLMM.create(connection, lbPairAddress, {
     cluster: "mainnet-beta",
     programId: new PublicKey(DLMM_PROGRAM_ID),
@@ -124,7 +125,8 @@ async function main() {
         false,
         true,
         true,
-        "https://lite-api.jup.ag"
+        JUPITER_API_URL,
+        JUPITER_API_KEY
       ),
     ]);
 
@@ -196,7 +198,9 @@ async function main() {
     } else if (bestProtocol === "jupiter" && quotes.jupiter) {
       const swapInstructionResponse = await getJupiterSwapInstruction(
         wallet.publicKey,
-        quotes.jupiter
+        quotes.jupiter,
+        JUPITER_API_URL,
+        JUPITER_API_KEY
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({

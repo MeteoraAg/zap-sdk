@@ -270,6 +270,8 @@ export interface EstimateDlmmDirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  jupiterApiUrl?: string;
+  jupiterApiKey?: string;
 }
 
 export interface DlmmDirectSwapEstimateContext {
@@ -305,6 +307,8 @@ export interface EstimateDlmmRebalanceSwapParams {
   maxDeltaId: number;
   swapSlippageBps: number;
   strategy: StrategyType;
+  jupiterApiUrl?: string;
+  jupiterApiKey?: string;
 }
 
 export interface DlmmDirectRebalanceEstimateContext {
@@ -332,6 +336,8 @@ export interface EstimateDlmmIndirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  jupiterApiUrl?: string;
+  jupiterApiKey?: string;
 }
 
 export interface DlmmIndirectSwapEstimateResult {

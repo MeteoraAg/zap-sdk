@@ -10,6 +10,7 @@ import { estimateDlmmDirectSwap, Zap, DlmmSingleSided } from "../src";
 import Decimal from "decimal.js";
 import BN from "bn.js";
 import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
@@ -30,7 +31,7 @@ async function main() {
   );
   const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 68;
   const isInputTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
@@ -51,6 +52,8 @@ async function main() {
     maxDeltaId,
     strategy: StrategyType.Spot,
     singleSided,
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
   });
 
   const result = await zap.getZapInDlmmDirectParams({

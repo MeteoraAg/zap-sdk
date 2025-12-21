@@ -19,8 +19,8 @@ export async function getJupiterQuote(
   dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
-  apiUrl: string = "https://lite-api.jup.ag",
-  apiKey?: string
+  jupiterApiUrl: string = "https://api.jup.ag",
+  jupiterApiKey: string = ""
 ): Promise<JupiterQuoteResponse | null> {
   const params = new URLSearchParams({
     inputMint: inputMint.toString(),
@@ -33,7 +33,7 @@ export async function getJupiterQuote(
     dynamicSlippage: dynamicSlippage.toString(),
   });
 
-  const url = `${apiUrl}/swap/v1/quote?${params.toString()}`;
+  const url = `${jupiterApiUrl}/swap/v1/quote?${params.toString()}`;
 
   let response = null;
   try {
@@ -41,7 +41,7 @@ export async function getJupiterQuote(
       method: "GET",
       headers: {
         Accept: "application/json",
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
+        ...(jupiterApiKey ? { "x-api-key": jupiterApiKey } : {}),
       },
     });
 
@@ -62,10 +62,10 @@ export async function getJupiterQuote(
 export async function getJupiterSwapInstruction(
   userPublicKey: PublicKey,
   quoteResponse: any,
-  apiUrl: string = "https://lite-api.jup.ag",
-  apiKey?: string
+  jupiterApiUrl: string = "https://api.jup.ag",
+  jupiterApiKey: string = ""
 ): Promise<JupiterSwapInstructionResponse> {
-  const url = `${apiUrl}/swap/v1/swap-instructions`;
+  const url = `${jupiterApiUrl}/swap/v1/swap-instructions`;
 
   const requestBody = {
     userPublicKey: userPublicKey.toString(),
@@ -79,7 +79,7 @@ export async function getJupiterSwapInstruction(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
+        ...(jupiterApiKey ? { "x-api-key": jupiterApiKey } : {}),
       },
       body: JSON.stringify(requestBody),
     });
@@ -106,7 +106,9 @@ export async function buildJupiterSwapTransaction(
   amount: BN,
   maxAccounts: number,
   slippageBps: number,
-  jupiterQuoteResponse?: JupiterQuoteResponse
+  jupiterQuoteResponse?: JupiterQuoteResponse,
+  jupiterApiUrl: string = "https://api.jup.ag",
+  jupiterApiKey: string = ""
 ): Promise<{
   transaction: Transaction;
   quoteResponse: JupiterQuoteResponse;
@@ -122,7 +124,8 @@ export async function buildJupiterSwapTransaction(
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      jupiterApiUrl,
+      jupiterApiKey
     ));
 
   if (!quoteResponse) {
@@ -133,7 +136,9 @@ export async function buildJupiterSwapTransaction(
 
   const swapInstructionResponse = await getJupiterSwapInstruction(
     user,
-    quoteResponse
+    quoteResponse,
+    jupiterApiUrl,
+    jupiterApiKey
   );
   const instruction = new TransactionInstruction({
     keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {

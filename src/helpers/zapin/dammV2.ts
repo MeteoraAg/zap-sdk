@@ -91,7 +91,9 @@ export async function getJupAndDammV2Quotes(
   tokenBDecimal: number,
   dammV2SlippageBps: number,
   jupSlippageBps: number,
-  maxAccounts: number
+  maxAccounts: number,
+  jupiterApiUrl: string = "https://api.jup.ag",
+  jupiterApiKey: string = ""
 ): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
@@ -147,7 +149,8 @@ export async function getJupAndDammV2Quotes(
     false,
     true,
     true,
-    "https://lite-api.jup.ag"
+    jupiterApiUrl,
+    jupiterApiKey
   );
   return {
     dammV2Quote,

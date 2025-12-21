@@ -15,6 +15,7 @@ import Decimal from "decimal.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
 import { createJitoTipIx, sendJitoBundle } from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const MAINNET_RPC_URL = "";
 
@@ -58,7 +59,7 @@ const keypairPath = "";
   const usdcDecimal = 6; // USDC has 6 decimals
   const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
 
   const jupiterQuoteToA = await getJupiterQuote(
     NATIVE_MINT,
@@ -69,7 +70,8 @@ const keypairPath = "";
     false,
     true,
     true,
-    "https://lite-api.jup.ag"
+    JUPITER_API_URL,
+    JUPITER_API_KEY
   );
 
   const jupiterQuoteToB = await getJupiterQuote(
@@ -81,7 +83,8 @@ const keypairPath = "";
     false,
     true,
     true,
-    "https://lite-api.jup.ag"
+    JUPITER_API_URL,
+    JUPITER_API_KEY
   );
 
   const result = await zap.getZapInDammV2IndirectPoolParams({
