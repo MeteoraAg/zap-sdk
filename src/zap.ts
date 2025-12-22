@@ -1931,7 +1931,9 @@ export class Zap {
           directSwapEstimate.swapAmount,
           maxAccounts,
           swapSlippageBps,
-          swapQuote.originalQuote
+          swapQuote.originalQuote,
+          this.jupiterApiUrl,
+          this.jupiterApiKey
         );
         swapTransaction = swapTx;
       } else {
