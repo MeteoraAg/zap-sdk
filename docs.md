@@ -128,15 +128,19 @@ const quoteResponse = await getJupiterQuote(
   false,
   true,
   true,
-  "https://api.jup.ag",
-  "YOUR_JUPITER_API_KEY"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
   quoteResponse,
-  "https://api.jup.ag",
-  "YOUR_JUPITER_API_KEY"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 
 const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
@@ -343,8 +347,7 @@ async getJupiterQuote(
   dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
-  jupiterApiUrl: string = "https://api.jup.ag",
-  jupiterApiKey: string = ""
+  config: ZapConfig = {}
 ): Promise<JupiterQuoteResponse | null>
 ```
 
@@ -360,8 +363,12 @@ interface GetJupiterQuoteParams {
   dynamicSlippage: boolean;
   onlyDirectRoutes: boolean;
   restrictIntermediateTokens: boolean;
-  jupiterApiUrl: string;
-  jupiterApiKey: string;
+  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
+}
+
+interface ZapConfig {
+  jupiterApiUrl?: string; // Default: "https://api.jup.ag"
+  jupiterApiKey?: string; // Default: ""
 }
 ```
 
@@ -381,8 +388,10 @@ const quoteResponse = await getJupiterQuote(
   false,
   true,
   true,
-  "https://api.jup.ag",
-  "YOUR_JUPITER_API_KEY"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 ```
 
@@ -403,8 +412,7 @@ Get Jupiter swap instruction from Jupiter API.
 async getJupiterSwapInstruction(
   userPublicKey: PublicKey,
   quoteResponse: any,
-  jupiterApiUrl: string = "https://api.jup.ag",
-  jupiterApiKey: string = ""
+  config: ZapConfig = {}
 ): Promise<JupiterSwapInstructionResponse>
 ```
 
@@ -414,8 +422,12 @@ async getJupiterSwapInstruction(
 interface GetJupiterSwapInstructionParams {
   userPublicKey: PublicKey;
   quoteResponse: any;
-  jupiterApiUrl: string;
-  jupiterApiKey: string;
+  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
+}
+
+interface ZapConfig {
+  jupiterApiUrl?: string; // Default: "https://api.jup.ag"
+  jupiterApiKey?: string; // Default: ""
 }
 ```
 
@@ -435,15 +447,19 @@ const quoteResponse = await getJupiterQuote(
   false,
   true,
   true,
-  "https://api.jup.ag",
-  "YOUR_JUPITER_API_KEY"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
   quoteResponse,
-  "https://api.jup.ag",
-  "YOUR_JUPITER_API_KEY"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 ```
 
