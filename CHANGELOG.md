@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Security
 
-## [1.2.0]
+## [1.2.0] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/27)
 
 ### Added
 
