@@ -30,7 +30,10 @@ async function main() {
     "9NRifL3nKQU84hMTbhE7spakkGy5vq4AvNHNQYr8LkW7"
   );
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
   const dlmm = await DLMM.create(connection, lbPairAddress, {
     cluster: "mainnet-beta",
     programId: new PublicKey(DLMM_PROGRAM_ID),
@@ -125,8 +128,10 @@ async function main() {
         false,
         true,
         true,
-        JUPITER_API_URL,
-        JUPITER_API_KEY
+        {
+          jupiterApiUrl: JUPITER_API_URL,
+          jupiterApiKey: JUPITER_API_KEY,
+        }
       ),
     ]);
 
@@ -199,8 +204,10 @@ async function main() {
       const swapInstructionResponse = await getJupiterSwapInstruction(
         wallet.publicKey,
         quotes.jupiter,
-        JUPITER_API_URL,
-        JUPITER_API_KEY
+        {
+          jupiterApiUrl: JUPITER_API_URL,
+          jupiterApiKey: JUPITER_API_KEY,
+        }
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({

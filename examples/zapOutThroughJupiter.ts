@@ -30,7 +30,10 @@ async function main() {
   const anotherWallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const inputMint = new PublicKey(
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
@@ -52,16 +55,20 @@ async function main() {
       false,
       true,
       true,
-      JUPITER_API_URL,
-      JUPITER_API_KEY
+      {
+        jupiterApiUrl: JUPITER_API_URL,
+        jupiterApiKey: JUPITER_API_KEY,
+      }
     );
 
     console.log("Getting swap instruction from Jupiter API...");
     const swapInstructionResponse = await getJupiterSwapInstruction(
       wallet.publicKey,
       quoteResponse,
-      JUPITER_API_URL,
-      JUPITER_API_KEY
+      {
+        jupiterApiUrl: JUPITER_API_URL,
+        jupiterApiKey: JUPITER_API_KEY,
+      }
     );
     // console.log(swapInstructionResponse);
     const { blockhash } = await connection.getLatestBlockhash();

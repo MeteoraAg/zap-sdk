@@ -32,7 +32,10 @@ async function main() {
   );
   const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const estimate = await estimateDlmmDirectSwap({
@@ -44,8 +47,10 @@ async function main() {
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
-    jupiterApiUrl: JUPITER_API_URL,
-    jupiterApiKey: JUPITER_API_KEY,
+    config: {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    },
   });
 
   const result = await zap.getZapInDlmmDirectParams({

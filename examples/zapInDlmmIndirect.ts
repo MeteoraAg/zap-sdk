@@ -31,7 +31,10 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
   const amountUseToAddLiquidity = new BN(0.001 * LAMPORTS_PER_SOL);
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
@@ -44,8 +47,10 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
-    jupiterApiUrl: JUPITER_API_URL,
-    jupiterApiKey: JUPITER_API_KEY,
+    config: {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    },
   });
 
   const result = await zap.getZapInDlmmIndirectParams({

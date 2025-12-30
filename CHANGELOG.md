@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Changed
 
 - Replace `lite-api.jup.ag` with `api.jup.ag` as the default Jupiter API endpoint
-- Add optional `jupiterApiUrl` and `jupiterApiKey` parameters to `Zap` class constructor and all Jupiter-related helper functions (`getJupiterQuote`, `getJupiterSwapInstruction`, `buildJupiterSwapTransaction`, `getJupAndDammV2Quotes`, `estimateDlmmIndirectSwap`, `estimateDlmmDirectSwap`, `estimateDlmmRebalanceSwap`) for explicit API configuration
+- Add optional `config.jupiterApiUrl` and `config.jupiterApiKey` parameters to `Zap` class constructor and all Jupiter-related helper functions (`getJupiterQuote`, `getJupiterSwapInstruction`, `buildJupiterSwapTransaction`, `getJupAndDammV2Quotes`, `estimateDlmmIndirectSwap`, `estimateDlmmDirectSwap`, `estimateDlmmRebalanceSwap`) for explicit API configuration
 
 ## [1.1.2] - [PR #26](https://github.com/MeteoraAg/zap-sdk/pull/26)
 
