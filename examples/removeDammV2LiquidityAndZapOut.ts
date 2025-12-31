@@ -36,7 +36,10 @@ async function main() {
     "7ccKzmrXBpFHwyZGPqPuKL6bEyWAETSnHwnWe3jEneVc"
   );
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
   const cpAmm = new CpAmm(connection);
 
   try {
@@ -137,8 +140,10 @@ async function main() {
         false,
         true,
         true,
-        JUPITER_API_URL,
-        JUPITER_API_KEY
+        {
+          jupiterApiUrl: JUPITER_API_URL,
+          jupiterApiKey: JUPITER_API_KEY,
+        }
       ),
     ]);
 
@@ -211,8 +216,10 @@ async function main() {
       const swapInstructionResponse = await getJupiterSwapInstruction(
         wallet.publicKey,
         quotes.jupiter,
-        JUPITER_API_URL,
-        JUPITER_API_KEY
+        {
+          jupiterApiUrl: JUPITER_API_URL,
+          jupiterApiKey: JUPITER_API_KEY,
+        }
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({

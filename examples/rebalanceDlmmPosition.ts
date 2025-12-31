@@ -62,7 +62,10 @@ async function main() {
 
   const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const estimate = await estimateDlmmRebalanceSwap({
     lbPair: dlmmPool,
@@ -72,8 +75,10 @@ async function main() {
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
-    jupiterApiUrl: JUPITER_API_URL,
-    jupiterApiKey: JUPITER_API_KEY,
+    config: {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    },
   });
 
   const result = await zap.rebalanceDlmmPosition({

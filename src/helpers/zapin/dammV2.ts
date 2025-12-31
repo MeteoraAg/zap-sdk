@@ -4,7 +4,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
-import { JupiterQuoteResponse } from "../../types";
+import { JupiterQuoteResponse, ZapConfig } from "../../types";
 import {
   convertUiAmountToLamports,
   convertLamportsToUiAmount,
@@ -92,8 +92,7 @@ export async function getJupAndDammV2Quotes(
   dammV2SlippageBps: number,
   jupSlippageBps: number,
   maxAccounts: number,
-  jupiterApiUrl: string = "https://api.jup.ag",
-  jupiterApiKey: string = ""
+  config: ZapConfig = {}
 ): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
@@ -149,8 +148,7 @@ export async function getJupAndDammV2Quotes(
     false,
     true,
     true,
-    jupiterApiUrl,
-    jupiterApiKey
+    config
   );
   return {
     dammV2Quote,

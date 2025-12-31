@@ -53,3 +53,5 @@ export const AMOUNT_IN_DAMM_V2_OFFSET = 8;
 export const DAMM_V2_SWAP_DISCRIMINATOR = [
   248, 198, 158, 145, 225, 117, 135, 200,
 ];
+
+export const DEFAULT_JUPITER_API_URL = "https://api.jup.ag";

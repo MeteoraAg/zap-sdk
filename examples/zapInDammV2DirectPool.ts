@@ -56,7 +56,10 @@ async function main() {
   const usdcDecimal = 6; // USDC has 6 decimals
   const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
 
-  const zap = new Zap(connection, JUPITER_API_URL, JUPITER_API_KEY);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const { tokenAMint, tokenBMint } = poolState;
 
@@ -81,8 +84,10 @@ async function main() {
     300, //dammV2SlippageBps: 300,
     300, // jup slippageBps:
     40, // maxAccounts
-    JUPITER_API_URL,
-    JUPITER_API_KEY
+    {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    }
   );
 
   const result = await zap.getZapInDammV2DirectPoolParams({

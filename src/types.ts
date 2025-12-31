@@ -17,6 +17,11 @@ import {
 
 export type ZapProgram = Program<Zap>;
 
+export type ZapConfig = {
+  jupiterApiUrl?: string;
+  jupiterApiKey?: string;
+};
+
 ///// ZAPOUT TYPES /////
 export type ZapOutParameters = IdlTypes<Zap>["zapOutParameters"];
 
@@ -270,8 +275,7 @@ export interface EstimateDlmmDirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
-  jupiterApiUrl?: string;
-  jupiterApiKey?: string;
+  config?: ZapConfig;
 }
 
 export interface DlmmDirectSwapEstimateContext {
@@ -307,8 +311,7 @@ export interface EstimateDlmmRebalanceSwapParams {
   maxDeltaId: number;
   swapSlippageBps: number;
   strategy: StrategyType;
-  jupiterApiUrl?: string;
-  jupiterApiKey?: string;
+  config?: ZapConfig;
 }
 
 export interface DlmmDirectRebalanceEstimateContext {
@@ -336,8 +339,7 @@ export interface EstimateDlmmIndirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
-  jupiterApiUrl?: string;
-  jupiterApiKey?: string;
+  config?: ZapConfig;
 }
 
 export interface DlmmIndirectSwapEstimateResult {
