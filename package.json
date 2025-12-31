@@ -1,6 +1,6 @@
 {
   "name": "@meteora-ag/zap-sdk",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "A Typescript SDK for interacting with the Zap program on Meteora.",
   "main": "dist/index.cjs",
   "module": "dist/index.js",

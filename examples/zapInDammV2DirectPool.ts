@@ -12,6 +12,7 @@ import { getJupAndDammV2Quotes } from "../src/helpers/zapin";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { createJitoTipIx, sendJitoBundle } from "./helpers";
 import BN from "bn.js";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const MAINNET_RPC_URL = "";
 
@@ -55,7 +56,10 @@ async function main() {
   const usdcDecimal = 6; // USDC has 6 decimals
   const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const { tokenAMint, tokenBMint } = poolState;
 
@@ -79,7 +83,11 @@ async function main() {
     tokenBDecimal,
     300, //dammV2SlippageBps: 300,
     300, // jup slippageBps:
-    40 // maxAccounts
+    40, // maxAccounts
+    {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    }
   );
 
   const result = await zap.getZapInDammV2DirectPoolParams({

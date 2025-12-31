@@ -34,6 +34,7 @@ import {
   DlmmDirectSwapQuoteRoute,
   DlmmSingleSided,
   ZapInDammV2PoolSwapRoute,
+  ZapConfig,
 } from "./types";
 
 import {
@@ -61,6 +62,7 @@ import {
   AMOUNT_IN_DLMM_OFFSET,
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   DAMM_V2_PROGRAM_ID,
+  DEFAULT_JUPITER_API_URL,
   DLMM_PROGRAM_ID,
   JUP_V6_PROGRAM_ID,
   MEMO_PROGRAM_ID,
@@ -101,10 +103,18 @@ import {
 
 export class Zap {
   private connection: Connection;
+  private jupiterApiUrl: string;
+  private jupiterApiKey: string;
   public zapProgram: ZapProgram;
-  constructor(connection: Connection) {
+  /**
+   * @param connection - The connection to the Solana cluster
+   * @param config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
+   */
+  constructor(connection: Connection, config: ZapConfig = {}) {
     this.connection = connection;
     this.zapProgram = new Program(ZapIDL as ZapTypes, { connection });
+    this.jupiterApiUrl = config.jupiterApiUrl || DEFAULT_JUPITER_API_URL;
+    this.jupiterApiKey = config.jupiterApiKey || "";
   }
 
   /////// PRIVATE FUNDTIONS //////
@@ -578,7 +588,12 @@ export class Zap {
         tokenAMint.equals(inputTokenMint) ? tokenBMint : tokenAMint,
         swapInAmount,
         maxAccounts,
-        slippageBps
+        slippageBps,
+        undefined,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+        }
       );
       swapTransactions = [result.transaction];
       maxTransferAmount = getExtendMaxAmountTransfer(
@@ -775,7 +790,12 @@ export class Zap {
           tokenAMint,
           amountIn,
           maxAccounts,
-          slippageBps
+          slippageBps,
+          undefined,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
 
       return {
@@ -819,7 +839,12 @@ export class Zap {
           tokenBMint,
           amountIn,
           maxAccounts,
-          slippageBps
+          slippageBps,
+          undefined,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
 
       return {
@@ -890,7 +915,12 @@ export class Zap {
           tokenAMint,
           swapAmountToA,
           maxAccounts,
-          slippageBps
+          slippageBps,
+          undefined,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
 
       const { transaction: swapToBTransaction, quoteResponse: swapToBQuote } =
@@ -900,7 +930,12 @@ export class Zap {
           tokenBMint,
           swapAmountToB,
           maxAccounts,
-          slippageBps
+          slippageBps,
+          undefined,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
       return {
         user,
@@ -1218,7 +1253,11 @@ export class Zap {
           directSwapEstimate.swapAmount,
           maxAccounts,
           swapSlippageBps,
-          swapQuote.originalQuote
+          swapQuote.originalQuote,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
         swapTransactions.push(swapTx);
       } else {
@@ -1420,7 +1459,11 @@ export class Zap {
           swapAmountToXInLamports,
           maxAccounts,
           swapSlippageBps,
-          indirectSwapEstimate.swapToX
+          indirectSwapEstimate.swapToX,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
       swapTransactions.push(swapToXTransaction);
     }
@@ -1437,7 +1480,11 @@ export class Zap {
           swapAmountToYInLamports,
           maxAccounts,
           swapSlippageBps,
-          indirectSwapEstimate.swapToY
+          indirectSwapEstimate.swapToY,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
       swapTransactions.push(swapToYTransaction);
     }
@@ -1902,7 +1949,11 @@ export class Zap {
           directSwapEstimate.swapAmount,
           maxAccounts,
           swapSlippageBps,
-          swapQuote.originalQuote
+          swapQuote.originalQuote,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          }
         );
         swapTransaction = swapTx;
       } else {

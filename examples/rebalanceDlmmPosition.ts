@@ -5,6 +5,7 @@ import { estimateDlmmRebalanceSwap, Zap } from "../src";
 import Decimal from "decimal.js";
 import BN from "bn.js";
 import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
@@ -61,7 +62,10 @@ async function main() {
 
   const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const estimate = await estimateDlmmRebalanceSwap({
     lbPair: dlmmPool,
@@ -71,6 +75,10 @@ async function main() {
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
+    config: {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    },
   });
 
   const result = await zap.rebalanceDlmmPosition({

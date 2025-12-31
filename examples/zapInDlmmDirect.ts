@@ -11,6 +11,7 @@ import Decimal from "decimal.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
 import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
@@ -31,7 +32,10 @@ async function main() {
   );
   const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const estimate = await estimateDlmmDirectSwap({
@@ -43,6 +47,10 @@ async function main() {
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
+    config: {
+      jupiterApiUrl: JUPITER_API_URL,
+      jupiterApiKey: JUPITER_API_KEY,
+    },
   });
 
   const result = await zap.getZapInDlmmDirectParams({

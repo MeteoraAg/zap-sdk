@@ -17,6 +17,7 @@ import {
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { JUPITER_API_URL, JUPITER_API_KEY } from "./constants";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -35,7 +36,10 @@ async function main() {
     "7ccKzmrXBpFHwyZGPqPuKL6bEyWAETSnHwnWe3jEneVc"
   );
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
   const cpAmm = new CpAmm(connection);
 
   try {
@@ -136,7 +140,10 @@ async function main() {
         false,
         true,
         true,
-        "https://lite-api.jup.ag"
+        {
+          jupiterApiUrl: JUPITER_API_URL,
+          jupiterApiKey: JUPITER_API_KEY,
+        }
       ),
     ]);
 
@@ -208,7 +215,11 @@ async function main() {
     } else if (bestProtocol === "jupiter" && quotes.jupiter) {
       const swapInstructionResponse = await getJupiterSwapInstruction(
         wallet.publicKey,
-        quotes.jupiter
+        quotes.jupiter,
+        {
+          jupiterApiUrl: JUPITER_API_URL,
+          jupiterApiKey: JUPITER_API_KEY,
+        }
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({

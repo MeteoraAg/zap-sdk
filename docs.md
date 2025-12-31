@@ -125,15 +125,22 @@ const quoteResponse = await getJupiterQuote(
   swapAmount,
   40,
   50,
+  false,
   true,
   true,
-  true,
-  "https://lite-api.jup.ag"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
-  quoteResponse
+  quoteResponse,
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 
 const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
@@ -340,9 +347,8 @@ async getJupiterQuote(
   dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
-  apiUrl: string = "https://lite-api.jup.ag",
-  apiKey?: string
-): Promise<JupiterQuoteResponse>
+  config: ZapConfig = {}
+): Promise<JupiterQuoteResponse | null>
 ```
 
 #### Parameters
@@ -354,11 +360,15 @@ interface GetJupiterQuoteParams {
   amount: BN;
   maxAccounts: number;
   slippageBps: number;
-  dynamicSlippage: boolean = false;
+  dynamicSlippage: boolean;
   onlyDirectRoutes: boolean;
   restrictIntermediateTokens: boolean;
-  apiUrl: string = "https://lite-api.jup.ag";
-  apiKey?: string;
+  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
+}
+
+interface ZapConfig {
+  jupiterApiUrl?: string; // Default: "https://api.jup.ag"
+  jupiterApiKey?: string; // Default: ""
 }
 ```
 
@@ -375,10 +385,13 @@ const quoteResponse = await getJupiterQuote(
   new BN(1000000000),
   40,
   50,
+  false,
   true,
   true,
-  true,
-  "https://lite-api.jup.ag"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 ```
 
@@ -398,9 +411,8 @@ Get Jupiter swap instruction from Jupiter API.
 ```typescript
 async getJupiterSwapInstruction(
   userPublicKey: PublicKey,
-  quoteResponse: JupiterQuoteResponse,
-  apiUrl: string = "https://lite-api.jup.ag",
-  apiKey?: string
+  quoteResponse: any,
+  config: ZapConfig = {}
 ): Promise<JupiterSwapInstructionResponse>
 ```
 
@@ -408,10 +420,14 @@ async getJupiterSwapInstruction(
 
 ```typescript
 interface GetJupiterSwapInstructionParams {
-  inputMint: PublicKey;
-  quoteResponse: JupiterQuoteResponse;
-  apiUrl: string = "https://lite-api.jup.ag";
-  apiKey?: string;
+  userPublicKey: PublicKey;
+  quoteResponse: any;
+  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
+}
+
+interface ZapConfig {
+  jupiterApiUrl?: string; // Default: "https://api.jup.ag"
+  jupiterApiKey?: string; // Default: ""
 }
 ```
 
@@ -428,16 +444,22 @@ const quoteResponse = await getJupiterQuote(
   new BN(1000000000),
   40,
   50,
+  false,
   true,
   true,
-  true,
-  "https://lite-api.jup.ag"
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
-  quoteResponse
-  apiUrl: "https://lite-api.jup.ag",
+  quoteResponse,
+  {
+    jupiterApiUrl: "https://api.jup.ag",
+    jupiterApiKey: "YOUR_JUPITER_API_KEY"
+  }
 );
 ```
 

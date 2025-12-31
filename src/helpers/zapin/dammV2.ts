@@ -4,7 +4,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
-import { JupiterQuoteResponse } from "../../types";
+import { JupiterQuoteResponse, ZapConfig } from "../../types";
 import {
   convertUiAmountToLamports,
   convertLamportsToUiAmount,
@@ -91,7 +91,8 @@ export async function getJupAndDammV2Quotes(
   tokenBDecimal: number,
   dammV2SlippageBps: number,
   jupSlippageBps: number,
-  maxAccounts: number
+  maxAccounts: number,
+  config: ZapConfig = {}
 ): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
@@ -147,7 +148,7 @@ export async function getJupAndDammV2Quotes(
     false,
     true,
     true,
-    "https://lite-api.jup.ag"
+    config
   );
   return {
     dammV2Quote,

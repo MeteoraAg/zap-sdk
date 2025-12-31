@@ -8,7 +8,9 @@ import {
   JupiterInstruction,
   JupiterQuoteResponse,
   JupiterSwapInstructionResponse,
+  ZapConfig,
 } from "../types";
+import { DEFAULT_JUPITER_API_URL } from "../constants";
 
 export async function getJupiterQuote(
   inputMint: PublicKey,
@@ -19,8 +21,7 @@ export async function getJupiterQuote(
   dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
-  apiUrl: string = "https://lite-api.jup.ag",
-  apiKey?: string
+  config: ZapConfig = {}
 ): Promise<JupiterQuoteResponse | null> {
   const params = new URLSearchParams({
     inputMint: inputMint.toString(),
@@ -33,7 +34,9 @@ export async function getJupiterQuote(
     dynamicSlippage: dynamicSlippage.toString(),
   });
 
-  const url = `${apiUrl}/swap/v1/quote?${params.toString()}`;
+  const url = `${
+    config.jupiterApiUrl || DEFAULT_JUPITER_API_URL
+  }/swap/v1/quote?${params.toString()}`;
 
   let response = null;
   try {
@@ -41,7 +44,7 @@ export async function getJupiterQuote(
       method: "GET",
       headers: {
         Accept: "application/json",
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
+        ...(config.jupiterApiKey ? { "x-api-key": config.jupiterApiKey } : {}),
       },
     });
 
@@ -62,10 +65,11 @@ export async function getJupiterQuote(
 export async function getJupiterSwapInstruction(
   userPublicKey: PublicKey,
   quoteResponse: any,
-  apiUrl: string = "https://lite-api.jup.ag",
-  apiKey?: string
+  config: ZapConfig = {}
 ): Promise<JupiterSwapInstructionResponse> {
-  const url = `${apiUrl}/swap/v1/swap-instructions`;
+  const url = `${
+    config.jupiterApiUrl || DEFAULT_JUPITER_API_URL
+  }/swap/v1/swap-instructions`;
 
   const requestBody = {
     userPublicKey: userPublicKey.toString(),
@@ -79,7 +83,7 @@ export async function getJupiterSwapInstruction(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        ...(apiKey ? { "x-api-key": apiKey } : {}),
+        ...(config.jupiterApiKey ? { "x-api-key": config.jupiterApiKey } : {}),
       },
       body: JSON.stringify(requestBody),
     });
@@ -106,7 +110,8 @@ export async function buildJupiterSwapTransaction(
   amount: BN,
   maxAccounts: number,
   slippageBps: number,
-  jupiterQuoteResponse?: JupiterQuoteResponse
+  jupiterQuoteResponse?: JupiterQuoteResponse,
+  config: ZapConfig = {}
 ): Promise<{
   transaction: Transaction;
   quoteResponse: JupiterQuoteResponse;
@@ -122,7 +127,7 @@ export async function buildJupiterSwapTransaction(
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      config
     ));
 
   if (!quoteResponse) {
@@ -133,7 +138,8 @@ export async function buildJupiterSwapTransaction(
 
   const swapInstructionResponse = await getJupiterSwapInstruction(
     user,
-    quoteResponse
+    quoteResponse,
+    config
   );
   const instruction = new TransactionInstruction({
     keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {

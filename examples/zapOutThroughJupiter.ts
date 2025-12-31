@@ -19,6 +19,7 @@ import {
   NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
@@ -29,7 +30,10 @@ async function main() {
   const anotherWallet = Keypair.fromSecretKey(Uint8Array.from([]));
   console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
-  const zap = new Zap(connection);
+  const zap = new Zap(connection, {
+    jupiterApiUrl: JUPITER_API_URL,
+    jupiterApiKey: JUPITER_API_KEY,
+  });
 
   const inputMint = new PublicKey(
     "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
@@ -51,13 +55,20 @@ async function main() {
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      {
+        jupiterApiUrl: JUPITER_API_URL,
+        jupiterApiKey: JUPITER_API_KEY,
+      }
     );
 
     console.log("Getting swap instruction from Jupiter API...");
     const swapInstructionResponse = await getJupiterSwapInstruction(
       wallet.publicKey,
-      quoteResponse
+      quoteResponse,
+      {
+        jupiterApiUrl: JUPITER_API_URL,
+        jupiterApiKey: JUPITER_API_KEY,
+      }
     );
     // console.log(swapInstructionResponse);
     const { blockhash } = await connection.getLatestBlockhash();

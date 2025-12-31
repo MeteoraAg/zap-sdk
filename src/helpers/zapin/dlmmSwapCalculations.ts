@@ -17,6 +17,7 @@ import {
   DlmmDirectRebalanceEstimate,
   DlmmDirectSwapEstimate,
   DlmmDirectEstimateResult,
+  ZapConfig,
 } from "../../types";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
@@ -46,6 +47,7 @@ interface EstimateDlmmDirectSwapCoreParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  config?: ZapConfig;
 }
 
 function getBinAmountDistribution(
@@ -134,7 +136,8 @@ async function getBestSwapQuoteJupiterDlmm(
   inAmount: BN,
   swapSlippageBps: number,
   swapForY: boolean,
-  binArrays: BinArrayAccount[]
+  binArrays: BinArrayAccount[],
+  config: ZapConfig = {}
 ): Promise<SwapQuoteResult | null> {
   let dlmmQuoteResult = null;
   try {
@@ -157,7 +160,7 @@ async function getBestSwapQuoteJupiterDlmm(
     false,
     true,
     true,
-    "https://lite-api.jup.ag"
+    config
   );
 
   // normalizing the quote interface
@@ -350,6 +353,7 @@ function binarySearchRefineDirectSwapAmount(
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
  * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+ * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns IndirectSwapEstimate with swap details and post-swap token amounts
  * @throws if inputTokenMint matches any token in the DLMM pool
  * @throws if failed to get Jupiter swap quote
@@ -364,6 +368,7 @@ export async function estimateDlmmIndirectSwap({
   maxDeltaId,
   strategy,
   singleSided,
+  config = {},
 }: EstimateDlmmIndirectSwapParams): Promise<DlmmIndirectSwapEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
   const activeBin = await dlmm.getActiveBin();
@@ -399,7 +404,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      config
     );
 
     if (!quote) {
@@ -434,7 +439,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      config
     ),
     getJupiterQuote(
       inputTokenMint,
@@ -445,7 +450,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      config
     ),
   ]);
 
@@ -576,7 +581,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      config
     ),
     getJupiterQuote(
       inputTokenMint,
@@ -587,7 +592,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      "https://lite-api.jup.ag"
+      config
     ),
   ]);
 
@@ -645,6 +650,7 @@ async function estimateDlmmDirectSwapCore({
   maxDeltaId,
   strategy,
   singleSided,
+  config = {},
 }: EstimateDlmmDirectSwapCoreParams): Promise<DlmmDirectEstimateResult> {
   if (singleSided !== undefined) {
     // swap all input to target token
@@ -662,7 +668,8 @@ async function estimateDlmmDirectSwapCore({
         tokenYAmount,
         swapSlippageBps,
         swapForY,
-        binArrayForSwap
+        binArrayForSwap,
+        config
       );
 
       if (!quote) {
@@ -692,7 +699,8 @@ async function estimateDlmmDirectSwapCore({
         tokenXAmount,
         swapSlippageBps,
         swapForY,
-        binArrayForSwap
+        binArrayForSwap,
+        config
       );
 
       if (!quote) {
@@ -808,7 +816,8 @@ async function estimateDlmmDirectSwapCore({
     initialSwapAmount,
     swapSlippageBps,
     swapForY,
-    binArrayForSwap
+    binArrayForSwap,
+    config
   );
 
   if (!initialQuote) {
@@ -883,7 +892,8 @@ async function estimateDlmmDirectSwapCore({
     refinedAmount,
     swapSlippageBps,
     swapForY,
-    binArrayForSwap
+    binArrayForSwap,
+    config
   );
 
   if (!finalQuote) {
@@ -933,6 +943,7 @@ async function estimateDlmmDirectSwapCore({
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
  * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+ * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */
@@ -946,6 +957,7 @@ export async function estimateDlmmDirectSwap({
   maxDeltaId,
   strategy,
   singleSided,
+  config = {},
 }: EstimateDlmmDirectSwapParams): Promise<DlmmDirectSwapEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
 
@@ -968,6 +980,7 @@ export async function estimateDlmmDirectSwap({
     maxDeltaId,
     strategy,
     singleSided,
+    config,
   });
 
   return {
@@ -999,6 +1012,7 @@ export async function estimateDlmmDirectSwap({
  * @param params.minDeltaId - Minimum bin delta from active bin
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
+ * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */
@@ -1010,6 +1024,7 @@ export async function estimateDlmmRebalanceSwap({
   minDeltaId,
   maxDeltaId,
   strategy,
+  config = {},
 }: EstimateDlmmRebalanceSwapParams): Promise<DlmmDirectRebalanceEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
   const userPosition = await dlmm.getPosition(position);
@@ -1023,6 +1038,7 @@ export async function estimateDlmmRebalanceSwap({
     maxDeltaId,
     strategy,
     singleSided: undefined, // rebalance does not use single-sided deposits
+    config,
   });
 
   return {
