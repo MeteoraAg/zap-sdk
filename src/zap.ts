@@ -908,6 +908,104 @@ export class Zap {
 
       const swapAmountToB = amountIn.sub(swapAmountToA);
 
+      if (swapAmountToB.isZero()) {
+        const { transaction: swapTransaction } =
+          await buildJupiterSwapTransaction(
+            user,
+            inputTokenMint,
+            tokenAMint,
+            amountIn,
+            maxAccounts,
+            slippageBps,
+            undefined,
+            {
+              jupiterApiUrl: this.jupiterApiUrl,
+              jupiterApiKey: this.jupiterApiKey,
+            }
+          );
+
+        return {
+          user,
+          pool,
+          position,
+          positionNftAccount,
+          maxSqrtPriceChangeBps,
+          amount: new BN(0),
+          isDirectPool: false,
+          tokenAMint,
+          tokenBMint,
+          tokenAVault,
+          tokenBVault,
+          tokenAProgram,
+          tokenBProgram,
+          maxTransferAmountA: getExtendMaxAmountTransfer(
+            jupiterQuoteToA.outAmount,
+            maxTransferAmountExtendPercentage
+          ),
+          swapType: SwapExternalType.swapToA,
+          maxTransferAmountB: new BN(0),
+          preSqrtPrice: poolState.sqrtPrice,
+          preInstructions,
+          swapTransactions: [swapTransaction],
+          cleanUpInstructions,
+          swapInEstimate: {
+            inAmountA: amountIn,
+            inAmountB: new BN(0),
+            routeA: ZapInDammV2PoolSwapRoute.Jupiter,
+            routeB: ZapInDammV2PoolSwapRoute.DammV2,
+          },
+        };
+      }
+
+      if (swapAmountToA.isZero()) {
+        const { transaction: swapTransaction } =
+          await buildJupiterSwapTransaction(
+            user,
+            inputTokenMint,
+            tokenBMint,
+            amountIn,
+            maxAccounts,
+            slippageBps,
+            undefined,
+            {
+              jupiterApiUrl: this.jupiterApiUrl,
+              jupiterApiKey: this.jupiterApiKey,
+            }
+          );
+
+        return {
+          user,
+          pool,
+          position,
+          positionNftAccount,
+          maxSqrtPriceChangeBps,
+          amount: new BN(0),
+          isDirectPool: false,
+          tokenAMint,
+          tokenBMint,
+          tokenAVault,
+          tokenBVault,
+          tokenAProgram,
+          tokenBProgram,
+          maxTransferAmountA: new BN(0),
+          maxTransferAmountB: getExtendMaxAmountTransfer(
+            jupiterQuoteToB.outAmount,
+            maxTransferAmountExtendPercentage
+          ),
+          swapType: SwapExternalType.swapToB,
+          preSqrtPrice: poolState.sqrtPrice,
+          preInstructions,
+          swapTransactions: [swapTransaction],
+          cleanUpInstructions,
+          swapInEstimate: {
+            inAmountA: new BN(0),
+            inAmountB: amountIn,
+            routeA: ZapInDammV2PoolSwapRoute.DammV2,
+            routeB: ZapInDammV2PoolSwapRoute.Jupiter,
+          },
+        };
+      }
+
       const { transaction: swapToATransaction, quoteResponse: swapToAQuote } =
         await buildJupiterSwapTransaction(
           user,

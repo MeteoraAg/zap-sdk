@@ -12,8 +12,8 @@ importers:
         specifier: ^0.31.1
         version: 0.31.1(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@meteora-ag/cp-amm-sdk':
-        specifier: ^1.2.3
-        version: 1.2.3(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
+        specifier: ^1.3.6
+        version: 1.3.6(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@meteora-ag/dlmm':
         specifier: ^1.9.0
         version: 1.9.0(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
@@ -261,8 +261,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.29':
     resolution: {integrity: sha512-uw6guiW/gcAGPDhLmd77/6lW8QLeiV5RUTsAX46Db6oLhGaVj4lhnPwb184s1bkc8kdVg/+h988dro8GRDpmYQ==}
 
-  '@meteora-ag/cp-amm-sdk@1.2.3':
-    resolution: {integrity: sha512-e1wo88tBe4luv/CLuKdUSVaU3ZiliU4yFQQjkP6uiawEzw827OXl60WzY0D+vitbWIad1J5u+bMepuFWv2HSdg==}
+  '@meteora-ag/cp-amm-sdk@1.3.6':
+    resolution: {integrity: sha512-fgjJALCXPycJXoMm4vqmA3p+RzMhhzSQ2SYBTZTsQR9ptG/S2UwKTjkJLs6wkQDuVeQw3AZHyTv48X4SYWZ/BQ==}
 
   '@meteora-ag/dlmm@1.9.0':
     resolution: {integrity: sha512-Mv8XqH/aUqkpZ+1+FAlZzgfsa+xyfb8TvJSn/SP/nYvzfv1JqfZK/b1ov+VVZludSv4kpuTduRX+TP+qvOdkcg==}
@@ -1610,12 +1610,13 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.4
 
-  '@meteora-ag/cp-amm-sdk@1.2.3(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)':
+  '@meteora-ag/cp-amm-sdk@1.3.6(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)':
     dependencies:
       '@coral-xyz/anchor': 0.31.1(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@solana/spl-token': 0.4.13(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10))(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@solana/web3.js': 1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@types/bn.js': 5.2.0
+      bn.js: 5.2.2
       chain: 0.4.2
       decimal.js: 10.6.0
       invariant: 2.2.4
