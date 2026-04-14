@@ -29,7 +29,7 @@ const keypairPath = "";
   const dammV2Instance = new CpAmm(connection);
   const pool = new PublicKey("Ep5MouzWgvdSSwUyekGQ3UyHMzaa4FKLZga4fEqk2VHG");
   const usdcMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   );
   const poolState = await dammV2Instance.fetchPoolState(pool);
 
@@ -76,7 +76,7 @@ const keypairPath = "";
     {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
-    }
+    },
   );
 
   const jupiterQuoteToB = await getJupiterQuote(
@@ -91,7 +91,7 @@ const keypairPath = "";
     {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
-    }
+    },
   );
 
   const result = await zap.getZapInDammV2IndirectPoolParams({
@@ -116,7 +116,7 @@ const keypairPath = "";
 
   const finalTx = [];
   const res: { landed50: number } = (await fetch(
-    "https://worker.jup.ag/jito-floor"
+    "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
 
   const jitoFloor = res.landed50;
@@ -148,8 +148,8 @@ const keypairPath = "";
         zapInDammV2Tx.zapInTransaction,
         zapInDammV2Tx.cleanUpTransaction,
         jitoTipsTx,
-      ]
-    )
+      ],
+    ),
   );
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;

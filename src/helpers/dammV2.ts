@@ -7,7 +7,7 @@ import BN from "bn.js";
 
 export async function getDammV2Pool(
   connection: Connection,
-  poolAddress: PublicKey
+  poolAddress: PublicKey,
 ): Promise<PoolState> {
   const cpAmmClient = new CpAmm(connection);
   return await cpAmmClient.fetchPoolState(poolAddress);
@@ -20,7 +20,7 @@ export async function getDammV2RemainingAccounts(
   userTokenOutAccount: PublicKey,
   tokenAProgram = TOKEN_PROGRAM_ID,
   tokenBProgram = TOKEN_PROGRAM_ID,
-  poolState: PoolState
+  poolState: PoolState,
 ): Promise<
   Array<{
     isSigner: boolean;
@@ -115,7 +115,7 @@ export async function getDammV2RemainingAccounts(
  */
 export function createDammV2SwapPayload(
   amountIn: BN,
-  minimumSwapAmountOut: BN
+  minimumSwapAmountOut: BN,
 ): Buffer {
   return Buffer.concat([
     Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),

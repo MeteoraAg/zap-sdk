@@ -23,11 +23,11 @@ export function calculateDirectPoolSwapAmount(
   currentPrice: Decimal,
   poolBalanceTokenA: Decimal,
   poolBalanceTokenB: Decimal,
-  isInputTokenA: boolean
+  isInputTokenA: boolean,
 ): BN {
   const amountDecimal = convertLamportsToUiAmount(
     new Decimal(amount.toString()),
-    amountDecimals
+    amountDecimals,
   );
 
   let swapAmountDecimal: Decimal;
@@ -50,7 +50,7 @@ export function calculateDirectPoolSwapAmount(
   return new BN(
     convertUiAmountToLamports(swapAmountDecimal, amountDecimals)
       .floor()
-      .toString()
+      .toString(),
   );
 }
 
@@ -62,11 +62,11 @@ export function calculateIndirectPoolSwapAmount(
   price1: Decimal, // in terms of tokenA per inputToken
   price2: Decimal, // in terms of tokenB per inputToken
   poolBalanceTokenA: Decimal,
-  poolBalanceTokenB: Decimal
+  poolBalanceTokenB: Decimal,
 ): BN {
   const amountDecimal = convertLamportsToUiAmount(
     new Decimal(amount.toString()),
-    amountDecimals
+    amountDecimals,
   );
 
   const numerator = amountDecimal.mul(price2).mul(poolBalanceTokenA);
@@ -79,7 +79,7 @@ export function calculateIndirectPoolSwapAmount(
   return new BN(
     convertUiAmountToLamports(swapAmountDecimal, amountDecimals)
       .floor()
-      .toString()
+      .toString(),
   );
 }
 
@@ -92,7 +92,7 @@ export async function getJupAndDammV2Quotes(
   dammV2SlippageBps: number,
   jupSlippageBps: number,
   maxAccounts: number,
-  config: ZapConfig = {}
+  config: ZapConfig = {},
 ): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
@@ -112,11 +112,11 @@ export async function getJupAndDammV2Quotes(
   const inputTokenDecimal = await getTokenDecimals(
     connection,
     inputTokenMint,
-    TOKEN_PROGRAM_ID
+    TOKEN_PROGRAM_ID,
   );
   const ONE_TOKEN = convertUiAmountToLamports(
     new Decimal(1),
-    inputTokenDecimal
+    inputTokenDecimal,
   );
 
   let dammV2Quote = null;
@@ -148,7 +148,7 @@ export async function getJupAndDammV2Quotes(
     false,
     true,
     true,
-    config
+    config,
   );
   return {
     dammV2Quote,
@@ -158,7 +158,7 @@ export async function getJupAndDammV2Quotes(
 
 export function getExtendMaxAmountTransfer(
   amount: string,
-  percentage: number
+  percentage: number,
 ): BN {
   const extendAmount = new Decimal(amount)
     .mul(percentage)

@@ -10,13 +10,13 @@ import { derivePath } from "ed25519-hd-key";
 const STANDARD_DERIVATION_PATH = "m/44'/501'/0'/0'";
 // https://jito-foundation.gitbook.io/mev/mev-payment-and-distribution/on-chain-addresses
 const JITO_TIP_ACCOUNT = new PublicKey(
-  "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5"
+  "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
 );
 
 // Derives a Keypair from a seed phrase using Solana's standard derivation path
 export function getKeypairFromSeed(
   seedPhrase: string,
-  derivationPath: string = STANDARD_DERIVATION_PATH
+  derivationPath: string = STANDARD_DERIVATION_PATH,
 ): Keypair {
   const seed = mnemonicToSeedSync(seedPhrase, "");
   const derivedSeed = derivePath(derivationPath, seed.toString("hex")).key;
@@ -45,7 +45,7 @@ interface JitoBundleResult {
 
 export async function sendJitoBundle(
   transactions: Transaction[],
-  jitoPrivateKey: string
+  jitoPrivateKey: string,
 ) {
   const jitoBundleResult = await fetch(
     "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
@@ -61,12 +61,12 @@ export async function sendJitoBundle(
         method: "sendBundle",
         params: [
           transactions.map((signedTx) =>
-            signedTx.serialize().toString("base64")
+            signedTx.serialize().toString("base64"),
           ),
           { encoding: "base64" },
         ],
       }),
-    }
+    },
   ).then((res) => res.json() as Promise<JitoBundleResult>);
 
   return jitoBundleResult;

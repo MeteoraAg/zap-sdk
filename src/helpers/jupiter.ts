@@ -21,7 +21,7 @@ export async function getJupiterQuote(
   dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
-  config: ZapConfig = {}
+  config: ZapConfig = {},
 ): Promise<JupiterQuoteResponse | null> {
   const params = new URLSearchParams({
     inputMint: inputMint.toString(),
@@ -65,7 +65,7 @@ export async function getJupiterQuote(
 export async function getJupiterSwapInstruction(
   userPublicKey: PublicKey,
   quoteResponse: any,
-  config: ZapConfig = {}
+  config: ZapConfig = {},
 ): Promise<JupiterSwapInstructionResponse> {
   const url = `${
     config.jupiterApiUrl || DEFAULT_JUPITER_API_URL
@@ -91,7 +91,7 @@ export async function getJupiterSwapInstruction(
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
-        `Jupiter swap instruction failed (${response.status}): ${errorText}`
+        `Jupiter swap instruction failed (${response.status}): ${errorText}`,
       );
     }
   } catch (error) {
@@ -111,7 +111,7 @@ export async function buildJupiterSwapTransaction(
   maxAccounts: number,
   slippageBps: number,
   jupiterQuoteResponse?: JupiterQuoteResponse,
-  config: ZapConfig = {}
+  config: ZapConfig = {},
 ): Promise<{
   transaction: Transaction;
   quoteResponse: JupiterQuoteResponse;
@@ -127,19 +127,19 @@ export async function buildJupiterSwapTransaction(
       false,
       true,
       true,
-      config
+      config,
     ));
 
   if (!quoteResponse) {
     throw new Error(
-      `Failed to get Jupiter quote for swap from ${inputMint.toBase58()} to ${outputMint.toBase58()}`
+      `Failed to get Jupiter quote for swap from ${inputMint.toBase58()} to ${outputMint.toBase58()}`,
     );
   }
 
   const swapInstructionResponse = await getJupiterSwapInstruction(
     user,
     quoteResponse,
-    config
+    config,
   );
   const instruction = new TransactionInstruction({
     keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {

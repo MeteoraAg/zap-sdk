@@ -3,14 +3,12 @@
 ## Table of Contents
 
 - [Zap Functions](#zap-functions)
-
   - [zapOut](#zapOut)
   - [zapOutThroughDammV2](#zapOutThroughDammV2)
   - [zapOutThroughDlmm](#zapOutThroughDlmm)
   - [zapOutThroughJupiter](#zapOutThroughJupiter)
 
 - [Helper Functions](#helper-functions)
-
   - [getTokenProgramFromMint](#getTokenProgramFromMint)
   - [getJupiterQuote](#getJupiterQuote)
   - [getJupiterSwapInstruction](#getJupiterSwapInstruction)
@@ -60,14 +58,14 @@ const remainingAccounts = await getDammV2RemainingAccounts(
   userInputMintAta,
   outputTokenAccountAta,
   inputTokenProgram,
-  outputTokenProgram
+  outputTokenProgram,
 );
 
 const payloadData = createDammV2SwapPayload(amountIn, minimumSwapAmountOut);
 
 const transaction = await client.zap.zapOut({
   userTokenInAccount: new PublicKey(
-    "userTokenInAccount1234567890abcdefghijklmnopqrstuvwxyz"
+    "userTokenInAccount1234567890abcdefghijklmnopqrstuvwxyz",
   ),
   zapOutParams: {
     percentage: 100,
@@ -130,8 +128,8 @@ const quoteResponse = await getJupiterQuote(
   true,
   {
     jupiterApiUrl: "https://api.jup.ag",
-    jupiterApiKey: "YOUR_JUPITER_API_KEY"
-  }
+    jupiterApiKey: "YOUR_JUPITER_API_KEY",
+  },
 );
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
@@ -139,8 +137,8 @@ const swapInstructionResponse = await getJupiterSwapInstruction(
   quoteResponse,
   {
     jupiterApiUrl: "https://api.jup.ag",
-    jupiterApiKey: "YOUR_JUPITER_API_KEY"
-  }
+    jupiterApiKey: "YOUR_JUPITER_API_KEY",
+  },
 );
 
 const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
@@ -390,8 +388,8 @@ const quoteResponse = await getJupiterQuote(
   true,
   {
     jupiterApiUrl: "https://api.jup.ag",
-    jupiterApiKey: "YOUR_JUPITER_API_KEY"
-  }
+    jupiterApiKey: "YOUR_JUPITER_API_KEY",
+  },
 );
 ```
 
@@ -449,8 +447,8 @@ const quoteResponse = await getJupiterQuote(
   true,
   {
     jupiterApiUrl: "https://api.jup.ag",
-    jupiterApiKey: "YOUR_JUPITER_API_KEY"
-  }
+    jupiterApiKey: "YOUR_JUPITER_API_KEY",
+  },
 );
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
@@ -458,8 +456,8 @@ const swapInstructionResponse = await getJupiterSwapInstruction(
   quoteResponse,
   {
     jupiterApiUrl: "https://api.jup.ag",
-    jupiterApiKey: "YOUR_JUPITER_API_KEY"
-  }
+    jupiterApiKey: "YOUR_JUPITER_API_KEY",
+  },
 );
 ```
 

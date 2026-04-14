@@ -24,7 +24,7 @@ import { ProgramStrategyType } from "../types";
 
 export async function getLbPairState(
   connection: Connection,
-  lbPair: PublicKey
+  lbPair: PublicKey,
 ): Promise<LbPair> {
   const dlmmClient = await DLMM.create(connection, lbPair, {
     cluster: "mainnet-beta",
@@ -35,7 +35,7 @@ export async function getLbPairState(
 
 export async function getBinArrayBitmapExtension(
   connection: Connection,
-  binArray: PublicKey
+  binArray: PublicKey,
 ): Promise<BinArrayBitmapExtension | null> {
   const program = createProgram(connection);
   const account = await connection.getAccountInfo(binArray);
@@ -44,13 +44,13 @@ export async function getBinArrayBitmapExtension(
   }
   return program.coder.accounts.decode(
     "binArrayBitmapExtension",
-    Buffer.from(account.data)
+    Buffer.from(account.data),
   );
 }
 
 export function getBitFromBinArrayIndexInBitmapExtension(
   binArrayIndex: BN,
-  state: BinArrayBitmapExtension
+  state: BinArrayBitmapExtension,
 ) {
   // In extension, the range start with -513 and 512
   // Brain burst, let's just shift back to the actual index and calculate from there ...
@@ -68,7 +68,7 @@ export function getBitFromBinArrayIndexInBitmapExtension(
 
   // Each U512 have 8 u64
   const { mod: offsetToU64InChunkBitmap } = offsetToU64InBitmap.divmod(
-    new BN(8)
+    new BN(8),
   );
 
   if (!bitmap) {
@@ -84,7 +84,7 @@ export function getNextBinArrayIndexWithLiquidity(
   binArrayIndex: BN,
   pairState: LbPair,
   swapForY: boolean,
-  state: BinArrayBitmapExtension | null
+  state: BinArrayBitmapExtension | null,
 ): BN | null {
   const [minBinArrayIndex, maxBinArrayIndex] = BIN_ARRAY_INDEX_BOUND;
   const step = swapForY ? new BN(-1) : new BN(1);
@@ -95,7 +95,7 @@ export function getNextBinArrayIndexWithLiquidity(
       if (state) {
         const isBitSet = getBitFromBinArrayIndexInBitmapExtension(
           binArrayIndex,
-          state
+          state,
         );
         if (isBitSet) {
           return binArrayIndex;
@@ -108,11 +108,11 @@ export function getNextBinArrayIndexWithLiquidity(
       const actualIdx = binArrayIndex.add(BIN_ARRAY_BITMAP_SIZE);
       // FullBitmap = U1024
       let { div: offsetInFullBitmap, mod: index } = actualIdx.divmod(
-        new BN(64)
+        new BN(64),
       );
       if (
         pairState.binArrayBitmap[offsetInFullBitmap.toNumber()].testn(
-          index.toNumber()
+          index.toNumber(),
         )
       ) {
         return binArrayIndex;
@@ -137,17 +137,17 @@ export async function getDlmmRemainingAccounts(
   userTokenOutAccount: PublicKey,
   tokenXProgram: PublicKey,
   tokenYProgram: PublicKey,
-  lbPairState: LbPair
+  lbPairState: LbPair,
 ): Promise<{
   remainingAccounts: AccountMeta[];
   remainingAccountsInfo: RemainingAccountInfo;
 }> {
   let [binArrayBitmapExtension] = deriveBinArrayBitmapExtension(
     lbPair,
-    DLMM_PROGRAM_ID
+    DLMM_PROGRAM_ID,
   );
   const binArrayBitmapExtensionState = await connection.getAccountInfo(
-    binArrayBitmapExtension
+    binArrayBitmapExtension,
   );
   if (!binArrayBitmapExtensionState) {
     binArrayBitmapExtension = new PublicKey(DLMM_PROGRAM_ID);
@@ -155,11 +155,11 @@ export async function getDlmmRemainingAccounts(
 
   const transferHookXAccounts = await getExtraAccountMetasForTransferHook(
     connection,
-    lbPairState.tokenXMint
+    lbPairState.tokenXMint,
   );
   const transferHookYAccounts = await getExtraAccountMetasForTransferHook(
     connection,
-    lbPairState.tokenYMint
+    lbPairState.tokenYMint,
   );
   let remainingAccountsInfo: RemainingAccountInfo = { slices: [] };
 
@@ -278,7 +278,7 @@ export async function getDlmmRemainingAccounts(
   });
 
   remainingAccounts.push(
-    ...[...transferHookXAccounts, ...transferHookYAccounts]
+    ...[...transferHookXAccounts, ...transferHookYAccounts],
   );
   remainingAccounts.push(...binArraysAccountMeta);
 
@@ -323,7 +323,7 @@ export function convertAccountTypeToNumber(accountType: object): number {
 export function createDlmmSwapPayload(
   amountIn: BN,
   minimumSwapAmountOut: BN,
-  remainingAccountsInfo: RemainingAccountInfo
+  remainingAccountsInfo: RemainingAccountInfo,
 ): Buffer {
   const sliceCount = Buffer.alloc(4);
   sliceCount.writeUInt32LE(remainingAccountsInfo.slices.length, 0);
@@ -334,7 +334,7 @@ export function createDlmmSwapPayload(
       sliceBuffer.writeUInt8(convertAccountTypeToNumber(slice.accountsType), 0);
       sliceBuffer.writeUInt8(slice.length, 1);
       return sliceBuffer;
-    })
+    }),
   );
 
   return Buffer.concat([
@@ -347,7 +347,7 @@ export function createDlmmSwapPayload(
 }
 
 export function toProgramStrategyType(
-  strategy: StrategyType
+  strategy: StrategyType,
 ): ProgramStrategyType {
   switch (strategy) {
     case StrategyType.Spot:

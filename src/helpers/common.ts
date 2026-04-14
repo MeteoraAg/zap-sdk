@@ -8,7 +8,7 @@ import Decimal from "decimal.js";
 
 export async function getTokenProgramFromMint(
   connection: Connection,
-  mint: PublicKey
+  mint: PublicKey,
 ): Promise<PublicKey> {
   if (mint.equals(NATIVE_MINT)) {
     return TOKEN_PROGRAM_ID;
@@ -22,7 +22,7 @@ export async function getTokenProgramFromMint(
 
     if (
       mintInfo.owner.equals(
-        new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+        new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"),
       )
     ) {
       return new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
@@ -32,7 +32,7 @@ export async function getTokenProgramFromMint(
   } catch (error) {
     console.warn(
       `Failed to determine token program for ${mint.toString()}, defaulting to TOKEN_PROGRAM_ID:`,
-      error
+      error,
     );
     return TOKEN_PROGRAM_ID;
   }
@@ -40,14 +40,14 @@ export async function getTokenProgramFromMint(
 
 export function convertLamportsToUiAmount(
   amount: Decimal,
-  decimals: number
+  decimals: number,
 ): Decimal {
   return amount.div(Decimal.pow(10, decimals));
 }
 
 export function convertUiAmountToLamports(
   amount: Decimal,
-  decimals: number
+  decimals: number,
 ): Decimal {
   return amount.mul(Decimal.pow(10, decimals));
 }

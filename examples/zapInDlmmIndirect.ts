@@ -25,7 +25,7 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
   const user = Keypair.fromSecretKey(Uint8Array.from([]));
   // MET-USDC pool
   const dlmmPool = new PublicKey(
-    "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd"
+    "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd",
   );
   const inputTokenMint = NATIVE_MINT;
 
@@ -73,7 +73,7 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
   const finalTx = [];
   const res: { landed50: number } = (await fetch(
-    "https://worker.jup.ag/jito-floor"
+    "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
 
   const jitoFloor = res.landed50;
@@ -101,8 +101,8 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
         zapInDlmmTx.zapInTransaction,
         zapInDlmmTx.cleanUpTransaction,
         jitoTipsTx,
-      ]
-    )
+      ],
+    ),
   );
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -111,11 +111,11 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
     tx.feePayer = user.publicKey;
 
     const txAccounts = tx.instructions.flatMap(({ keys }) =>
-      keys.map((key) => key)
+      keys.map((key) => key),
     );
     if (
       txAccounts.some(
-        ({ isSigner, pubkey }) => isSigner && pubkey.equals(position.publicKey)
+        ({ isSigner, pubkey }) => isSigner && pubkey.equals(position.publicKey),
       )
     ) {
       tx.partialSign(position);

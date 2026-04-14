@@ -9,7 +9,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 
 export async function getExtraAccountMetasForTransferHook(
   connection: Connection,
-  mint: PublicKey
+  mint: PublicKey,
 ) {
   const info = await connection.getAccountInfo(mint);
 
@@ -28,7 +28,7 @@ export async function getExtraAccountMetasForTransferHook(
   const mintInfo = unpackMint(
     mint,
     accountInfoWithBuffer,
-    TOKEN_2022_PROGRAM_ID
+    TOKEN_2022_PROGRAM_ID,
   );
 
   const transferHook = getTransferHook(mintInfo);
@@ -45,7 +45,7 @@ export async function getExtraAccountMetasForTransferHook(
       mintInfo.decimals,
       [],
       "confirmed",
-      TOKEN_2022_PROGRAM_ID
+      TOKEN_2022_PROGRAM_ID,
     );
 
     // Only 4 keys needed if it's single signer. https://github.com/solana-labs/solana-program-library/blob/d72289c79a04411c69a8bf1054f7156b6196f9b3/token/js/src/extensions/transferFee/instructions.ts#L251

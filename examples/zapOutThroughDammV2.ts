@@ -31,14 +31,14 @@ async function main() {
   });
 
   const inputMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   );
   const outputMint = new PublicKey(
-    "So11111111111111111111111111111111111111112"
+    "So11111111111111111111111111111111111111112",
   );
 
   const poolAddress = new PublicKey(
-    "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"
+    "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
   );
 
   const swapAmount = new BN(1000000);
@@ -48,19 +48,19 @@ async function main() {
 
     const inputTokenProgram = await getTokenProgramFromMint(
       connection,
-      inputMint
+      inputMint,
     );
 
     const outputTokenProgram = await getTokenProgramFromMint(
       connection,
-      outputMint
+      outputMint,
     );
 
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputMint,
       wallet.publicKey,
       true,
-      inputTokenProgram
+      inputTokenProgram,
     );
 
     const transaction = new Transaction();
@@ -71,7 +71,7 @@ async function main() {
         inputMint,
         anotherWallet.publicKey,
         true,
-        inputTokenProgram
+        inputTokenProgram,
       );
 
       const transferIx = createTransferCheckedInstruction(
@@ -82,7 +82,7 @@ async function main() {
         BigInt(swapAmount.toString()),
         6,
         [],
-        inputTokenProgram
+        inputTokenProgram,
       );
 
       transaction.add(transferIx);
@@ -91,7 +91,7 @@ async function main() {
         wallet.publicKey,
         inputTokenAccount,
         BigInt(swapAmount.toString()),
-        TOKEN_PROGRAM_ID
+        TOKEN_PROGRAM_ID,
       );
 
       transaction.add(...wrapInstructions);
@@ -123,7 +123,7 @@ async function main() {
       connection,
       transaction,
       [wallet, anotherWallet],
-      { commitment: "confirmed" }
+      { commitment: "confirmed" },
     );
 
     console.log(`Zap transaction sent: ${signature}`);

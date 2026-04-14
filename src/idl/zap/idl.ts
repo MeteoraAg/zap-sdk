@@ -30,7 +30,7 @@ export type Zap = {
           name: "rentReceiver";
           writable: true;
           signer: true;
-        }
+        },
       ];
       args: [];
     },
@@ -50,7 +50,7 @@ export type Zap = {
               {
                 kind: "account";
                 path: "owner";
-              }
+              },
             ];
           };
         },
@@ -66,7 +66,7 @@ export type Zap = {
         {
           name: "systemProgram";
           address: "11111111111111111111111111111111";
-        }
+        },
       ];
       args: [];
     },
@@ -82,7 +82,7 @@ export type Zap = {
           name: "owner";
           signer: true;
           relations: ["ledger"];
-        }
+        },
       ];
       args: [
         {
@@ -92,7 +92,7 @@ export type Zap = {
         {
           name: "isTokenA";
           type: "bool";
-        }
+        },
       ];
     },
     {
@@ -110,7 +110,7 @@ export type Zap = {
           name: "owner";
           signer: true;
           relations: ["ledger"];
-        }
+        },
       ];
       args: [
         {
@@ -124,7 +124,7 @@ export type Zap = {
         {
           name: "isTokenA";
           type: "bool";
-        }
+        },
       ];
     },
     {
@@ -189,7 +189,7 @@ export type Zap = {
         },
         {
           name: "dammEventAuthority";
-        }
+        },
       ];
       args: [
         {
@@ -199,7 +199,7 @@ export type Zap = {
         {
           name: "maxSqrtPriceChangeBps";
           type: "u32";
-        }
+        },
       ];
     },
     {
@@ -275,7 +275,7 @@ export type Zap = {
         },
         {
           name: "dlmmEventAuthority";
-        }
+        },
       ];
       args: [
         {
@@ -313,7 +313,7 @@ export type Zap = {
               name: "remainingAccountsInfo";
             };
           };
-        }
+        },
       ];
     },
     {
@@ -333,7 +333,7 @@ export type Zap = {
           name: "position";
           docs: [
             "user position",
-            "Check it is different from owner to avoid user to pass owner address wrongly"
+            "Check it is different from owner to avoid user to pass owner address wrongly",
           ];
           writable: true;
           signer: true;
@@ -394,7 +394,7 @@ export type Zap = {
         },
         {
           name: "dlmmEventAuthority";
-        }
+        },
       ];
       args: [
         {
@@ -432,7 +432,7 @@ export type Zap = {
               name: "remainingAccountsInfo";
             };
           };
-        }
+        },
       ];
     },
     {
@@ -445,7 +445,7 @@ export type Zap = {
         },
         {
           name: "ammProgram";
-        }
+        },
       ];
       args: [
         {
@@ -455,9 +455,9 @@ export type Zap = {
               name: "zapOutParameters";
             };
           };
-        }
+        },
       ];
-    }
+    },
   ];
   accounts: [
     {
@@ -471,7 +471,7 @@ export type Zap = {
     {
       name: "userLedger";
       discriminator: [185, 84, 101, 128, 8, 6, 160, 83];
-    }
+    },
   ];
   errors: [
     {
@@ -518,7 +518,7 @@ export type Zap = {
       code: 6008;
       name: "unsupportedFeeMode";
       msg: "Unsupported fee mode";
-    }
+    },
   ];
   types: [
     {
@@ -538,7 +538,7 @@ export type Zap = {
           {
             name: "transferHookMultiReward";
             fields: ["u8"];
-          }
+          },
         ];
       };
     },
@@ -582,7 +582,7 @@ export type Zap = {
           {
             name: "padding1";
             type: "u64";
-          }
+          },
         ];
       };
     },
@@ -648,7 +648,7 @@ export type Zap = {
           {
             name: "volatilityReference";
             type: "u128";
-          }
+          },
         ];
       };
     },
@@ -762,7 +762,7 @@ export type Zap = {
                     name: "dlmm::dlmm::types::RewardInfo";
                   };
                 },
-                2
+                2,
               ];
             };
           },
@@ -829,7 +829,7 @@ export type Zap = {
             type: {
               array: ["u8", 22];
             };
-          }
+          },
         ];
       };
     },
@@ -874,7 +874,7 @@ export type Zap = {
           {
             name: "whitelistedVault";
             docs: [
-              "Whitelisted vault to be able to buy pool before activation_point"
+              "Whitelisted vault to be able to buy pool before activation_point",
             ];
             type: "pubkey";
           },
@@ -891,7 +891,7 @@ export type Zap = {
           {
             name: "padding";
             docs: [
-              "padding, previous reserve amount, be careful to use that field"
+              "padding, previous reserve amount, be careful to use that field",
             ];
             type: "u128";
           },
@@ -958,7 +958,7 @@ export type Zap = {
           {
             name: "collectFeeMode";
             docs: [
-              "0 is collect fee in both token, 1 only collect fee in token a, 2 only collect fee in token b"
+              "0 is collect fee in both token, 1 only collect fee in token a, 2 only collect fee in token b",
             ];
             type: "u8";
           },
@@ -970,7 +970,7 @@ export type Zap = {
           {
             name: "version";
             docs: [
-              "pool version, 0: max_fee is still capped at 50%, 1: max_fee is capped at 99%"
+              "pool version, 0: max_fee is still capped at 50%, 1: max_fee is capped at 99%",
             ];
             type: "u8";
           },
@@ -1028,10 +1028,10 @@ export type Zap = {
                     name: "cp_amm::state::pool::RewardInfo";
                   };
                 },
-                2
+                2,
               ];
             };
-          }
+          },
         ];
       };
     },
@@ -1042,7 +1042,7 @@ export type Zap = {
         "trading_fee = amount * trade_fee_numerator / denominator",
         "protocol_fee = trading_fee * protocol_fee_percentage / 100",
         "referral_fee = protocol_fee * referral_percentage / 100",
-        "partner_fee = (protocol_fee - referral_fee) * partner_fee_percentage / denominator"
+        "partner_fee = (protocol_fee - referral_fee) * partner_fee_percentage / denominator",
       ];
       serialization: "bytemuck";
       repr: {
@@ -1056,7 +1056,7 @@ export type Zap = {
             docs: [
               "Trade fees are extra token amounts that are held inside the token",
               "accounts during a trade, making the value of liquidity tokens rise.",
-              "Trade fee numerator"
+              "Trade fee numerator",
             ];
             type: {
               defined: {
@@ -1070,7 +1070,7 @@ export type Zap = {
               "Protocol trading fees are extra token amounts that are held inside the token",
               "accounts during a trade, with the equivalent in pool tokens minted to",
               "the protocol of the program.",
-              "Protocol trade fee numerator"
+              "Protocol trade fee numerator",
             ];
             type: "u8";
           },
@@ -1106,7 +1106,7 @@ export type Zap = {
             type: {
               array: ["u64", 2];
             };
-          }
+          },
         ];
       };
     },
@@ -1150,7 +1150,7 @@ export type Zap = {
           {
             name: "padding";
             type: "u64";
-          }
+          },
         ];
       };
     },
@@ -1170,7 +1170,7 @@ export type Zap = {
           {
             name: "amountY";
             type: "u64";
-          }
+          },
         ];
       };
     },
@@ -1188,7 +1188,7 @@ export type Zap = {
                 };
               };
             };
-          }
+          },
         ];
       };
     },
@@ -1208,7 +1208,7 @@ export type Zap = {
           {
             name: "length";
             type: "u8";
-          }
+          },
         ];
       };
     },
@@ -1267,7 +1267,7 @@ export type Zap = {
             type: {
               array: ["u8", 5];
             };
-          }
+          },
         ];
       };
     },
@@ -1284,7 +1284,7 @@ export type Zap = {
           },
           {
             name: "bidAsk";
-          }
+          },
         ];
       };
     },
@@ -1308,7 +1308,7 @@ export type Zap = {
           {
             name: "amountB";
             type: "u64";
-          }
+          },
         ];
       };
     },
@@ -1349,7 +1349,7 @@ export type Zap = {
             type: {
               array: ["u8", 8];
             };
-          }
+          },
         ];
       };
     },
@@ -1377,7 +1377,7 @@ export type Zap = {
           {
             name: "payloadData";
             type: "bytes";
-          }
+          },
         ];
       };
     },
@@ -1461,10 +1461,10 @@ export type Zap = {
             name: "cumulativeSecondsWithEmptyLiquidityReward";
             docs: [
               "Accumulated seconds when the farm distributed rewards but the bin was empty.",
-              "These rewards will be carried over to the next reward time window."
+              "These rewards will be carried over to the next reward time window.",
             ];
             type: "u64";
-          }
+          },
         ];
       };
     },
@@ -1509,10 +1509,10 @@ export type Zap = {
           {
             name: "cumulativeSecondsWithEmptyLiquidityReward";
             type: "u64";
-          }
+          },
         ];
       };
-    }
+    },
   ];
   constants: [
     {
@@ -1562,6 +1562,6 @@ export type Zap = {
       name: "userLedgerPrefix";
       type: "bytes";
       value: "[117, 115, 101, 114, 95, 108, 101, 100, 103, 101, 114]";
-    }
+    },
   ];
 };
