@@ -56,6 +56,8 @@ import {
   buildJupiterSwapTransaction,
   toProgramStrategyType,
   filterOutCloseSplTokenAccountInstructions,
+  isSingleSidedA,
+  isSingleSidedB,
 } from "./helpers";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
@@ -66,8 +68,10 @@ import {
   DLMM_PROGRAM_ID,
   JUP_V6_PROGRAM_ID,
   MEMO_PROGRAM_ID,
+  MIN_SWAP_THRESHOLD,
 } from "./constants";
 import {
+  CollectFeeMode,
   derivePositionAddress,
   derivePositionNftAccount,
   getAmountAFromLiquidityDelta,
@@ -75,7 +79,6 @@ import {
   getTokenDecimals,
   getTokenProgram,
   Rounding,
-  getPriceFromSqrtPrice,
 } from "@meteora-ag/cp-amm-sdk";
 import {
   getAssociatedTokenAddressSync,
@@ -532,18 +535,31 @@ export class Zap {
       ? tokenADecimal
       : tokenBDecimal;
 
+    const collectFeeMode = poolState.collectFeeMode as CollectFeeMode;
+
     const poolBalanceTokenA = getAmountAFromLiquidityDelta(
       poolState.sqrtPrice,
       poolState.sqrtMaxPrice,
       poolState.liquidity,
       Rounding.Down,
+      collectFeeMode,
+      poolState.tokenAAmount,
+      poolState.liquidity,
     );
     const poolBalanceTokenB = getAmountBFromLiquidityDelta(
       poolState.sqrtMinPrice,
       poolState.sqrtPrice,
       poolState.liquidity,
       Rounding.Down,
+      collectFeeMode,
+      poolState.tokenBAmount,
+      poolState.liquidity,
     );
+
+    const isInputTokenA = tokenAMint.equals(inputTokenMint);
+    const outputTokenMint = isInputTokenA ? tokenBMint : tokenAMint;
+    const singleSidedA = isSingleSidedA(poolState);
+    const singleSidedB = isSingleSidedB(poolState);
 
     let amount;
     let swapTransactions: Transaction[] = [];
@@ -551,41 +567,27 @@ export class Zap {
     let swapInAmount: BN;
     let swapRoute: ZapInDammV2PoolSwapRoute;
 
-    if (dammV2Quote === null && jupiterQuote === null) {
-      throw new Error("No Jupiter or DAMM v2 quote found, unable to proceed");
-    }
-
-    if (
-      jupiterQuote !== null &&
-      (dammV2Quote === null ||
-        new BN(jupiterQuote.outAmount).gte(dammV2Quote.swapOutAmount))
+    if ((singleSidedA && isInputTokenA) || (singleSidedB && !isInputTokenA)) {
+      amount = amountIn;
+      swapInAmount = new BN(0);
+      maxTransferAmount = new BN(0);
+      swapRoute = ZapInDammV2PoolSwapRoute.DammV2;
+    } else if (
+      (singleSidedA && !isInputTokenA) ||
+      (singleSidedB && isInputTokenA)
     ) {
-      const price = convertLamportsToUiAmount(
-        new Decimal(jupiterQuote.outAmount),
-        tokenAMint.equals(inputTokenMint) ? tokenBDecimal : tokenADecimal,
-      );
-
-      swapInAmount = calculateDirectPoolSwapAmount(
-        amountIn,
-        inputTokenDecimal,
-        price,
-        convertLamportsToUiAmount(
-          new Decimal(poolBalanceTokenA.toString()),
-          tokenADecimal,
-        ),
-        convertLamportsToUiAmount(
-          new Decimal(poolBalanceTokenB.toString()),
-          tokenBDecimal,
-        ),
-        tokenAMint.equals(inputTokenMint),
-      );
-
-      amount = amountIn.sub(swapInAmount);
+      if (jupiterQuote === null) {
+        throw new Error(
+          "No Jupiter quote found for single-sided swap, unable to proceed",
+        );
+      }
+      swapInAmount = amountIn;
+      amount = new BN(0);
 
       const result = await buildJupiterSwapTransaction(
         user,
         inputTokenMint,
-        tokenAMint.equals(inputTokenMint) ? tokenBMint : tokenAMint,
+        outputTokenMint,
         swapInAmount,
         maxAccounts,
         slippageBps,
@@ -601,8 +603,60 @@ export class Zap {
         maxTransferAmountExtendPercentage,
       );
       swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
-    } else {
-      const quote = dammV2Quote!; // we know dammV2Quote is not null here
+    } else if (
+      jupiterQuote !== null &&
+      (dammV2Quote === null ||
+        new BN(jupiterQuote.outAmount).gte(dammV2Quote.swapOutAmount))
+    ) {
+      const price = convertLamportsToUiAmount(
+        new Decimal(jupiterQuote.outAmount),
+        isInputTokenA ? tokenBDecimal : tokenADecimal,
+      );
+
+      swapInAmount = calculateDirectPoolSwapAmount(
+        amountIn,
+        inputTokenDecimal,
+        price,
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenA.toString()),
+          tokenADecimal,
+        ),
+        convertLamportsToUiAmount(
+          new Decimal(poolBalanceTokenB.toString()),
+          tokenBDecimal,
+        ),
+        isInputTokenA,
+      );
+
+      if (swapInAmount.lte(MIN_SWAP_THRESHOLD)) {
+        throw new Error(
+          "Swap amount is below minimum threshold for near single-sided pool, unable to zap in",
+        );
+      } else {
+        amount = amountIn.sub(swapInAmount);
+
+        const result = await buildJupiterSwapTransaction(
+          user,
+          inputTokenMint,
+          outputTokenMint,
+          swapInAmount,
+          maxAccounts,
+          slippageBps,
+          undefined,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          },
+        );
+        swapTransactions = [result.transaction];
+        maxTransferAmount = getExtendMaxAmountTransfer(
+          result.quoteResponse.outAmount,
+          maxTransferAmountExtendPercentage,
+        );
+        swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
+      }
+    } else if (dammV2Quote !== null) {
+      const quote = dammV2Quote;
       amount = amountIn;
       const price = convertLamportsToUiAmount(
         new Decimal(quote.swapOutAmount.toString()),
@@ -620,13 +674,15 @@ export class Zap {
           new Decimal(poolBalanceTokenB.toString()),
           tokenBDecimal,
         ),
-        tokenAMint.equals(inputTokenMint),
+        isInputTokenA,
       );
       maxTransferAmount = getExtendMaxAmountTransfer(
         quote.swapOutAmount.toString(),
         maxTransferAmountExtendPercentage,
       );
       swapRoute = ZapInDammV2PoolSwapRoute.DammV2;
+    } else {
+      throw new Error("No Jupiter or DAMM v2 quote found, unable to proceed");
     }
 
     const cleanUpInstructions: TransactionInstruction[] = [];
@@ -642,7 +698,7 @@ export class Zap {
       position,
       positionNftAccount,
       isDirectPool: true,
-      isTokenA: tokenAMint.equals(inputTokenMint),
+      isTokenA: isInputTokenA,
       tokenAMint,
       tokenBMint,
       tokenAVault,
@@ -769,34 +825,50 @@ export class Zap {
       closewrapSol && cleanUpInstructions.push(closewrapSol);
     }
 
+    const collectFeeMode = poolState.collectFeeMode as CollectFeeMode;
+
     const poolBalanceTokenA = getAmountAFromLiquidityDelta(
       poolState.sqrtPrice,
       poolState.sqrtMaxPrice,
       poolState.liquidity,
       Rounding.Down,
+      collectFeeMode,
+      poolState.tokenAAmount,
+      poolState.liquidity,
     );
+
     const poolBalanceTokenB = getAmountBFromLiquidityDelta(
       poolState.sqrtMinPrice,
       poolState.sqrtPrice,
       poolState.liquidity,
       Rounding.Down,
+      collectFeeMode,
+      poolState.tokenBAmount,
+      poolState.liquidity,
     );
 
-    if (jupiterQuoteToA && jupiterQuoteToB === null) {
-      const { transaction: swapTransaction } =
-        await buildJupiterSwapTransaction(
-          user,
-          inputTokenMint,
-          tokenAMint,
-          amountIn,
-          maxAccounts,
-          slippageBps,
-          undefined,
-          {
-            jupiterApiUrl: this.jupiterApiUrl,
-            jupiterApiKey: this.jupiterApiKey,
-          },
+    const singleSidedA = isSingleSidedA(poolState);
+    const singleSidedB = isSingleSidedB(poolState);
+
+    if (singleSidedA) {
+      if (!jupiterQuoteToA) {
+        throw new Error(
+          "No Jupiter quote for token A found for single-sided pool, unable to proceed",
         );
+      }
+      const result = await buildJupiterSwapTransaction(
+        user,
+        inputTokenMint,
+        tokenAMint,
+        amountIn,
+        maxAccounts,
+        slippageBps,
+        undefined,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+        },
+      );
 
       return {
         user,
@@ -813,14 +885,14 @@ export class Zap {
         tokenAProgram,
         tokenBProgram,
         maxTransferAmountA: getExtendMaxAmountTransfer(
-          jupiterQuoteToA.outAmount,
+          result.quoteResponse.outAmount,
           maxTransferAmountExtendPercentage,
         ),
         swapType: SwapExternalType.swapToA,
         maxTransferAmountB: new BN(0),
         preSqrtPrice: poolState.sqrtPrice,
         preInstructions,
-        swapTransactions: [swapTransaction],
+        swapTransactions: [result.transaction],
         cleanUpInstructions,
         swapInEstimate: {
           inAmountA: amountIn,
@@ -831,21 +903,25 @@ export class Zap {
       };
     }
 
-    if (jupiterQuoteToB && jupiterQuoteToA === null) {
-      const { transaction: swapTransaction } =
-        await buildJupiterSwapTransaction(
-          user,
-          inputTokenMint,
-          tokenBMint,
-          amountIn,
-          maxAccounts,
-          slippageBps,
-          undefined,
-          {
-            jupiterApiUrl: this.jupiterApiUrl,
-            jupiterApiKey: this.jupiterApiKey,
-          },
+    if (singleSidedB) {
+      if (!jupiterQuoteToB) {
+        throw new Error(
+          "No Jupiter quote for token B found for single-sided pool, unable to proceed",
         );
+      }
+      const result = await buildJupiterSwapTransaction(
+        user,
+        inputTokenMint,
+        tokenBMint,
+        amountIn,
+        maxAccounts,
+        slippageBps,
+        undefined,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+        },
+      );
 
       return {
         user,
@@ -863,13 +939,109 @@ export class Zap {
         tokenBProgram,
         maxTransferAmountA: new BN(0),
         maxTransferAmountB: getExtendMaxAmountTransfer(
-          jupiterQuoteToB.outAmount,
+          result.quoteResponse.outAmount,
           maxTransferAmountExtendPercentage,
         ),
         swapType: SwapExternalType.swapToB,
         preSqrtPrice: poolState.sqrtPrice,
         preInstructions,
-        swapTransactions: [swapTransaction],
+        swapTransactions: [result.transaction],
+        cleanUpInstructions,
+        swapInEstimate: {
+          inAmountA: new BN(0),
+          inAmountB: amountIn,
+          routeA: ZapInDammV2PoolSwapRoute.DammV2,
+          routeB: ZapInDammV2PoolSwapRoute.Jupiter,
+        },
+      };
+    }
+
+    if (jupiterQuoteToA && jupiterQuoteToB === null) {
+      const result = await buildJupiterSwapTransaction(
+        user,
+        inputTokenMint,
+        tokenAMint,
+        amountIn,
+        maxAccounts,
+        slippageBps,
+        undefined,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+        },
+      );
+
+      return {
+        user,
+        pool,
+        position,
+        positionNftAccount,
+        maxSqrtPriceChangeBps,
+        amount: new BN(0),
+        isDirectPool: false,
+        tokenAMint,
+        tokenBMint,
+        tokenAVault,
+        tokenBVault,
+        tokenAProgram,
+        tokenBProgram,
+        maxTransferAmountA: getExtendMaxAmountTransfer(
+          result.quoteResponse.outAmount,
+          maxTransferAmountExtendPercentage,
+        ),
+        swapType: SwapExternalType.swapToA,
+        maxTransferAmountB: new BN(0),
+        preSqrtPrice: poolState.sqrtPrice,
+        preInstructions,
+        swapTransactions: [result.transaction],
+        cleanUpInstructions,
+        swapInEstimate: {
+          inAmountA: amountIn,
+          inAmountB: new BN(0),
+          routeA: ZapInDammV2PoolSwapRoute.Jupiter,
+          routeB: ZapInDammV2PoolSwapRoute.DammV2,
+        },
+      };
+    }
+
+    if (jupiterQuoteToB && jupiterQuoteToA === null) {
+      const result = await buildJupiterSwapTransaction(
+        user,
+        inputTokenMint,
+        tokenBMint,
+        amountIn,
+        maxAccounts,
+        slippageBps,
+        undefined,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+        },
+      );
+
+      return {
+        user,
+        pool,
+        position,
+        positionNftAccount,
+        maxSqrtPriceChangeBps,
+        amount: new BN(0),
+        isDirectPool: false,
+        tokenAMint,
+        tokenBMint,
+        tokenAVault,
+        tokenBVault,
+        tokenAProgram,
+        tokenBProgram,
+        maxTransferAmountA: new BN(0),
+        maxTransferAmountB: getExtendMaxAmountTransfer(
+          result.quoteResponse.outAmount,
+          maxTransferAmountExtendPercentage,
+        ),
+        swapType: SwapExternalType.swapToB,
+        preSqrtPrice: poolState.sqrtPrice,
+        preInstructions,
+        swapTransactions: [result.transaction],
         cleanUpInstructions,
         swapInEstimate: {
           inAmountA: new BN(0),
@@ -908,6 +1080,37 @@ export class Zap {
 
       const swapAmountToB = amountIn.sub(swapAmountToA);
 
+      const baseParams = {
+        user,
+        pool,
+        position,
+        positionNftAccount,
+        maxSqrtPriceChangeBps,
+        amount: new BN(0),
+        isDirectPool: false,
+        tokenAMint,
+        tokenBMint,
+        tokenAVault,
+        tokenBVault,
+        tokenAProgram,
+        tokenBProgram,
+        preInstructions,
+        preSqrtPrice: poolState.sqrtPrice,
+        cleanUpInstructions,
+      };
+
+      if (swapAmountToA.lte(MIN_SWAP_THRESHOLD)) {
+        throw new Error(
+          "Swap amount to token A is below minimum threshold for near single-sided pool, unable to zap in",
+        );
+      }
+
+      if (swapAmountToB.lte(MIN_SWAP_THRESHOLD)) {
+        throw new Error(
+          "Swap amount to token B is below minimum threshold for near single-sided pool, unable to zap in",
+        );
+      }
+
       const { transaction: swapToATransaction, quoteResponse: swapToAQuote } =
         await buildJupiterSwapTransaction(
           user,
@@ -938,20 +1141,7 @@ export class Zap {
           },
         );
       return {
-        user,
-        pool,
-        position,
-        positionNftAccount,
-        maxSqrtPriceChangeBps,
-        amount: new BN(0),
-        isDirectPool: false,
-        tokenAMint,
-        tokenBMint,
-        tokenAVault,
-        tokenBVault,
-        tokenAProgram,
-        tokenBProgram,
-        preInstructions,
+        ...baseParams,
         maxTransferAmountA: getExtendMaxAmountTransfer(
           swapToAQuote.outAmount,
           maxTransferAmountExtendPercentage,
@@ -961,9 +1151,7 @@ export class Zap {
           maxTransferAmountExtendPercentage,
         ),
         swapType: SwapExternalType.swapToBoth,
-        preSqrtPrice: poolState.sqrtPrice,
         swapTransactions: [swapToATransaction, swapToBTransaction],
-        cleanUpInstructions,
         swapInEstimate: {
           inAmountA: swapAmountToA,
           inAmountB: swapAmountToB,

@@ -1,0 +1,20 @@
+{
+  "inputMint": "",
+  "inAmount": "0",
+  "outputMint": "",
+  "outAmount": "0",
+  "otherAmountThreshold": "0",
+  "swapMode": "ExactIn",
+  "slippageBps": 300,
+  "platformFee": null,
+  "priceImpactPct": "0",
+  "routePlan": [],
+  "contextSlot": 0,
+  "timeTaken": 0,
+  "swapUsdValue": "0",
+  "simplerRouteUsed": false,
+  "mostReliableAmmsQuoteReport": { "info": {} },
+  "useIncurredSlippageForQuoting": null,
+  "otherRoutePlans": null,
+  "aggregatorVersion": null
+}

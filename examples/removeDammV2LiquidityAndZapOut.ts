@@ -10,6 +10,7 @@ import { Zap } from "../src/zap";
 import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
 import {
   CpAmm,
+  CollectFeeMode,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
   getTokenDecimals,
@@ -54,18 +55,26 @@ async function main() {
     const liquidityDelta =
       position[0].positionState.unlockedLiquidity.divn(1000000); // remove liquidity with too small amount
 
+    const collectFeeMode = poolState.collectFeeMode as CollectFeeMode;
+
     const amountARemoved = getAmountAFromLiquidityDelta(
-      liquidityDelta,
       poolState.sqrtPrice,
       poolState.sqrtMaxPrice,
+      liquidityDelta,
       Rounding.Down,
+      collectFeeMode,
+      poolState.tokenAAmount,
+      poolState.liquidity,
     );
 
     const amountBRemoved = getAmountBFromLiquidityDelta(
-      liquidityDelta,
-      poolState.sqrtPrice,
       poolState.sqrtMinPrice,
+      poolState.sqrtPrice,
+      liquidityDelta,
       Rounding.Down,
+      collectFeeMode,
+      poolState.tokenBAmount,
+      poolState.liquidity,
     );
 
     console.log({

@@ -1,7 +1,12 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { DAMM_V2_PROGRAM_ID, DAMM_V2_SWAP_DISCRIMINATOR } from "../constants";
-import { CpAmm, derivePoolAuthority, PoolState } from "@meteora-ag/cp-amm-sdk";
+import {
+  CollectFeeMode,
+  CpAmm,
+  derivePoolAuthority,
+  PoolState,
+} from "@meteora-ag/cp-amm-sdk";
 import { deriveDammV2EventAuthority } from "./pda";
 import BN from "bn.js";
 
@@ -102,6 +107,27 @@ export async function getDammV2RemainingAccounts(
   ];
 
   return remainingAccounts;
+}
+
+/**
+ * Returns true if the pool is single-sided with only tokenA
+ */
+export function isSingleSidedA(poolState: PoolState): boolean {
+  return (
+    poolState.collectFeeMode !== CollectFeeMode.Compounding &&
+    poolState.sqrtPrice.eq(poolState.sqrtMinPrice)
+  );
+}
+
+/**
+ * Returns true if the pool is single-sided with only tokenB
+ */
+export function isSingleSidedB(poolState: PoolState): boolean {
+  return (
+    (poolState.collectFeeMode as CollectFeeMode) !==
+      CollectFeeMode.Compounding &&
+    poolState.sqrtPrice.eq(poolState.sqrtMaxPrice)
+  );
 }
 
 /**

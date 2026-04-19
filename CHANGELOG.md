@@ -18,6 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Security
 
+## [1.3.0]
+
+### Added
+
+- Support Zap-In to damm-V2 Compounding Pool Fee Mode.
+- Support Zap-In to single-sided damm-v2 pool. A single-sided pool is a pool fully contains only one token in the pool pair, either fully token a (`sqrt_price` at `sqrt_min_price`) or fully token b (`sqrt_price` at `sqrt_max_price`).
+- Explicit error for Zap-In to near single-sided damm-v2 pool where the swap amount falls below the `MIN_SWAP_THRESHOLD` of 1000 lamports
+
 ## [1.2.0] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/27)
 
 ### Added

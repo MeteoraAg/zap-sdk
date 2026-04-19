@@ -136,12 +136,13 @@ export async function getJupAndDammV2Quotes(
     console.error("Error getting DAMM v2 quote:", error);
   }
 
+  const outputTokenMint = poolState.tokenAMint.equals(inputTokenMint)
+    ? poolState.tokenBMint
+    : poolState.tokenAMint;
+
   const jupiterQuote = await getJupiterQuote(
     inputTokenMint,
-    poolState.tokenAMint.equals(inputTokenMint)
-      ? poolState.tokenBMint
-      : poolState.tokenAMint,
-
+    outputTokenMint,
     new BN(ONE_TOKEN.floor().toString()),
     maxAccounts,
     jupSlippageBps,
