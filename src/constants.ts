@@ -55,5 +55,3 @@ export const DAMM_V2_SWAP_DISCRIMINATOR = [
 ];
 
 export const DEFAULT_JUPITER_API_URL = "https://api.jup.ag";
-
-export const MIN_SWAP_THRESHOLD = new BN(1000);

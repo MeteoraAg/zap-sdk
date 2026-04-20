@@ -38,9 +38,8 @@ export async function getJupiterQuote(
     config.jupiterApiUrl || DEFAULT_JUPITER_API_URL
   }/swap/v1/quote?${params.toString()}`;
 
-  let response = null;
   try {
-    response = await fetch(url, {
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         Accept: "application/json",
@@ -49,17 +48,14 @@ export async function getJupiterQuote(
     });
 
     if (!response.ok) {
-      // const errorText = await response.text();
-      // throw new Error(`Jupiter quote failed (${response.status}): ${errorText}`);
       return null;
     }
+
+    const result = (await response.json()) as JupiterQuoteResponse;
+    return result;
   } catch (error) {
     return null;
   }
-
-  const result = (await response.json()) as JupiterQuoteResponse;
-
-  return result;
 }
 
 export async function getJupiterSwapInstruction(
