@@ -68,7 +68,6 @@ import {
   DLMM_PROGRAM_ID,
   JUP_V6_PROGRAM_ID,
   MEMO_PROGRAM_ID,
-  MIN_SWAP_THRESHOLD,
 } from "./constants";
 import {
   CollectFeeMode,
@@ -628,33 +627,27 @@ export class Zap {
         isInputTokenA,
       );
 
-      if (swapInAmount.lte(MIN_SWAP_THRESHOLD)) {
-        throw new Error(
-          "Swap amount is below minimum threshold for near single-sided pool, unable to zap in",
-        );
-      } else {
-        amount = amountIn.sub(swapInAmount);
+      amount = amountIn.sub(swapInAmount);
 
-        const result = await buildJupiterSwapTransaction(
-          user,
-          inputTokenMint,
-          outputTokenMint,
-          swapInAmount,
-          maxAccounts,
-          slippageBps,
-          undefined,
-          {
-            jupiterApiUrl: this.jupiterApiUrl,
-            jupiterApiKey: this.jupiterApiKey,
-          },
-        );
-        swapTransactions = [result.transaction];
-        maxTransferAmount = getExtendMaxAmountTransfer(
-          result.quoteResponse.outAmount,
-          maxTransferAmountExtendPercentage,
-        );
-        swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
-      }
+      const result = await buildJupiterSwapTransaction(
+        user,
+        inputTokenMint,
+        outputTokenMint,
+        swapInAmount,
+        maxAccounts,
+        slippageBps,
+        undefined,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+        },
+      );
+      swapTransactions = [result.transaction];
+      maxTransferAmount = getExtendMaxAmountTransfer(
+        result.quoteResponse.outAmount,
+        maxTransferAmountExtendPercentage,
+      );
+      swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
     } else if (dammV2Quote !== null) {
       const quote = dammV2Quote;
       amount = amountIn;
@@ -1098,18 +1091,6 @@ export class Zap {
         preSqrtPrice: poolState.sqrtPrice,
         cleanUpInstructions,
       };
-
-      if (swapAmountToA.lte(MIN_SWAP_THRESHOLD)) {
-        throw new Error(
-          "Swap amount to token A is below minimum threshold for near single-sided pool, unable to zap in",
-        );
-      }
-
-      if (swapAmountToB.lte(MIN_SWAP_THRESHOLD)) {
-        throw new Error(
-          "Swap amount to token B is below minimum threshold for near single-sided pool, unable to zap in",
-        );
-      }
 
       const { transaction: swapToATransaction, quoteResponse: swapToAQuote } =
         await buildJupiterSwapTransaction(

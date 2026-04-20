@@ -114,7 +114,8 @@ export async function getDammV2RemainingAccounts(
  */
 export function isSingleSidedA(poolState: PoolState): boolean {
   return (
-    poolState.collectFeeMode !== CollectFeeMode.Compounding &&
+    (poolState.collectFeeMode as CollectFeeMode) !==
+      CollectFeeMode.Compounding &&
     poolState.sqrtPrice.eq(poolState.sqrtMinPrice)
   );
 }
