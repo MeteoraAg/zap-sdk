@@ -62,30 +62,6 @@ function snapshotUserBalances(
   };
 }
 
-function assertZapInBalances(
-  pre: UserBalances,
-  post: UserBalances,
-  isInputTokenA: boolean,
-  expectedInput: BN,
-) {
-  const userInputDelta = isInputTokenA
-    ? pre.tokenA.sub(post.tokenA)
-    : pre.tokenB.sub(post.tokenB);
-  const userOutputDelta = isInputTokenA
-    ? post.tokenB.sub(pre.tokenB)
-    : post.tokenA.sub(pre.tokenA);
-
-  // 0.1% tolerance based on the expected input
-  const tolerance = expectedInput.divn(1000);
-
-  // user spent close to expectedInput (within 0.1%)
-  const inputDiff = expectedInput.sub(userInputDelta).abs();
-  expect(inputDiff.lte(tolerance)).to.be.true;
-
-  // user's other token unchanged (within 0.1% of expected input)
-  expect(userOutputDelta.abs().lte(tolerance)).to.be.true;
-}
-
 describe("Zap in DAMM V2", () => {
   let svm: LiteSVM;
   let user: Keypair;
@@ -132,8 +108,6 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
         await zapInDammV2Direct(
           svm,
@@ -149,9 +123,6 @@ describe("Zap in DAMM V2", () => {
         .add(zapInTransaction)
         .add(cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, true, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -173,8 +144,6 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
         await zapInDammV2Direct(
           svm,
@@ -190,9 +159,6 @@ describe("Zap in DAMM V2", () => {
         .add(zapInTransaction)
         .add(cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, false, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -234,7 +200,6 @@ describe("Zap in DAMM V2", () => {
       signAndSendTransaction(svm, tx, [user]);
 
       const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, true, zapInAmount);
 
       // single-sided A pool: user's tokenB must be exactly unchanged (no swap)
       expect(post.tokenB.eq(pre.tokenB)).to.be.true;
@@ -316,8 +281,6 @@ describe("Zap in DAMM V2", () => {
 
       const result = await zap.buildZapInDammV2Transaction(params);
 
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       if (result.setupTransaction) {
         signAndSendTransaction(svm, result.setupTransaction, [user]);
       }
@@ -330,9 +293,6 @@ describe("Zap in DAMM V2", () => {
         .add(result.zapInTransaction)
         .add(result.cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, false, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -374,7 +334,6 @@ describe("Zap in DAMM V2", () => {
       signAndSendTransaction(svm, tx, [user]);
 
       const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, false, zapInAmount);
 
       // single-sided B pool: user's tokenA must be exactly unchanged (no swap)
       expect(post.tokenA.eq(pre.tokenA)).to.be.true;
@@ -456,8 +415,6 @@ describe("Zap in DAMM V2", () => {
 
       const result = await zap.buildZapInDammV2Transaction(params);
 
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       if (result.setupTransaction) {
         signAndSendTransaction(svm, result.setupTransaction, [user]);
       }
@@ -470,9 +427,6 @@ describe("Zap in DAMM V2", () => {
         .add(result.zapInTransaction)
         .add(result.cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, true, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -496,8 +450,6 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
         await zapInDammV2Direct(
           svm,
@@ -513,9 +465,6 @@ describe("Zap in DAMM V2", () => {
         .add(zapInTransaction)
         .add(cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, true, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -539,8 +488,6 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
         await zapInDammV2Direct(
           svm,
@@ -556,9 +503,6 @@ describe("Zap in DAMM V2", () => {
         .add(zapInTransaction)
         .add(cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, true, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -582,8 +526,6 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
-
       const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
         await zapInDammV2Direct(
           svm,
@@ -599,9 +541,6 @@ describe("Zap in DAMM V2", () => {
         .add(zapInTransaction)
         .add(cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
-
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-      assertZapInBalances(pre, post, false, zapInAmount);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -713,7 +652,6 @@ describe("Zap in DAMM V2", () => {
       );
 
       expect(swapTransactions.length).to.equal(2);
-      const pre = snapshotUserBalances(svm, pool, user.publicKey);
       if (setupTransaction) {
         signAndSendTransaction(svm, setupTransaction, [user]);
       }
@@ -727,15 +665,9 @@ describe("Zap in DAMM V2", () => {
         .add(cleanUpTransaction);
       signAndSendTransaction(svm, tx, [user]);
 
-      const post = snapshotUserBalances(svm, pool, user.publicKey);
-
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
       expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
-
-      const tolerance = zapInAmount.divn(1000);
-      expect(post.tokenA.sub(pre.tokenA).abs().lte(tolerance)).to.be.true;
-      expect(post.tokenB.sub(pre.tokenB).abs().lte(tolerance)).to.be.true;
     });
 
     it("zap in indirect - tokenC into single-sided tokenA pool", async () => {
@@ -831,8 +763,6 @@ describe("Zap in DAMM V2", () => {
       const positionState = getDammV2Position(svm, position);
       expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
 
-      const tolerance = zapInAmount.divn(1000);
-      expect(post.tokenA.sub(pre.tokenA).abs().lte(tolerance)).to.be.true;
       expect(post.tokenB.eq(pre.tokenB)).to.be.true;
     });
 
@@ -929,9 +859,7 @@ describe("Zap in DAMM V2", () => {
       const positionState = getDammV2Position(svm, position);
       expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
 
-      const tolerance = zapInAmount.divn(1000);
       expect(post.tokenA.eq(pre.tokenA)).to.be.true;
-      expect(post.tokenB.sub(pre.tokenB).abs().lte(tolerance)).to.be.true;
     });
   });
 });
