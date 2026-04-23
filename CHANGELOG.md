@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Added
 
 - Support Zap-In to damm-V2 Compounding Pool Fee Mode.
-- Support Zap-In to single-sided damm-v2 pool. A single-sided pool is a pool fully contains only one token in the pool pair, either fully token a (`sqrt_price` at `sqrt_min_price`) or fully token b (`sqrt_price` at `sqrt_max_price`).
+- Support Zap-In to single-sided damm-v2 pool. A single-sided pool is a pool that fully contains only one token of the pool pair, either fully token A (`sqrt_price` at `sqrt_min_price`) or fully token B (`sqrt_price` at `sqrt_max_price`).
 
 ### Fixed
 
