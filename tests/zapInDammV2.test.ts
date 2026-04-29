@@ -1,9 +1,20 @@
 import { LiteSVM } from "litesvm";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import {
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  Transaction,
+} from "@solana/web3.js";
 import { expect } from "chai";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { BN } from "@coral-xyz/anchor";
-import { CollectFeeMode, derivePositionAddress } from "@meteora-ag/cp-amm-sdk";
+import {
+  CollectFeeMode,
+  derivePositionAddress,
+  getAmountAFromLiquidityDelta,
+  getAmountBFromLiquidityDelta,
+  Rounding,
+} from "@meteora-ag/cp-amm-sdk";
 
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
 import { Zap } from "../src/zap";
@@ -60,6 +71,33 @@ function snapshotUserBalances(
     tokenA: getTokenBalance(svm, userTokenA),
     tokenB: getTokenBalance(svm, userTokenB),
   };
+}
+
+function poolBalances(
+  svm: LiteSVM,
+  pool: PublicKey,
+): { tokenA: BN; tokenB: BN } {
+  const poolState = getDammV2Pool(svm, pool);
+  const collectFeeMode = poolState.collectFeeMode as CollectFeeMode;
+  const tokenA = getAmountAFromLiquidityDelta(
+    poolState.sqrtPrice,
+    poolState.sqrtMaxPrice,
+    poolState.liquidity,
+    Rounding.Down,
+    collectFeeMode,
+    poolState.tokenAAmount,
+    poolState.liquidity,
+  );
+  const tokenB = getAmountBFromLiquidityDelta(
+    poolState.sqrtMinPrice,
+    poolState.sqrtPrice,
+    poolState.liquidity,
+    Rounding.Down,
+    collectFeeMode,
+    poolState.tokenBAmount,
+    poolState.liquidity,
+  );
+  return { tokenA, tokenB };
 }
 
 describe("Zap in DAMM V2", () => {
@@ -175,6 +213,8 @@ describe("Zap in DAMM V2", () => {
         liquidity: new BN("1844674407370955161600"),
       });
 
+      expect(poolBalances(svm, pool).tokenB.isZero()).to.be.true;
+
       const poolState = getDammV2Pool(svm, pool);
       const inputTokenMint = poolState.tokenAMint;
 
@@ -227,6 +267,8 @@ describe("Zap in DAMM V2", () => {
         sqrtPrice: SQRT_MIN_PRICE,
         liquidity: new BN("1844674407370955161600"),
       });
+
+      expect(poolBalances(svm, pool).tokenB.isZero()).to.be.true;
 
       const poolState = getDammV2Pool(svm, pool);
       const inputTokenMint = poolState.tokenBMint;
@@ -299,6 +341,75 @@ describe("Zap in DAMM V2", () => {
       expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
     });
 
+    it("zap in direct - tokenB into single-sided tokenA pool (cross-side via DammV2 fallback, no Jupiter quote)", async () => {
+      const customSqrtMin = SQRT_PRICE_50A_50B;
+      const pool = await createDammV2Pool({
+        svm,
+        creator: admin,
+        tokenAMint,
+        tokenBMint,
+        sqrtMinPrice: customSqrtMin,
+        sqrtPrice: customSqrtMin,
+        liquidity: new BN("1844674407370955161600"),
+      });
+
+      expect(poolBalances(svm, pool).tokenB.isZero()).to.be.true;
+
+      const poolState = getDammV2Pool(svm, pool);
+      const inputTokenMint = poolState.tokenBMint;
+
+      const { positionNftMint } = await createPosition(svm, user, pool);
+
+      const zapInAmount = new BN("100000000");
+
+      const cpAmm = new CpAmm(createLiteSvmConnection(svm));
+      const dammV2Quote = cpAmm.getQuote({
+        inAmount: new BN(LAMPORTS_PER_SOL),
+        inputTokenMint,
+        slippage: 0.5,
+        poolState: getDammV2Pool(svm, pool) as any,
+        currentTime: 0,
+        currentSlot: 0,
+        tokenADecimal: 9,
+        tokenBDecimal: 9,
+      });
+
+      const zap = new Zap(createLiteSvmConnection(svm));
+
+      const params = await zap.getZapInDammV2DirectPoolParams({
+        user: user.publicKey,
+        inputTokenMint,
+        amountIn: zapInAmount,
+        pool,
+        positionNftMint,
+        maxSqrtPriceChangeBps: 4_000_000_000,
+        maxTransferAmountExtendPercentage: 20,
+        maxAccounts: 40,
+        slippageBps: 300,
+        dammV2Quote,
+        jupiterQuote: null,
+      });
+
+      // verify SDK chose DammV2 route, no swap transactions built
+      expect(params.swapTransactions.length).to.equal(0);
+
+      const result = await zap.buildZapInDammV2Transaction(params);
+
+      if (result.setupTransaction) {
+        signAndSendTransaction(svm, result.setupTransaction, [user]);
+      }
+
+      const tx = new Transaction()
+        .add(result.ledgerTransaction)
+        .add(result.zapInTransaction)
+        .add(result.cleanUpTransaction);
+      signAndSendTransaction(svm, tx, [user]);
+
+      const position = derivePositionAddress(positionNftMint);
+      const positionState = getDammV2Position(svm, position);
+      expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
+    });
+
     it("zap in direct - tokenB into single-sided tokenB pool", async () => {
       const pool = await createDammV2Pool({
         svm,
@@ -308,6 +419,8 @@ describe("Zap in DAMM V2", () => {
         sqrtPrice: SQRT_MAX_PRICE,
         liquidity: new BN("1844674407370955161600"),
       });
+
+      expect(poolBalances(svm, pool).tokenA.isZero()).to.be.true;
 
       const poolState = getDammV2Pool(svm, pool);
       const inputTokenMint = poolState.tokenBMint;
@@ -362,6 +475,8 @@ describe("Zap in DAMM V2", () => {
         liquidity: new BN("1844674407370955161600"),
       });
 
+      expect(poolBalances(svm, pool).tokenA.isZero()).to.be.true;
+
       const poolState = getDammV2Pool(svm, pool);
       const inputTokenMint = poolState.tokenAMint;
       const outputTokenMint = poolState.tokenBMint;
@@ -372,7 +487,7 @@ describe("Zap in DAMM V2", () => {
 
       const cpAmm = new CpAmm(createLiteSvmConnection(svm));
       const swapQuote = cpAmm.getQuote({
-        inAmount: zapInAmount,
+        inAmount: new BN(LAMPORTS_PER_SOL),
         inputTokenMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPool) as any,
@@ -420,6 +535,73 @@ describe("Zap in DAMM V2", () => {
       }
       for (const swapTx of result.swapTransactions) {
         signAndSendTransaction(svm, swapTx, [user]);
+      }
+
+      const tx = new Transaction()
+        .add(result.ledgerTransaction)
+        .add(result.zapInTransaction)
+        .add(result.cleanUpTransaction);
+      signAndSendTransaction(svm, tx, [user]);
+
+      const position = derivePositionAddress(positionNftMint);
+      const positionState = getDammV2Position(svm, position);
+      expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
+    });
+
+    it("zap in direct - tokenA into single-sided tokenB pool (cross-side via DammV2 fallback, no Jupiter quote)", async () => {
+      const pool = await createDammV2Pool({
+        svm,
+        creator: admin,
+        tokenAMint,
+        tokenBMint,
+        sqrtPrice: SQRT_MAX_PRICE,
+        liquidity: new BN("1844674407370955161600"),
+      });
+
+      expect(poolBalances(svm, pool).tokenA.isZero()).to.be.true;
+
+      const poolState = getDammV2Pool(svm, pool);
+      const inputTokenMint = poolState.tokenAMint;
+
+      const { positionNftMint } = await createPosition(svm, user, pool);
+
+      const zapInAmount = new BN("5000000");
+
+      const cpAmm = new CpAmm(createLiteSvmConnection(svm));
+      const dammV2Quote = cpAmm.getQuote({
+        inAmount: zapInAmount,
+        inputTokenMint,
+        slippage: 0.5,
+        poolState: getDammV2Pool(svm, pool) as any,
+        currentTime: 0,
+        currentSlot: 0,
+        tokenADecimal: 9,
+        tokenBDecimal: 9,
+      });
+
+      const zap = new Zap(createLiteSvmConnection(svm));
+
+      const params = await zap.getZapInDammV2DirectPoolParams({
+        user: user.publicKey,
+        inputTokenMint,
+        amountIn: zapInAmount,
+        pool,
+        positionNftMint,
+        maxSqrtPriceChangeBps: 1000000,
+        maxTransferAmountExtendPercentage: 20,
+        maxAccounts: 40,
+        slippageBps: 300,
+        dammV2Quote,
+        jupiterQuote: null,
+      });
+
+      // verify SDK chose DammV2 route, no swap transactions built
+      expect(params.swapTransactions.length).to.equal(0);
+
+      const result = await zap.buildZapInDammV2Transaction(params);
+
+      if (result.setupTransaction) {
+        signAndSendTransaction(svm, result.setupTransaction, [user]);
       }
 
       const tx = new Transaction()
@@ -692,6 +874,8 @@ describe("Zap in DAMM V2", () => {
         liquidity: new BN("1844674407370955161600"),
       });
 
+      expect(poolBalances(svm, pool).tokenB.isZero()).to.be.true;
+
       const poolState = getDammV2Pool(svm, pool);
       const { positionNftMint } = await createPosition(svm, user, pool);
 
@@ -787,6 +971,8 @@ describe("Zap in DAMM V2", () => {
         sqrtPrice: SQRT_MAX_PRICE,
         liquidity: new BN("1844674407370955161600"),
       });
+
+      expect(poolBalances(svm, pool).tokenA.isZero()).to.be.true;
 
       const poolState = getDammV2Pool(svm, pool);
       const { positionNftMint } = await createPosition(svm, user, pool);
