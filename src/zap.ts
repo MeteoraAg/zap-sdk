@@ -575,33 +575,43 @@ export class Zap {
       (singleSidedA && !isInputTokenA) ||
       (singleSidedB && isInputTokenA)
     ) {
-      if (jupiterQuote === null) {
+      if (
+        jupiterQuote !== null &&
+        (dammV2Quote === null ||
+          new BN(jupiterQuote.outAmount).gte(dammV2Quote.swapOutAmount))
+      ) {
+        swapInAmount = amountIn;
+        amount = new BN(0);
+
+        const result = await buildJupiterSwapTransaction(
+          user,
+          inputTokenMint,
+          outputTokenMint,
+          swapInAmount,
+          maxAccounts,
+          slippageBps,
+          undefined,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+          },
+        );
+        swapTransactions = [result.transaction];
+        maxTransferAmount = getExtendMaxAmountTransfer(
+          result.quoteResponse.outAmount,
+          maxTransferAmountExtendPercentage,
+        );
+        swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
+      } else if (dammV2Quote !== null) {
+        swapInAmount = new BN(0);
+        amount = amountIn;
+        maxTransferAmount = new BN(0);
+        swapRoute = ZapInDammV2PoolSwapRoute.DammV2;
+      } else {
         throw new Error(
-          "No Jupiter quote found for single-sided swap, unable to proceed",
+          "No Jupiter or DAMM v2 quote found for single-sided swap, unable to proceed",
         );
       }
-      swapInAmount = amountIn;
-      amount = new BN(0);
-
-      const result = await buildJupiterSwapTransaction(
-        user,
-        inputTokenMint,
-        outputTokenMint,
-        swapInAmount,
-        maxAccounts,
-        slippageBps,
-        undefined,
-        {
-          jupiterApiUrl: this.jupiterApiUrl,
-          jupiterApiKey: this.jupiterApiKey,
-        },
-      );
-      swapTransactions = [result.transaction];
-      maxTransferAmount = getExtendMaxAmountTransfer(
-        result.quoteResponse.outAmount,
-        maxTransferAmountExtendPercentage,
-      );
-      swapRoute = ZapInDammV2PoolSwapRoute.Jupiter;
     } else if (
       jupiterQuote !== null &&
       (dammV2Quote === null ||
