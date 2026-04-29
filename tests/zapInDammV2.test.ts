@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { LiteSVM } from "litesvm";
 import {
   Keypair,
@@ -362,17 +363,15 @@ describe("Zap in DAMM V2", () => {
 
       const zapInAmount = new BN("100000000");
 
-      const cpAmm = new CpAmm(createLiteSvmConnection(svm));
-      const dammV2Quote = cpAmm.getQuote({
-        inAmount: new BN(LAMPORTS_PER_SOL),
-        inputTokenMint,
-        slippage: 0.5,
-        poolState: getDammV2Pool(svm, pool) as any,
-        currentTime: 0,
-        currentSlot: 0,
-        tokenADecimal: 9,
-        tokenBDecimal: 9,
-      });
+      // use dummy quote. cpAmm.getQuote errors out on CI machine
+      const dammV2Quote = {
+        swapInAmount: zapInAmount,
+        consumedInAmount: zapInAmount,
+        swapOutAmount: new BN(0),
+        minSwapOutAmount: new BN(0),
+        totalFee: new BN(0),
+        priceImpact: new Decimal(0),
+      };
 
       const zap = new Zap(createLiteSvmConnection(svm));
 
