@@ -19,10 +19,10 @@ async function main() {
   const user = Keypair.fromSecretKey(Uint8Array.from([]));
   // ZEC-USDC
   const dlmmPool = new PublicKey(
-    "9ToMYnmEeYKc1AWYAFo8yjPKM1bt3vPhgw1U6qh9RxBd"
+    "9ToMYnmEeYKc1AWYAFo8yjPKM1bt3vPhgw1U6qh9RxBd",
   );
   const usdcMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   );
   const binDelta = 34;
 
@@ -93,7 +93,7 @@ async function main() {
 
   const finalTx = [];
   const res: { landed50: number } = (await fetch(
-    "https://worker.jup.ag/jito-floor"
+    "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
 
   const jitoFloor = res.landed50;
@@ -132,8 +132,8 @@ async function main() {
         result.zapInTransaction,
         result.cleanUpTransaction,
         jitoTipsTx,
-      ]
-    )
+      ],
+    ),
   );
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;

@@ -1,13 +1,18 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { DAMM_V2_PROGRAM_ID, DAMM_V2_SWAP_DISCRIMINATOR } from "../constants";
-import { CpAmm, derivePoolAuthority, PoolState } from "@meteora-ag/cp-amm-sdk";
+import {
+  CollectFeeMode,
+  CpAmm,
+  derivePoolAuthority,
+  PoolState,
+} from "@meteora-ag/cp-amm-sdk";
 import { deriveDammV2EventAuthority } from "./pda";
 import BN from "bn.js";
 
 export async function getDammV2Pool(
   connection: Connection,
-  poolAddress: PublicKey
+  poolAddress: PublicKey,
 ): Promise<PoolState> {
   const cpAmmClient = new CpAmm(connection);
   return await cpAmmClient.fetchPoolState(poolAddress);
@@ -20,7 +25,7 @@ export async function getDammV2RemainingAccounts(
   userTokenOutAccount: PublicKey,
   tokenAProgram = TOKEN_PROGRAM_ID,
   tokenBProgram = TOKEN_PROGRAM_ID,
-  poolState: PoolState
+  poolState: PoolState,
 ): Promise<
   Array<{
     isSigner: boolean;
@@ -105,6 +110,28 @@ export async function getDammV2RemainingAccounts(
 }
 
 /**
+ * Returns true if the pool is single-sided with only tokenA
+ */
+export function isSingleSidedA(poolState: PoolState): boolean {
+  return (
+    (poolState.collectFeeMode as CollectFeeMode) !==
+      CollectFeeMode.Compounding &&
+    poolState.sqrtPrice.eq(poolState.sqrtMinPrice)
+  );
+}
+
+/**
+ * Returns true if the pool is single-sided with only tokenB
+ */
+export function isSingleSidedB(poolState: PoolState): boolean {
+  return (
+    (poolState.collectFeeMode as CollectFeeMode) !==
+      CollectFeeMode.Compounding &&
+    poolState.sqrtPrice.eq(poolState.sqrtMaxPrice)
+  );
+}
+
+/**
  * Creates payload data for DAMM V2 swap instruction
  * @param amountIn - The input amount for the swap
  * @param minimumSwapAmountOut - The minimum amount out for the swap
@@ -115,7 +142,7 @@ export async function getDammV2RemainingAccounts(
  */
 export function createDammV2SwapPayload(
   amountIn: BN,
-  minimumSwapAmountOut: BN
+  minimumSwapAmountOut: BN,
 ): Buffer {
   return Buffer.concat([
     Buffer.from(DAMM_V2_SWAP_DISCRIMINATOR),

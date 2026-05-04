@@ -28,13 +28,13 @@ export const getOrCreateATAInstruction = async (
   owner: PublicKey,
   payer: PublicKey,
   allowOwnerOffCurve = true,
-  tokenProgram: PublicKey
+  tokenProgram: PublicKey,
 ): Promise<{ ataPubkey: PublicKey; ix?: TransactionInstruction }> => {
   const toAccount = getAssociatedTokenAddressSync(
     tokenMint,
     owner,
     allowOwnerOffCurve,
-    tokenProgram
+    tokenProgram,
   );
 
   const ix = createAssociatedTokenAccountIdempotentInstruction(
@@ -42,7 +42,7 @@ export const getOrCreateATAInstruction = async (
     toAccount,
     owner,
     tokenMint,
-    tokenProgram
+    tokenProgram,
   );
   return { ataPubkey: toAccount, ix };
 };
@@ -57,12 +57,12 @@ export const getOrCreateATAInstruction = async (
 export function unwrapSOLInstruction(
   owner: PublicKey,
   receiver: PublicKey,
-  allowOwnerOffCurve = true
+  allowOwnerOffCurve = true,
 ): TransactionInstruction | null {
   const wSolATAAccount = getAssociatedTokenAddressSync(
     NATIVE_MINT,
     owner,
-    allowOwnerOffCurve
+    allowOwnerOffCurve,
   );
   if (wSolATAAccount) {
     const closedWrappedSolInstruction = createCloseAccountInstruction(
@@ -70,7 +70,7 @@ export function unwrapSOLInstruction(
       receiver,
       owner,
       [],
-      TOKEN_PROGRAM_ID
+      TOKEN_PROGRAM_ID,
     );
     return closedWrappedSolInstruction;
   }
@@ -85,7 +85,7 @@ export function unwrapSOLInstruction(
  */
 export async function getTokenAccountBalance(
   connection: Connection,
-  tokenAccount: PublicKey
+  tokenAccount: PublicKey,
 ): Promise<string> {
   let balance: string;
   try {
@@ -110,7 +110,7 @@ export function wrapSOLInstruction(
   from: PublicKey,
   to: PublicKey,
   amount: bigint,
-  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID,
 ): TransactionInstruction[] {
   return [
     SystemProgram.transfer({
@@ -143,7 +143,7 @@ const CLOSE_ACCOUNT_DISCRIMINATOR = 9;
  * @returns Filtered array with CloseAccount instructions removed
  */
 export function filterOutCloseSplTokenAccountInstructions(
-  instructions: TransactionInstruction[]
+  instructions: TransactionInstruction[],
 ): TransactionInstruction[] {
   return instructions.filter((ix) => {
     if (ix.programId.equals(TOKEN_PROGRAM_ID)) {

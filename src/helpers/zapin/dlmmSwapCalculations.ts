@@ -58,7 +58,7 @@ function getBinAmountDistribution(
   tokenXAmount: BN,
   tokenYAmount: BN,
   bins: BinLiquidity[],
-  strategy: StrategyType
+  strategy: StrategyType,
 ): BinAmountDistribution[] {
   const amountDistribution = toAmountsBothSideByStrategy(
     activeBin.binId,
@@ -72,7 +72,7 @@ function getBinAmountDistribution(
     strategy,
     dlmm.tokenX.mint,
     dlmm.tokenY.mint,
-    dlmm.clock
+    dlmm.clock,
   );
   const binAmountDistribution = bins
     .filter((bin) => bin.binId >= minBinId && bin.binId <= maxBinId) // direct estimate route passes extra bins so we need to filter them out
@@ -85,7 +85,7 @@ function getBinAmountDistribution(
 
   invariant(
     binAmountDistribution.length === amountDistribution.length,
-    "binAmountDistribution length mismatch"
+    "binAmountDistribution length mismatch",
   );
 
   return binAmountDistribution;
@@ -96,11 +96,11 @@ function getBinAmountDistribution(
  * the ratio is thesum of y token in each bin vs the sum of x token multiply by price of y/x in each bin
  */
 function calculateValueRatio(
-  binAmountDistribution: BinAmountDistribution[]
+  binAmountDistribution: BinAmountDistribution[],
 ): Decimal {
   const totalXAmountInTermsOfY = binAmountDistribution.reduce((acc, bin) => {
     const xInTermsOfY = new Decimal(bin.amountX.toString()).mul(
-      new Decimal(bin.price)
+      new Decimal(bin.price),
     );
     return acc.add(xInTermsOfY);
   }, new Decimal(0));
@@ -137,7 +137,7 @@ async function getBestSwapQuoteJupiterDlmm(
   swapSlippageBps: number,
   swapForY: boolean,
   binArrays: BinArrayAccount[],
-  config: ZapConfig = {}
+  config: ZapConfig = {},
 ): Promise<SwapQuoteResult | null> {
   let dlmmQuoteResult = null;
   try {
@@ -145,7 +145,7 @@ async function getBestSwapQuoteJupiterDlmm(
       inAmount,
       swapForY,
       new BN(swapSlippageBps),
-      binArrays
+      binArrays,
     );
   } catch (error) {
     // dlmm quote can fail, if the pool has insufficient liquidity
@@ -160,7 +160,7 @@ async function getBestSwapQuoteJupiterDlmm(
     false,
     true,
     true,
-    config
+    config,
   );
 
   // normalizing the quote interface
@@ -193,7 +193,7 @@ async function getBestSwapQuoteJupiterDlmm(
 function calculateInitialSwapEstimate(
   tokenXAmount: BN,
   tokenYAmount: BN,
-  currentPrice: Decimal
+  currentPrice: Decimal,
 ): BN {
   const valueX = new Decimal(tokenXAmount.toString()).mul(currentPrice);
   const valueY = new Decimal(tokenYAmount.toString());
@@ -230,7 +230,7 @@ function binarySearchRefineDirectSwapAmount(
   swapDirection: DlmmSwapType,
   initialRoute: DlmmDirectSwapQuoteRoute,
   swapSlippageBps: number,
-  binArrayForSwap: BinArrayAccount[]
+  binArrayForSwap: BinArrayAccount[],
 ): BN {
   let left = new BN(0);
   let right = swapDirection === DlmmSwapType.XToY ? tokenXAmount : tokenYAmount;
@@ -258,14 +258,14 @@ function binarySearchRefineDirectSwapAmount(
           mid,
           swapDirection === DlmmSwapType.XToY,
           swapSlippageBpsBn,
-          binArrayForSwap
+          binArrayForSwap,
         );
         effectiveSwapRate = new Decimal(dlmmQuote.minOutAmount.toString()).div(
-          new Decimal(dlmmQuote.consumedInAmount.toString())
+          new Decimal(dlmmQuote.consumedInAmount.toString()),
         );
         // TODO: if we change the dlmm-sdk to return the activeBin.id, we can diirectly use that
         const newActiveBin = bins.find(
-          (x) => x.price === dlmmQuote.endPrice.toString()
+          (x) => x.price === dlmmQuote.endPrice.toString(),
         );
         if (
           newActiveBin &&
@@ -282,7 +282,7 @@ function binarySearchRefineDirectSwapAmount(
         // dlmm quote can fail, if the pool has insufficient liquidity
         console.error(
           "Error getting DLMM quote, using jupiter quote only:",
-          error
+          error,
         );
         route = DlmmDirectSwapQuoteRoute.Jupiter;
       }
@@ -305,7 +305,7 @@ function binarySearchRefineDirectSwapAmount(
       postSwapX,
       postSwapY,
       bins,
-      strategy
+      strategy,
     );
     const ratio = calculateValueRatio(postSwapBinAmountDistribution);
 
@@ -387,7 +387,7 @@ export async function estimateDlmmIndirectSwap({
 
   invariant(
     !inputTokenMint.equals(tokenXMint) && !inputTokenMint.equals(tokenYMint),
-    "Input token must not be tokenX or tokenY for indirect route"
+    "Input token must not be tokenX or tokenY for indirect route",
   );
 
   if (singleSided !== undefined) {
@@ -404,14 +404,14 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      config
+      config,
     );
 
     if (!quote) {
       throw new Error(
         `Failed to get Jupiter quote for single-sided indirect swap to ${
           singleSidedX ? "tokenX" : "tokenY"
-        }`
+        }`,
       );
     }
 
@@ -439,7 +439,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      config
+      config,
     ),
     getJupiterQuote(
       inputTokenMint,
@@ -450,7 +450,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      config
+      config,
     ),
   ]);
 
@@ -465,7 +465,7 @@ export async function estimateDlmmIndirectSwap({
         !quoteToX ? "quoteToX failed" : ""
       }${!quoteToX && !quoteToY ? " and " : ""}${
         !quoteToY ? "quoteToY failed" : ""
-      }`
+      }`,
     );
   }
 
@@ -475,7 +475,7 @@ export async function estimateDlmmIndirectSwap({
   const maxBinId = activeBin.binId + maxDeltaId;
   const binMeta = await dlmm.getBinsBetweenLowerAndUpperBound(
     minBinId,
-    maxBinId
+    maxBinId,
   );
   const binAmountDistribution = getBinAmountDistribution(
     dlmm,
@@ -485,7 +485,7 @@ export async function estimateDlmmIndirectSwap({
     initialTokenX,
     initialTokenY,
     binMeta.bins,
-    strategy
+    strategy,
   );
   const initialRatio = calculateValueRatio(binAmountDistribution);
 
@@ -505,10 +505,10 @@ export async function estimateDlmmIndirectSwap({
   }
 
   const effectiveRateToX = new Decimal(quoteToX.outAmount).div(
-    new Decimal(quoteToX.inAmount)
+    new Decimal(quoteToX.inAmount),
   );
   const effectiveRateToY = new Decimal(quoteToY.outAmount).div(
-    new Decimal(quoteToY.inAmount)
+    new Decimal(quoteToY.inAmount),
   );
 
   // binary search to find optimal input
@@ -548,7 +548,7 @@ export async function estimateDlmmIndirectSwap({
       estimatedX,
       estimatedY,
       binMeta.bins,
-      strategy
+      strategy,
     );
     const ratio = calculateValueRatio(postSwapBinAmountDistribution);
 
@@ -581,7 +581,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      config
+      config,
     ),
     getJupiterQuote(
       inputTokenMint,
@@ -592,7 +592,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
-      config
+      config,
     ),
   ]);
 
@@ -659,7 +659,7 @@ async function estimateDlmmDirectSwapCore({
       const swapForY = false;
       const binArrayForSwap = await dlmm.getBinArrayForSwap(
         false,
-        SWAP_BIN_ARRAY_COUNT
+        SWAP_BIN_ARRAY_COUNT,
       );
       const quote = await getBestSwapQuoteJupiterDlmm(
         dlmm,
@@ -669,12 +669,12 @@ async function estimateDlmmDirectSwapCore({
         swapSlippageBps,
         swapForY,
         binArrayForSwap,
-        config
+        config,
       );
 
       if (!quote) {
         throw new Error(
-          "Failed to get swap quote for single-sided direct swap from Y to X"
+          "Failed to get swap quote for single-sided direct swap from Y to X",
         );
       }
 
@@ -690,7 +690,7 @@ async function estimateDlmmDirectSwapCore({
       const swapForY = true; // X to Y swap
       const binArrayForSwap = await dlmm.getBinArrayForSwap(
         swapForY,
-        SWAP_BIN_ARRAY_COUNT
+        SWAP_BIN_ARRAY_COUNT,
       );
       const quote = await getBestSwapQuoteJupiterDlmm(
         dlmm,
@@ -700,12 +700,12 @@ async function estimateDlmmDirectSwapCore({
         swapSlippageBps,
         swapForY,
         binArrayForSwap,
-        config
+        config,
       );
 
       if (!quote) {
         throw new Error(
-          "Failed to get swap quote for single-sided direct swap from X to Y"
+          "Failed to get swap quote for single-sided direct swap from X to Y",
         );
       }
 
@@ -737,7 +737,7 @@ async function estimateDlmmDirectSwapCore({
   // get bins between minBinId and maxBinId with SWAP_BIN_ARRAY_COUNT extra bins on each side
   const binMeta = await dlmm.getBinsBetweenLowerAndUpperBound(
     minBinId - SWAP_BIN_ARRAY_COUNT,
-    maxBinId + SWAP_BIN_ARRAY_COUNT
+    maxBinId + SWAP_BIN_ARRAY_COUNT,
   );
   const binAmountDistribution = getBinAmountDistribution(
     dlmm,
@@ -747,7 +747,7 @@ async function estimateDlmmDirectSwapCore({
     tokenXAmount,
     tokenYAmount,
     binMeta.bins,
-    strategy
+    strategy,
   );
   const activeBinPrice = new Decimal(activeBin.price);
 
@@ -789,7 +789,7 @@ async function estimateDlmmDirectSwapCore({
       : calculateInitialSwapEstimate(
           tokenYAmount,
           tokenXAmount,
-          activeBinPrice.pow(-1)
+          activeBinPrice.pow(-1),
         );
 
   // if zero, then calculation failed
@@ -807,7 +807,7 @@ async function estimateDlmmDirectSwapCore({
   const swapForY = swapType === DlmmSwapType.XToY;
   const binArrayForSwap = await dlmm.getBinArrayForSwap(
     swapForY,
-    SWAP_BIN_ARRAY_COUNT
+    SWAP_BIN_ARRAY_COUNT,
   );
   const initialQuote = await getBestSwapQuoteJupiterDlmm(
     dlmm,
@@ -817,20 +817,20 @@ async function estimateDlmmDirectSwapCore({
     swapSlippageBps,
     swapForY,
     binArrayForSwap,
-    config
+    config,
   );
 
   if (!initialQuote) {
     throw new Error(
       `Failed to get initial swap quote for balanced direct swap (${
         swapType === DlmmSwapType.XToY ? "X to Y" : "Y to X"
-      })`
+      })`,
     );
   }
 
   // calculate effective rate from initialQuote
   const effectiveSwapRate = new Decimal(initialQuote.outAmount.toString()).div(
-    new Decimal(initialQuote.inAmount.toString())
+    new Decimal(initialQuote.inAmount.toString()),
   );
 
   const postSwapX =
@@ -849,7 +849,7 @@ async function estimateDlmmDirectSwapCore({
     postSwapX,
     postSwapY,
     binMeta.bins,
-    strategy
+    strategy,
   );
   const ratio = calculateValueRatio(postSwapBinAmountDistribution);
 
@@ -881,7 +881,7 @@ async function estimateDlmmDirectSwapCore({
     swapType,
     initialQuote.route,
     swapSlippageBps,
-    binArrayForSwap
+    binArrayForSwap,
   );
 
   // get final quote for refinedAmount
@@ -893,7 +893,7 @@ async function estimateDlmmDirectSwapCore({
     swapSlippageBps,
     swapForY,
     binArrayForSwap,
-    config
+    config,
   );
 
   if (!finalQuote) {
@@ -964,7 +964,7 @@ export async function estimateDlmmDirectSwap({
   invariant(
     inputTokenMint.equals(dlmm.lbPair.tokenXMint) ||
       inputTokenMint.equals(dlmm.lbPair.tokenYMint),
-    "Input token must be tokenX or tokenY for direct route"
+    "Input token must be tokenX or tokenY for direct route",
   );
 
   const isInputTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);

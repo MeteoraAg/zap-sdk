@@ -20,14 +20,14 @@ async function main() {
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const inputMint = new PublicKey(
-    "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups"
+    "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups",
   );
   const outputMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   );
 
   const lbPairAddress = new PublicKey(
-    "9NRifL3nKQU84hMTbhE7spakkGy5vq4AvNHNQYr8LkW7"
+    "9NRifL3nKQU84hMTbhE7spakkGy5vq4AvNHNQYr8LkW7",
   );
 
   const zap = new Zap(connection, {
@@ -44,7 +44,7 @@ async function main() {
     const currentTime = await connection.getBlockTime(currentSlot);
 
     const { userPositions } = await dlmm.getPositionsByUserAndLbPair(
-      wallet.publicKey
+      wallet.publicKey,
     );
 
     if (userPositions.length === 0) {
@@ -57,10 +57,10 @@ async function main() {
     for (const { positionData } of userPositions) {
       for (const binData of positionData.positionBinData) {
         totalAmountXRemoved = totalAmountXRemoved.add(
-          new BN(binData.positionXAmount)
+          new BN(binData.positionXAmount),
         );
         totalAmountYRemoved = totalAmountYRemoved.add(
-          new BN(binData.positionYAmount)
+          new BN(binData.positionYAmount),
         );
       }
     }
@@ -80,7 +80,7 @@ async function main() {
     const removeLiquidityTxs = await Promise.all(
       userPositions.map(({ publicKey, positionData }) => {
         const binIdsToRemove = positionData.positionBinData.map(
-          (bin) => bin.binId
+          (bin) => bin.binId,
         );
         return dlmm.removeLiquidity({
           position: publicKey,
@@ -90,7 +90,7 @@ async function main() {
           bps: new BN(1 * 100), // Remove 1% of liquidity
           shouldClaimAndClose: true,
         });
-      })
+      }),
     );
 
     const transaction = new Transaction();
@@ -117,7 +117,7 @@ async function main() {
       dlmm
         .getBinArrayForSwap(true, 5)
         .then((binArrays) =>
-          dlmm.swapQuote(amountXRemoved, true, new BN(50), binArrays)
+          dlmm.swapQuote(amountXRemoved, true, new BN(50), binArrays),
         ),
       getJupiterQuote(
         inputMint,
@@ -131,7 +131,7 @@ async function main() {
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,
-        }
+        },
       ),
     ]);
 
@@ -145,7 +145,7 @@ async function main() {
     } else {
       console.log(
         "DLMM quote failed:",
-        dlmmQuote.status === "rejected" ? dlmmQuote.reason : "Unknown error"
+        dlmmQuote.status === "rejected" ? dlmmQuote.reason : "Unknown error",
       );
     }
 
@@ -156,7 +156,7 @@ async function main() {
         "Jupiter quote failed:",
         jupiterQuote.status === "rejected"
           ? jupiterQuote.reason
-          : "Unknown error"
+          : "Unknown error",
       );
     }
 
@@ -182,7 +182,7 @@ async function main() {
 
     console.log(
       `Best protocol: ${bestProtocol} with quote:`,
-      bestQuoteValue.toString()
+      bestQuoteValue.toString(),
     );
 
     let zapOutTx;
@@ -207,7 +207,7 @@ async function main() {
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,
-        }
+        },
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({
@@ -239,7 +239,7 @@ async function main() {
       connection,
       transaction,
       [wallet],
-      { commitment: "confirmed" }
+      { commitment: "confirmed" },
     );
 
     console.log(`Zap transaction sent: ${signature}`);

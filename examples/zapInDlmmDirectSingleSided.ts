@@ -24,10 +24,10 @@ async function main() {
   const user = Keypair.fromSecretKey(Uint8Array.from([]));
   // PUMP-SOL (x = PUMP, y = SOL)
   const dlmmPool = new PublicKey(
-    "HbjYfcWZBjCBYTJpZkLGxqArVmZVu3mQcRudb6Wg1sVh"
+    "HbjYfcWZBjCBYTJpZkLGxqArVmZVu3mQcRudb6Wg1sVh",
   );
   const inputTokenMint = new PublicKey(
-    "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn"
+    "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
   );
   const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
 
@@ -79,7 +79,7 @@ async function main() {
 
   const finalTx = [];
   const res: { landed50: number } = (await fetch(
-    "https://worker.jup.ag/jito-floor"
+    "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
 
   const jitoFloor = res.landed50;
@@ -107,8 +107,8 @@ async function main() {
         zapInDlmmTx.zapInTransaction,
         zapInDlmmTx.cleanUpTransaction,
         jitoTipsTx,
-      ]
-    )
+      ],
+    ),
   );
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -117,11 +117,11 @@ async function main() {
     tx.feePayer = user.publicKey;
 
     const txAccounts = tx.instructions.flatMap(({ keys }) =>
-      keys.map((key) => key)
+      keys.map((key) => key),
     );
     if (
       txAccounts.some(
-        ({ isSigner, pubkey }) => isSigner && pubkey.equals(position.publicKey)
+        ({ isSigner, pubkey }) => isSigner && pubkey.equals(position.publicKey),
       )
     ) {
       tx.partialSign(position);

@@ -8,24 +8,24 @@ import ZapIDL from "./idl/zap/idl.json";
 
 export const ZAP_PROGRAM_ID = new PublicKey(ZapIDL.address);
 export const JUP_V6_PROGRAM_ID = new PublicKey(
-  "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+  "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
 );
 export const DAMM_V2_PROGRAM_ID = new PublicKey(
-  "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+  "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
 );
 export const DLMM_PROGRAM_ID = new PublicKey(
-  "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"
+  "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
 );
 export const MEMO_PROGRAM_ID = new PublicKey(
-  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
 );
 
 export const BIN_ARRAY_INDEX_BOUND = [
   BIN_ARRAY_BITMAP_SIZE.mul(
-    EXTENSION_BINARRAY_BITMAP_SIZE.add(new BN(1))
+    EXTENSION_BINARRAY_BITMAP_SIZE.add(new BN(1)),
   ).neg(),
   BIN_ARRAY_BITMAP_SIZE.mul(EXTENSION_BINARRAY_BITMAP_SIZE.add(new BN(1))).sub(
-    new BN(1)
+    new BN(1),
   ),
 ];
 

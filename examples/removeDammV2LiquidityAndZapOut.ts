@@ -10,6 +10,7 @@ import { Zap } from "../src/zap";
 import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
 import {
   CpAmm,
+  CollectFeeMode,
   getAmountAFromLiquidityDelta,
   getAmountBFromLiquidityDelta,
   getTokenDecimals,
@@ -26,14 +27,14 @@ async function main() {
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const inputMint = new PublicKey(
-    "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups"
+    "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups",
   );
   const outputMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   );
 
   const poolAddress = new PublicKey(
-    "7ccKzmrXBpFHwyZGPqPuKL6bEyWAETSnHwnWe3jEneVc"
+    "7ccKzmrXBpFHwyZGPqPuKL6bEyWAETSnHwnWe3jEneVc",
   );
 
   const zap = new Zap(connection, {
@@ -54,18 +55,26 @@ async function main() {
     const liquidityDelta =
       position[0].positionState.unlockedLiquidity.divn(1000000); // remove liquidity with too small amount
 
+    const collectFeeMode = poolState.collectFeeMode as CollectFeeMode;
+
     const amountARemoved = getAmountAFromLiquidityDelta(
-      liquidityDelta,
       poolState.sqrtPrice,
       poolState.sqrtMaxPrice,
-      Rounding.Down
+      liquidityDelta,
+      Rounding.Down,
+      collectFeeMode,
+      poolState.tokenAAmount,
+      poolState.liquidity,
     );
 
     const amountBRemoved = getAmountBFromLiquidityDelta(
-      liquidityDelta,
-      poolState.sqrtPrice,
       poolState.sqrtMinPrice,
-      Rounding.Down
+      poolState.sqrtPrice,
+      liquidityDelta,
+      Rounding.Down,
+      collectFeeMode,
+      poolState.tokenBAmount,
+      poolState.liquidity,
     );
 
     console.log({
@@ -111,13 +120,13 @@ async function main() {
     const tokenADecimal = await getTokenDecimals(
       connection,
       poolState.tokenAMint,
-      TOKEN_PROGRAM_ID
+      TOKEN_PROGRAM_ID,
     );
 
     const tokenBDecimal = await getTokenDecimals(
       connection,
       poolState.tokenBMint,
-      TOKEN_PROGRAM_ID
+      TOKEN_PROGRAM_ID,
     );
 
     const [dammV2Quote, jupiterQuote] = await Promise.allSettled([
@@ -143,7 +152,7 @@ async function main() {
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,
-        }
+        },
       ),
     ]);
 
@@ -157,7 +166,9 @@ async function main() {
     } else {
       console.log(
         "DAMM v2 quote failed:",
-        dammV2Quote.status === "rejected" ? dammV2Quote.reason : "Unknown error"
+        dammV2Quote.status === "rejected"
+          ? dammV2Quote.reason
+          : "Unknown error",
       );
     }
 
@@ -168,7 +179,7 @@ async function main() {
         "Jupiter quote failed:",
         jupiterQuote.status === "rejected"
           ? jupiterQuote.reason
-          : "Unknown error"
+          : "Unknown error",
       );
     }
 
@@ -194,7 +205,7 @@ async function main() {
 
     console.log(
       `Best protocol: ${bestProtocol} with quote:`,
-      bestQuoteValue.toString()
+      bestQuoteValue.toString(),
     );
 
     let zapOutTx;
@@ -219,7 +230,7 @@ async function main() {
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,
-        }
+        },
       );
 
       zapOutTx = await zap.zapOutThroughJupiter({
@@ -251,7 +262,7 @@ async function main() {
       connection,
       transaction,
       [wallet],
-      { commitment: "confirmed" }
+      { commitment: "confirmed" },
     );
 
     console.log(`Zap transaction sent: ${signature}`);

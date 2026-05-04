@@ -26,7 +26,7 @@ async function main() {
   const dammV2Instance = new CpAmm(connection);
   const pool = new PublicKey("BnztueWcXv93mgW7yJe8WYpnCxpz34nujPhfjQT6SLu1");
   const usdcMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   );
   const poolState = await dammV2Instance.fetchPoolState(pool);
 
@@ -66,13 +66,13 @@ async function main() {
   const tokenADecimal = await getTokenDecimals(
     connection,
     tokenAMint,
-    TOKEN_PROGRAM_ID
+    TOKEN_PROGRAM_ID,
   );
 
   const tokenBDecimal = await getTokenDecimals(
     connection,
     tokenBMint,
-    TOKEN_PROGRAM_ID
+    TOKEN_PROGRAM_ID,
   );
 
   const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes(
@@ -87,7 +87,7 @@ async function main() {
     {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
-    }
+    },
   );
 
   const result = await zap.getZapInDammV2DirectPoolParams({
@@ -110,7 +110,7 @@ async function main() {
 
   const finalTx = [];
   const res: { landed50: number } = (await fetch(
-    "https://worker.jup.ag/jito-floor"
+    "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
 
   const jitoFloor = res.landed50;
@@ -142,8 +142,8 @@ async function main() {
         zapInDammV2Tx.zapInTransaction,
         zapInDammV2Tx.cleanUpTransaction,
         jitoTipsTx,
-      ]
-    )
+      ],
+    ),
   );
 
   const blockhash = (await connection.getLatestBlockhash()).blockhash;
