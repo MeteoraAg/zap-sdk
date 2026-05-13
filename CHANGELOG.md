@@ -18,13 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Security
 
-## [1.3.0]
+## [1.3.1] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/31)
 
 ### Changed
 
 - Support DLMM 0.12.0 by marking `bin_array_bitmap_extension` as writable and bumping `@meteora-ag/dlmm` to `^1.9.8` for updated swap quote math (collect fee mode + limit order).
 
-## [1.3.0]
+## [1.3.0] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/30)
 
 ### Added
 
