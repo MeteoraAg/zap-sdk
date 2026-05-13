@@ -15,8 +15,8 @@ importers:
         specifier: ^1.4.0
         version: 1.4.1(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@meteora-ag/dlmm':
-        specifier: ^1.9.7
-        version: 1.9.7(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
+        specifier: ^1.9.8
+        version: 1.9.8(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@solana/spl-token':
         specifier: ^0.4.13
         version: 0.4.13(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10))(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
@@ -438,8 +438,8 @@ packages:
   '@meteora-ag/cp-amm-sdk@1.4.1':
     resolution: {integrity: sha512-wdN9g8X6I6Rxk7VIg3XE1YrUAz4ETpRsVTg5kr8O+EwJ4uuz9gz0q4AlZbtCwQaeqRXztfdN77QfU6Tq+lalJQ==}
 
-  '@meteora-ag/dlmm@1.9.7':
-    resolution: {integrity: sha512-UBIfyP9BKeJ25VlrCpEpipkWJ+IrU2UAvdgUhRH9X8pmiHNhhxH3Q5FHdB+dF3WckMA2FdzDK26CFo3syqFQIQ==}
+  '@meteora-ag/dlmm@1.9.8':
+    resolution: {integrity: sha512-T8s7gIGzlCVgz8Y1jtZYC/Pf4fupusXcG8ZceVx4XNnT4NOED9hEnxGKCe+oIz9SLYFR1jpgIErEmpbb6iRvvw==}
 
   '@noble/curves@1.9.6':
     resolution: {integrity: sha512-GIKz/j99FRthB8icyJQA51E8Uk5hXmdyThjgQXRKiv9h0zeRlzSCLIzFw6K1LotZ3XuB7yzlf76qk7uBmTdFqA==}
@@ -2254,7 +2254,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@meteora-ag/dlmm@1.9.7(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)':
+  '@meteora-ag/dlmm@1.9.8(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)':
     dependencies:
       '@coral-xyz/anchor': 0.31.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@coral-xyz/borsh': 0.31.0(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10))

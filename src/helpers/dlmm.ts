@@ -188,7 +188,7 @@ export async function getDlmmRemainingAccounts(
     },
     {
       isSigner: false,
-      isWritable: false,
+      isWritable: true,
       pubkey: binArrayBitmapExtension,
     },
     {

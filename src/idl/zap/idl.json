@@ -532,6 +532,9 @@
           {
             "name": "TransferHookMultiReward",
             "fields": ["u8"]
+          },
+          {
+            "name": "TransferHookReferral"
           }
         ]
       }

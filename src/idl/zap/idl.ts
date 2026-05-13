@@ -539,6 +539,9 @@ export type Zap = {
             name: "transferHookMultiReward";
             fields: ["u8"];
           },
+          {
+            name: "transferHookReferral";
+          },
         ];
       };
     },
