@@ -32,6 +32,7 @@ export async function getJupiterQuote(
     onlyDirectRoutes: onlyDirectRoutes.toString(),
     restrictIntermediateTokens: restrictIntermediateTokens.toString(),
     dynamicSlippage: dynamicSlippage.toString(),
+    forJitoBundle: 'true',
   });
 
   const url = `${
