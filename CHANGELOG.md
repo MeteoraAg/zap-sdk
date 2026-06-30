@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Security
 
+## [1.3.2] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/32)
+
+- Add `forJitoBundle` in `getJupiterQuote` to exclude AMMs that explicitly block Jito bundles
+
 ## [1.3.1] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/31)
 
 ### Changed
