@@ -160,6 +160,7 @@ async function getBestSwapQuoteJupiterDlmm(
     false,
     true,
     true,
+    true,
     config,
   );
 
@@ -404,6 +405,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
+      true,
       config,
     );
 
@@ -439,6 +441,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
+      true,
       config,
     ),
     getJupiterQuote(
@@ -448,6 +451,7 @@ export async function estimateDlmmIndirectSwap({
       50,
       swapSlippageBps,
       false,
+      true,
       true,
       true,
       config,
@@ -581,6 +585,7 @@ export async function estimateDlmmIndirectSwap({
       false,
       true,
       true,
+      true,
       config,
     ),
     getJupiterQuote(
@@ -590,6 +595,7 @@ export async function estimateDlmmIndirectSwap({
       50,
       swapSlippageBps,
       false,
+      true,
       true,
       true,
       config,

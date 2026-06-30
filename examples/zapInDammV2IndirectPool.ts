@@ -73,6 +73,7 @@ const keypairPath = "";
     false,
     true,
     true,
+    true,
     {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
@@ -86,6 +87,7 @@ const keypairPath = "";
     40, // maxAccounts,
     50, //slippageBps,
     false,
+    true,
     true,
     true,
     {

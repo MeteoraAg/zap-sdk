@@ -128,6 +128,7 @@ async function main() {
         false,
         true,
         true,
+        true,
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,

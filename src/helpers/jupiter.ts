@@ -21,6 +21,7 @@ export async function getJupiterQuote(
   dynamicSlippage: boolean = false,
   onlyDirectRoutes: boolean,
   restrictIntermediateTokens: boolean,
+  forJitoBundle: boolean = true,
   config: ZapConfig = {},
 ): Promise<JupiterQuoteResponse | null> {
   const params = new URLSearchParams({
@@ -32,6 +33,7 @@ export async function getJupiterQuote(
     onlyDirectRoutes: onlyDirectRoutes.toString(),
     restrictIntermediateTokens: restrictIntermediateTokens.toString(),
     dynamicSlippage: dynamicSlippage.toString(),
+    forJitoBundle: forJitoBundle.toString(),
   });
 
   const url = `${
@@ -121,6 +123,7 @@ export async function buildJupiterSwapTransaction(
       maxAccounts,
       slippageBps,
       false,
+      true,
       true,
       true,
       config,
