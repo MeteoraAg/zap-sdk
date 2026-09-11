@@ -14,12 +14,23 @@ import {
   StrategyType,
   RemainingAccountInfo,
 } from "@meteora-ag/dlmm";
+import { PoolState } from "@meteora-ag/cp-amm-sdk";
 
 export type ZapProgram = Program<Zap>;
+
+/** Jupiter Swap API version used for quotes and swap instructions. */
+export enum JupiterApiVersion {
+  /** @deprecated `GET /swap/v1/quote` + `POST /swap/v1/swap-instructions`. Use V2; v1 will be removed in a future major version. */
+  V1 = "v1",
+  /** `GET /swap/v2/build` (default) */
+  V2 = "v2",
+}
 
 export type ZapConfig = {
   jupiterApiUrl?: string;
   jupiterApiKey?: string;
+  /** Defaults to `JupiterApiVersion.V2`. */
+  jupiterApiVersion?: JupiterApiVersion;
 };
 
 ///// ZAPOUT TYPES /////
@@ -66,11 +77,43 @@ export interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
-  jupiterSwapResponse: JupiterSwapInstructionResponse;
+  jupiterSwapResponse: Pick<JupiterSwapInstructionResponse, "swapInstruction">;
   maxSwapAmount: BN;
   percentageToZapOut: number;
 }
 
+export type GetJupiterQuoteParams = {
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  amount: BN;
+  /** Wallet the swap is built for. Sent as `taker` under v2, unused under v1. */
+  user: PublicKey;
+  maxAccounts: number;
+  slippageBps: number;
+  /** Default false */
+  dynamicSlippage?: boolean;
+  /** Default true */
+  onlyDirectRoutes?: boolean;
+  /** Default true */
+  restrictIntermediateTokens?: boolean;
+  /** Default true */
+  forJitoBundle?: boolean;
+};
+
+export type GetJupAndDammV2QuotesParams = {
+  connection: Connection;
+  user: PublicKey;
+  inputTokenMint: PublicKey;
+  poolState: PoolState;
+  tokenADecimal: number;
+  tokenBDecimal: number;
+  dammV2SlippageBps: number;
+  jupSlippageBps: number;
+  maxAccounts: number;
+  config?: ZapConfig;
+};
+
+/** Quote fields shared by v1 `/quote` and v2 `/build` responses. */
 export interface JupiterQuoteResponse {
   inputMint: string;
   inAmount: string;
@@ -79,19 +122,28 @@ export interface JupiterQuoteResponse {
   otherAmountThreshold: string;
   swapMode: string;
   slippageBps: number;
-  platformFee: any;
   priceImpactPct: string;
   routePlan: JupiterRoutePlan[];
-  contextSlot: number;
-  timeTaken: number;
-  swapUsdValue: string;
-  simplerRouteUsed: boolean;
-  mostReliableAmmsQuoteReport: {
+  /** @deprecated v1 only */
+  platformFee?: any;
+  /** @deprecated v1 only */
+  contextSlot?: number;
+  /** @deprecated v1 only */
+  timeTaken?: number;
+  /** @deprecated v1 only */
+  swapUsdValue?: string;
+  /** @deprecated v1 only */
+  simplerRouteUsed?: boolean;
+  /** @deprecated v1 only */
+  mostReliableAmmsQuoteReport?: {
     info: Record<string, string>;
   };
-  useIncurredSlippageForQuoting: any;
-  otherRoutePlans: any;
-  aggregatorVersion: any;
+  /** @deprecated v1 only */
+  useIncurredSlippageForQuoting?: any;
+  /** @deprecated v1 only */
+  otherRoutePlans?: any;
+  /** @deprecated v1 only */
+  aggregatorVersion?: any;
 }
 
 export interface JupiterRoutePlan {
@@ -106,6 +158,39 @@ export interface JupiterInstruction {
   data: string;
 }
 
+export interface JupiterInstructionLayout {
+  /** Byte offset of amount_in (u64 LE) inside the instruction data */
+  amountInOffset: (dataLength: number) => number;
+  /** Index of the user transfer authority in the instruction accounts */
+  userTransferAuthorityIndex: number;
+}
+
+export interface JupiterBlockhashWithMetadata {
+  blockhash: number[];
+  lastValidBlockHeight: number;
+  fetchedAt: {
+    secs_since_epoch: number;
+    nanos_since_epoch: number;
+  };
+}
+
+/** Instruction fields shared by v1 `/swap-instructions` and v2 `/build` responses. */
+export interface JupiterSwapInstructions {
+  computeBudgetInstructions: JupiterInstruction[];
+  setupInstructions: JupiterInstruction[];
+  swapInstruction: JupiterInstruction;
+  cleanupInstruction: JupiterInstruction | null;
+  otherInstructions: JupiterInstruction[];
+  tipInstruction?: JupiterInstruction | null;
+  addressesByLookupTableAddress: Record<string, string[]> | null;
+  blockhashWithMetadata: JupiterBlockhashWithMetadata;
+}
+
+/** Response of v2 `GET /swap/v2/build`: quote and instructions in one object. */
+export type JupiterBuildResponse = JupiterQuoteResponse &
+  JupiterSwapInstructions;
+
+/** @deprecated v1 `POST /swap/v1/swap-instructions` response. Use `JupiterBuildResponse` / `JupiterSwapInstructions`. */
 export interface JupiterSwapInstructionResponse {
   tokenLedgerInstruction: JupiterInstruction | null;
   computeBudgetInstructions: JupiterInstruction[];
@@ -266,6 +351,8 @@ export enum DlmmSingleSided {
 }
 
 export interface EstimateDlmmDirectSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
   amountIn: BN;
   inputTokenMint: PublicKey;
   lbPair: PublicKey;
@@ -304,6 +391,8 @@ export interface DlmmDirectSwapEstimate {
 }
 
 export interface EstimateDlmmRebalanceSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
   position: PublicKey;
   lbPair: PublicKey;
   connection: Connection;
@@ -330,6 +419,8 @@ export interface DlmmDirectRebalanceEstimate {
 }
 
 export interface EstimateDlmmIndirectSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
   amountIn: BN;
   inputTokenMint: PublicKey;
   lbPair: PublicKey;

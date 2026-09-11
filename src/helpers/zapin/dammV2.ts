@@ -1,10 +1,9 @@
-import { CpAmm, getTokenDecimals, PoolState } from "@meteora-ag/cp-amm-sdk";
+import { CpAmm, getTokenDecimals } from "@meteora-ag/cp-amm-sdk";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Connection, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import Decimal from "decimal.js";
 import { getJupiterQuote } from "../jupiter";
-import { JupiterQuoteResponse, ZapConfig } from "../../types";
+import { GetJupAndDammV2QuotesParams, JupiterQuoteResponse } from "../../types";
 import {
   convertUiAmountToLamports,
   convertLamportsToUiAmount,
@@ -38,7 +37,7 @@ export function calculateDirectPoolSwapAmount(
       .add(poolBalanceTokenB);
 
     swapAmountDecimal = numerator.div(denominator);
-  } else {
+  } else { 
     const numerator = amountDecimal.mul(poolBalanceTokenA);
     const denominator = currentPrice
       .mul(poolBalanceTokenB)
@@ -83,17 +82,18 @@ export function calculateIndirectPoolSwapAmount(
   );
 }
 
-export async function getJupAndDammV2Quotes(
-  connection: Connection,
-  inputTokenMint: PublicKey,
-  poolState: PoolState,
-  tokenADecimal: number,
-  tokenBDecimal: number,
-  dammV2SlippageBps: number,
-  jupSlippageBps: number,
-  maxAccounts: number,
-  config: ZapConfig = {},
-): Promise<{
+export async function getJupAndDammV2Quotes({
+  connection,
+  user,
+  inputTokenMint,
+  poolState,
+  tokenADecimal,
+  tokenBDecimal,
+  dammV2SlippageBps,
+  jupSlippageBps,
+  maxAccounts,
+  config = {},
+}: GetJupAndDammV2QuotesParams): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
     consumedInAmount: BN;
@@ -141,15 +141,14 @@ export async function getJupAndDammV2Quotes(
     : poolState.tokenAMint;
 
   const jupiterQuote = await getJupiterQuote(
-    inputTokenMint,
-    outputTokenMint,
-    new BN(ONE_TOKEN.floor().toString()),
-    maxAccounts,
-    jupSlippageBps,
-    false,
-    true,
-    true,
-    true,
+    {
+      inputMint: inputTokenMint,
+      outputMint: outputTokenMint,
+      amount: new BN(ONE_TOKEN.floor().toString()),
+      user,
+      maxAccounts,
+      slippageBps: jupSlippageBps,
+    },
     config,
   );
   return {

@@ -35,6 +35,7 @@ import {
   DlmmSingleSided,
   ZapInDammV2PoolSwapRoute,
   ZapConfig,
+  JupiterApiVersion,
 } from "./types";
 
 import {
@@ -54,6 +55,7 @@ import {
   deriveDlmmEventAuthority,
   convertLamportsToUiAmount,
   buildJupiterSwapTransaction,
+  getJupiterInstructionLayout,
   toProgramStrategyType,
   filterOutCloseSplTokenAccountInstructions,
   isSingleSidedA,
@@ -62,9 +64,9 @@ import {
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
   AMOUNT_IN_DLMM_OFFSET,
-  AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   DAMM_V2_PROGRAM_ID,
   DEFAULT_JUPITER_API_URL,
+  DEFAULT_JUPITER_API_VERSION,
   DLMM_PROGRAM_ID,
   JUP_V6_PROGRAM_ID,
   MEMO_PROGRAM_ID,
@@ -107,16 +109,19 @@ export class Zap {
   private connection: Connection;
   private jupiterApiUrl: string;
   private jupiterApiKey: string;
+  private jupiterApiVersion: JupiterApiVersion;
   public zapProgram: ZapProgram;
   /**
    * @param connection - The connection to the Solana cluster
-   * @param config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
+   * @param config - Optional configuration for Jupiter API URL (default: https://api.jup.ag), API key (default: empty string) and API version (default: JupiterApiVersion.V2)
    */
   constructor(connection: Connection, config: ZapConfig = {}) {
     this.connection = connection;
     this.zapProgram = new Program(ZapIDL as ZapTypes, { connection });
     this.jupiterApiUrl = config.jupiterApiUrl || DEFAULT_JUPITER_API_URL;
     this.jupiterApiKey = config.jupiterApiKey || "";
+    this.jupiterApiVersion =
+      config.jupiterApiVersion ?? DEFAULT_JUPITER_API_VERSION;
   }
 
   /////// PRIVATE FUNDTIONS //////
@@ -594,6 +599,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
         swapTransactions = [result.transaction];
@@ -650,6 +656,7 @@ export class Zap {
         {
           jupiterApiUrl: this.jupiterApiUrl,
           jupiterApiKey: this.jupiterApiKey,
+          jupiterApiVersion: this.jupiterApiVersion,
         },
       );
       swapTransactions = [result.transaction];
@@ -870,6 +877,7 @@ export class Zap {
         {
           jupiterApiUrl: this.jupiterApiUrl,
           jupiterApiKey: this.jupiterApiKey,
+          jupiterApiVersion: this.jupiterApiVersion,
         },
       );
 
@@ -923,6 +931,7 @@ export class Zap {
         {
           jupiterApiUrl: this.jupiterApiUrl,
           jupiterApiKey: this.jupiterApiKey,
+          jupiterApiVersion: this.jupiterApiVersion,
         },
       );
 
@@ -971,6 +980,7 @@ export class Zap {
         {
           jupiterApiUrl: this.jupiterApiUrl,
           jupiterApiKey: this.jupiterApiKey,
+          jupiterApiVersion: this.jupiterApiVersion,
         },
       );
 
@@ -1019,6 +1029,7 @@ export class Zap {
         {
           jupiterApiUrl: this.jupiterApiUrl,
           jupiterApiKey: this.jupiterApiKey,
+          jupiterApiVersion: this.jupiterApiVersion,
         },
       );
 
@@ -1114,6 +1125,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
 
@@ -1129,6 +1141,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
       return {
@@ -1435,6 +1448,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
         swapTransactions.push(swapTx);
@@ -1641,6 +1655,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
       swapTransactions.push(swapToXTransaction);
@@ -1662,6 +1677,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
       swapTransactions.push(swapToYTransaction);
@@ -2130,6 +2146,7 @@ export class Zap {
           {
             jupiterApiUrl: this.jupiterApiUrl,
             jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
           },
         );
         swapTransaction = swapTx;
@@ -2421,7 +2438,9 @@ export class Zap {
       "base64",
     );
 
-    const offsetAmountIn = payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET;
+    const offsetAmountIn = getJupiterInstructionLayout(
+      payloadData,
+    ).amountInOffset(payloadData.length);
 
     // NEED TO UNWRAP SOL SINCE WE SKIP THIS STEP IN REMOVE LIQUIDITY FOR ACCURATE SOL BALANCE CHECK
     if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
