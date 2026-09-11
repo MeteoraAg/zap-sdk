@@ -4,14 +4,24 @@ import { PublicKey, Transaction } from "@solana/web3.js";
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
 
 import { Zap } from "../../src/zap";
-import { JUP_V6_PROGRAM_ID } from "../../src/constants";
-import { JupiterQuoteResponse } from "../../src/types";
-import { getDammV2Pool } from "./damm_v2";
+import {
+  AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
+  JUP_V6_PROGRAM_ID,
+} from "../../src/constants";
+import { JupiterApiVersion, JupiterQuoteResponse } from "../../src/types";
+import { getDammV2OutputMint, getDammV2Pool } from "./damm_v2";
+import { getDlmmOutputMint, getLbPair } from "./dlmm";
 import { getTokenBalance, getTokenProgram } from "./token";
 import { TOKEN_DECIMALS } from "./token";
 import { createLiteSvmConnection } from "./svm";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { getJupRemainingAccounts, JUP_ROUTE_DISC } from "./jupiter";
+import {
+  encodeJupRouteData,
+  getDammV2SwapLeg,
+  getDlmmSwapLeg,
+  getJupRemainingAccounts,
+  JupiterSwapLeg,
+} from "./jupiter";
 
 function getDammV2Quote(
   svm: LiteSVM,
@@ -46,12 +56,11 @@ export async function zapOutDammV2(
   pool: PublicKey,
   amountIn: BN,
 ): Promise<Transaction> {
-  const zap = new Zap(createLiteSvmConnection(svm));
+  const zap = new Zap(createLiteSvmConnection(svm), {
+    jupiterApiVersion: JupiterApiVersion.V1,
+  });
   const poolState = getDammV2Pool(svm, pool);
-
-  const outputTokenMint = poolState.tokenAMint.equals(inputTokenMint)
-    ? poolState.tokenBMint
-    : poolState.tokenAMint;
+  const outputTokenMint = getDammV2OutputMint(poolState, inputTokenMint);
 
   const inputTokenProgram = getTokenProgram(svm, inputTokenMint);
   const outputTokenProgram = getTokenProgram(svm, outputTokenMint);
@@ -86,7 +95,9 @@ export async function zapInDammV2Direct(
   zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 }> {
-  const zap = new Zap(createLiteSvmConnection(svm));
+  const zap = new Zap(createLiteSvmConnection(svm), {
+    jupiterApiVersion: JupiterApiVersion.V1,
+  });
 
   const dammV2Quote = getDammV2Quote(svm, pool, inputTokenMint, amountIn);
 
@@ -131,7 +142,9 @@ export async function zapInDammV2Indirect(
   zapInTransaction: Transaction;
   cleanUpTransaction: Transaction;
 }> {
-  const zap = new Zap(createLiteSvmConnection(svm));
+  const zap = new Zap(createLiteSvmConnection(svm), {
+    jupiterApiVersion: JupiterApiVersion.V1,
+  });
 
   const params = await zap.getZapInDammV2IndirectPoolParams({
     user,
@@ -161,11 +174,66 @@ export async function zapOutJupV6ThroughDammv2(
   inputTokenMint: PublicKey,
   pool: PublicKey,
 ): Promise<Transaction> {
-  const zap = new Zap(createLiteSvmConnection(svm));
   const poolState = getDammV2Pool(svm, pool);
-  const outputTokenMint = poolState.tokenAMint.equals(inputTokenMint)
-    ? poolState.tokenBMint
-    : poolState.tokenAMint;
+  const outputTokenMint = getDammV2OutputMint(poolState, inputTokenMint);
+
+  return await zapOutJupV6(
+    svm,
+    user,
+    inputTokenMint,
+    outputTokenMint,
+    (userTokenInAccount, userTokenOutAccount) =>
+      getDammV2SwapLeg(
+        svm,
+        pool,
+        user,
+        userTokenInAccount,
+        userTokenOutAccount,
+      ),
+  );
+}
+
+// jup v6 aggregator with route_plan that swaps through DLMM pool
+export async function zapOutJupV6ThroughDlmm(
+  svm: LiteSVM,
+  user: PublicKey,
+  inputTokenMint: PublicKey,
+  lbPair: PublicKey,
+): Promise<Transaction> {
+  const lbPairState = getLbPair(svm, lbPair);
+  const outputTokenMint = getDlmmOutputMint(lbPairState, inputTokenMint);
+
+  return await zapOutJupV6(
+    svm,
+    user,
+    inputTokenMint,
+    outputTokenMint,
+    (userTokenInAccount, userTokenOutAccount) =>
+      getDlmmSwapLeg(
+        svm,
+        lbPair,
+        user,
+        userTokenInAccount,
+        userTokenOutAccount,
+        inputTokenMint,
+      ),
+  );
+}
+
+// Hand-built Jupiter v6 `route` instruction with a single swap leg, wrapped in the zap program's zapOut.
+async function zapOutJupV6(
+  svm: LiteSVM,
+  user: PublicKey,
+  inputTokenMint: PublicKey,
+  outputTokenMint: PublicKey,
+  getSwapLeg: (
+    userTokenInAccount: PublicKey,
+    userTokenOutAccount: PublicKey,
+  ) => JupiterSwapLeg | Promise<JupiterSwapLeg>,
+): Promise<Transaction> {
+  const zap = new Zap(createLiteSvmConnection(svm), {
+    jupiterApiVersion: JupiterApiVersion.V1,
+  });
 
   const inputTokenProgram = getTokenProgram(svm, inputTokenMint);
   const outputTokenProgram = getTokenProgram(svm, outputTokenMint);
@@ -185,46 +253,23 @@ export async function zapOutJupV6ThroughDammv2(
 
   const preUserTokenBalance = getTokenBalance(svm, userTokenInAccount);
 
+  const leg = await getSwapLeg(userTokenInAccount, userTokenOutAccount);
   const remainingAccounts = getJupRemainingAccounts(
-    svm,
-    pool,
     user,
     userTokenInAccount,
     userTokenOutAccount,
     outputTokenMint,
+    leg,
   );
 
-  const routeStepPlanCount = Buffer.alloc(4);
-  routeStepPlanCount.writeUInt32LE(1, 0);
-  const routeStepPlanBuffer = Buffer.alloc(4);
-  routeStepPlanBuffer.writeUint8(77, 0); // MeteoraDammV2 = enum index 77
-  routeStepPlanBuffer.writeUint8(100, 1); // percent
-  routeStepPlanBuffer.writeUint8(0, 2); // inputIndex
-  routeStepPlanBuffer.writeUint8(1, 3); // outputIndex
-
-  const inAmount = new BN(0).toArrayLike(Buffer, "le", 8);
-  const quotedOutAmount = new BN(0).toArrayLike(Buffer, "le", 8);
-  const slippageBps = new BN(9900).toArrayLike(Buffer, "le", 2);
-  const platformFee = Buffer.from([0]);
-
-  const payloadData = Buffer.concat([
-    Buffer.from(JUP_ROUTE_DISC),
-    routeStepPlanCount,
-    routeStepPlanBuffer,
-    inAmount,
-    quotedOutAmount,
-    slippageBps,
-    platformFee,
-  ]);
+  // amount_in is the placeholder right after the route plan; the zap program splices the real amount in.
+  const payloadData = encodeJupRouteData(new BN(0), leg.swapEnum);
 
   return zap.zapOut({
     userTokenInAccount,
     zapOutParams: {
       percentage: 100,
-      offsetAmountIn:
-        JUP_ROUTE_DISC.length +
-        routeStepPlanCount.length +
-        routeStepPlanBuffer.length,
+      offsetAmountIn: payloadData.length - AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
       preUserTokenBalance,
       maxSwapAmount: new BN("1000000000000"),
       payloadData,
@@ -233,5 +278,32 @@ export async function zapOutJupV6ThroughDammv2(
     ammProgram: JUP_V6_PROGRAM_ID,
     preInstructions: [],
     postInstructions: [],
+  });
+}
+
+export async function zapOutDlmm(
+  svm: LiteSVM,
+  user: PublicKey,
+  inputTokenMint: PublicKey,
+  lbPair: PublicKey,
+  amountIn: BN,
+): Promise<Transaction> {
+  const zap = new Zap(createLiteSvmConnection(svm), {
+    jupiterApiVersion: JupiterApiVersion.V1,
+  });
+  const lbPairState = getLbPair(svm, lbPair);
+  const outputTokenMint = getDlmmOutputMint(lbPairState, inputTokenMint);
+
+  return await zap.zapOutThroughDlmm({
+    user,
+    lbPairAddress: lbPair,
+    inputMint: inputTokenMint,
+    outputMint: outputTokenMint,
+    inputTokenProgram: getTokenProgram(svm, inputTokenMint),
+    outputTokenProgram: getTokenProgram(svm, outputTokenMint),
+    amountIn,
+    minimumSwapAmountOut: new BN(0),
+    maxSwapAmount: amountIn,
+    percentageToZapOut: 100,
   });
 }

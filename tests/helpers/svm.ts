@@ -17,6 +17,7 @@ import { expect } from "chai";
 import ZapIDL from "../../src/idl/zap/idl.json";
 import DammV2IDL from "../fixtures/damm_v2.json";
 import JupiterIDL from "../fixtures/jupiter.json";
+import DlmmIDL from "../fixtures/dlmm.json";
 
 export function startSvm(): LiteSVM {
   const svm = new LiteSVM().withFeatureSet(FeatureSet.allEnabled());
@@ -32,6 +33,10 @@ export function startSvm(): LiteSVM {
   svm.addProgramFromFile(
     new PublicKey(JupiterIDL.address),
     "tests/fixtures/jupiter.so",
+  );
+  svm.addProgramFromFile(
+    new PublicKey(DlmmIDL.address),
+    "tests/fixtures/dlmm.so",
   );
 
   return svm;
@@ -49,6 +54,8 @@ export function createLiteSvmConnection(svm: LiteSVM): Connection {
 
   return {
     getAccountInfo: async (pubkey: PublicKey) => getAccountInfoResult(pubkey),
+    getMultipleAccountsInfo: async (pubkeys: PublicKey[]) =>
+      pubkeys.map(getAccountInfoResult),
     getAccountInfoAndContext: async (pubkey: PublicKey) => ({
       context: { slot: 0 },
       value: getAccountInfoResult(pubkey),

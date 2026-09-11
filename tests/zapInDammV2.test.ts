@@ -19,6 +19,7 @@ import {
 
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
 import { Zap } from "../src/zap";
+import { JupiterApiVersion } from "../src/types";
 import {
   startSvm,
   generateKpAndFund,
@@ -299,7 +300,9 @@ describe("Zap in DAMM V2", () => {
         [{ outputMint: outputTokenMint, swapPool, outAmount: estimatedOut }],
       ).restore;
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const jupiterQuote = buildJupiterQuoteResponse(
         inputTokenMint,
@@ -373,7 +376,9 @@ describe("Zap in DAMM V2", () => {
         priceImpact: new Decimal(0),
       };
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const params = await zap.getZapInDammV2DirectPoolParams({
         user: user.publicKey,
@@ -504,7 +509,9 @@ describe("Zap in DAMM V2", () => {
         [{ outputMint: outputTokenMint, swapPool, outAmount: estimatedOut }],
       ).restore;
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const jupiterQuote = buildJupiterQuoteResponse(
         inputTokenMint,
@@ -578,7 +585,9 @@ describe("Zap in DAMM V2", () => {
         tokenBDecimal: 9,
       });
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const params = await zap.getZapInDammV2DirectPoolParams({
         user: user.publicKey,

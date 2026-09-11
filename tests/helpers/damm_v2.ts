@@ -34,12 +34,15 @@ import {
   derivePositionAddress,
   derivePositionNftAccount,
   deriveTokenVaultAddress,
+  getAmountAFromLiquidityDelta,
+  getAmountBFromLiquidityDelta,
   CollectFeeMode,
+  Rounding,
   U64_MAX,
 } from "@meteora-ag/cp-amm-sdk";
 
 import { signAndSendTransaction } from "./svm";
-import { getTokenProgram } from "./token";
+import { getTokenBalance, getTokenProgram } from "./token";
 import { deriveDammV2EventAuthority } from "../../src/helpers";
 
 const cpAmmCoder = new BorshCoder(DammV2IDL as any);
@@ -89,6 +92,15 @@ export function getDammV2Pool(svm: LiteSVM, pool: PublicKey): Pool {
   const program = createDammV2Program();
   const account = svm.getAccount(pool);
   return program.coder.accounts.decode("pool", Buffer.from(account!.data));
+}
+
+export function getDammV2OutputMint(
+  poolState: Pool,
+  inputTokenMint: PublicKey,
+): PublicKey {
+  return poolState.tokenAMint.equals(inputTokenMint)
+    ? poolState.tokenBMint
+    : poolState.tokenAMint;
 }
 
 export function getDammV2Position(svm: LiteSVM, position: PublicKey): Position {
@@ -391,7 +403,7 @@ export async function createPositionAndAddLiquidity(
       pool,
       position,
       positionNftAccount,
-      owner: user.publicKey,
+      signer: user.publicKey,
       tokenAAccount,
       tokenBAccount,
       tokenAVault: poolState.tokenAVault,
@@ -437,7 +449,7 @@ export async function removeLiquidity(
       pool,
       position,
       positionNftAccount,
-      owner: user,
+      signer: user,
       tokenAAccount,
       tokenBAccount,
       tokenAVault: poolState.tokenAVault,
@@ -619,4 +631,102 @@ export function getDammV2RemainingAccounts(
       pubkey: DAMM_V2_PROGRAM_ID,
     },
   ];
+}
+
+// Create a pool, add liquidity for `user`, and build (but not send) the remove-liquidity tx,
+// returning what a zap-out test needs to assert on balances afterwards.
+export async function setupPoolAndRemoveLiquidity(
+  svm: LiteSVM,
+  admin: Keypair,
+  user: Keypair,
+  tokenAMint: PublicKey,
+  tokenBMint: PublicKey,
+  inputTokenMint: PublicKey,
+) {
+  const pool = await createDammV2Pool({
+    svm,
+    creator: admin,
+    tokenAMint,
+    tokenBMint,
+  });
+
+  const userPosition = await createPositionAndAddLiquidity(svm, user, pool);
+
+  const tokenAAccount = getAssociatedTokenAddressSync(
+    tokenAMint,
+    user.publicKey,
+    true,
+    TOKEN_PROGRAM_ID,
+  );
+  const tokenBAccount = getAssociatedTokenAddressSync(
+    tokenBMint,
+    user.publicKey,
+    true,
+    TOKEN_PROGRAM_ID,
+  );
+
+  const removeLiquidityTx = await removeLiquidity(
+    svm,
+    user.publicKey,
+    pool,
+    userPosition,
+    tokenAAccount,
+    tokenBAccount,
+  );
+
+  const poolState = getDammV2Pool(svm, pool);
+  const positionState = getDammV2Position(svm, userPosition);
+  const collectFeeMode = poolState.collectFeeMode as CollectFeeMode;
+
+  const amountARemoved = getAmountAFromLiquidityDelta(
+    poolState.sqrtPrice,
+    poolState.sqrtMaxPrice,
+    positionState.unlockedLiquidity,
+    Rounding.Down,
+    collectFeeMode,
+    poolState.tokenAAmount,
+    poolState.liquidity,
+  );
+  const amountBRemoved = getAmountBFromLiquidityDelta(
+    poolState.sqrtMinPrice,
+    poolState.sqrtPrice,
+    positionState.unlockedLiquidity,
+    Rounding.Down,
+    collectFeeMode,
+    poolState.tokenBAmount,
+    poolState.liquidity,
+  );
+
+  const isInputTokenA = poolState.tokenAMint.equals(inputTokenMint);
+  const estimatedAmountIn = isInputTokenA ? amountARemoved : amountBRemoved;
+  const outputTokenMint = getDammV2OutputMint(poolState, inputTokenMint);
+
+  const inputTokenProgram = getTokenProgram(svm, inputTokenMint);
+  const outputTokenProgram = getTokenProgram(svm, outputTokenMint);
+
+  const userTokenInAccount = getAssociatedTokenAddressSync(
+    inputTokenMint,
+    user.publicKey,
+    true,
+    inputTokenProgram,
+  );
+  const userTokenOutAccount = getAssociatedTokenAddressSync(
+    outputTokenMint,
+    user.publicKey,
+    true,
+    outputTokenProgram,
+  );
+
+  const preUserTokenInBalance = getTokenBalance(svm, userTokenInAccount);
+  const preUserTokenOutBalance = getTokenBalance(svm, userTokenOutAccount);
+
+  return {
+    pool,
+    removeLiquidityTx,
+    userTokenInAccount,
+    userTokenOutAccount,
+    preUserTokenInBalance,
+    preUserTokenOutBalance,
+    estimatedAmountIn,
+  };
 }
