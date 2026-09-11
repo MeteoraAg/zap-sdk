@@ -8,17 +8,20 @@ import { Zap } from "../../src/zap";
 import {
   estimateDlmmDirectSwap,
   estimateDlmmIndirectSwap,
+  estimateDlmmRebalanceSwap,
 } from "../../src/helpers";
 import {
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   JUP_V6_PROGRAM_ID,
 } from "../../src/constants";
 import {
+  DlmmDirectRebalanceEstimate,
   DlmmDirectSwapEstimate,
   DlmmIndirectSwapEstimate,
   DlmmSingleSided,
   JupiterApiVersion,
   JupiterQuoteResponse,
+  RebalanceDlmmPositionResponse,
 } from "../../src/types";
 import { getDammV2OutputMint, getDammV2Pool } from "./damm_v2";
 import { getDlmmOutputMint, getLbPair } from "./dlmm";
@@ -459,4 +462,42 @@ export async function zapInDlmmIndirect(
   });
 
   return { position, estimate, ...result };
+}
+
+// Estimate the balancing swap and build the transactions that re-center an existing
+// position `binDelta` bins either side of the current active bin.
+export async function rebalanceDlmmPosition(
+  svm: LiteSVM,
+  user: PublicKey,
+  lbPair: PublicKey,
+  position: PublicKey,
+  binDelta: number = 34,
+): Promise<
+  RebalanceDlmmPositionResponse & { estimate: DlmmDirectRebalanceEstimate }
+> {
+  const config = { jupiterApiVersion: JupiterApiVersion.V1 };
+  const connection = createLiteSvmConnection(svm);
+  const zap = new Zap(connection, config);
+
+  const estimate = await estimateDlmmRebalanceSwap({
+    user,
+    lbPair,
+    position,
+    connection,
+    swapSlippageBps: 150,
+    minDeltaId: -binDelta,
+    maxDeltaId: binDelta,
+    strategy: StrategyType.Spot,
+    config,
+  });
+
+  const result = await zap.rebalanceDlmmPosition({
+    user,
+    liquiditySlippageBps: 50,
+    favorXInActiveId: false,
+    directSwapEstimate: estimate.result,
+    ...estimate.context,
+  });
+
+  return { estimate, ...result };
 }

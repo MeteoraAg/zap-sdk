@@ -452,3 +452,31 @@ export async function setupDlmmPoolAndRemoveLiquidity(
     estimatedAmountIn,
   };
 }
+
+// Swap `amountIn` of `inputTokenMint` on the pool as `user`, moving the active bin.
+export async function swapDlmm(
+  svm: LiteSVM,
+  user: Keypair,
+  lbPair: PublicKey,
+  inputTokenMint: PublicKey,
+  amountIn: BN,
+): Promise<void> {
+  const dlmm = await DLMM.create(createLiteSvmConnection(svm), lbPair, {
+    cluster: "mainnet-beta",
+    programId: DLMM_PROGRAM_ID,
+  });
+  const swapForY = dlmm.lbPair.tokenXMint.equals(inputTokenMint);
+  const binArrays = await dlmm.getBinArrayForSwap(swapForY);
+
+  const transaction = await dlmm.swap({
+    inToken: inputTokenMint,
+    outToken: getDlmmOutputMint(dlmm.lbPair, inputTokenMint),
+    inAmount: amountIn,
+    minOutAmount: new BN(0),
+    lbPair,
+    user: user.publicKey,
+    binArraysPubkey: binArrays.map((binArray) => binArray.publicKey),
+  });
+
+  signAndSendTransaction(svm, transaction, [user]);
+}

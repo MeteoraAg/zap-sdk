@@ -553,7 +553,8 @@ async function buildJupiterSwapInstructionResponse(
 export type JupiterMockRoute = {
   outputMint: PublicKey;
   swapPool: PublicKey;
-  outAmount: BN;
+  // Quoted output, either fixed or computed from the requested input amount.
+  outAmount: BN | ((inAmount: BN) => BN);
   // Defaults to "dammV2".
   poolType?: JupiterSwapPoolType;
 };
@@ -565,6 +566,11 @@ export function mockJupiterFetch(
   routes: JupiterMockRoute[],
 ): { mock: typeof fetch; restore: () => void } {
   const originalFetch = global.fetch;
+
+  const getOutAmount = (route: JupiterMockRoute, inAmount: BN): BN =>
+    typeof route.outAmount === "function"
+      ? route.outAmount(inAmount)
+      : route.outAmount;
 
   const findRoute = (outputMint: string): JupiterMockRoute => {
     const route = routes.find((r) => r.outputMint.toBase58() === outputMint);
@@ -589,7 +595,7 @@ export function mockJupiterFetch(
         inputTokenMint,
         route.outputMint,
         inAmount,
-        route.outAmount,
+        getOutAmount(route, inAmount),
       );
       return new Response(JSON.stringify(quote), {
         status: 200,
@@ -608,7 +614,7 @@ export function mockJupiterFetch(
         taker,
         inputTokenMint,
         inAmount,
-        route.outAmount,
+        getOutAmount(route, inAmount),
       );
       return new Response(JSON.stringify(buildResponse), {
         status: 200,
