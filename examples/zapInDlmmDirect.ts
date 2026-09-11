@@ -39,6 +39,7 @@ async function main() {
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const estimate = await estimateDlmmDirectSwap({
+    user: user.publicKey,
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,

@@ -75,20 +75,21 @@ async function main() {
     TOKEN_PROGRAM_ID,
   );
 
-  const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes(
+  const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes({
     connection,
-    usdcMint,
+    user: user.publicKey,
+    inputTokenMint: usdcMint,
     poolState,
     tokenADecimal,
     tokenBDecimal,
-    300, //dammV2SlippageBps: 300,
-    300, // jup slippageBps:
-    40, // maxAccounts
-    {
+    dammV2SlippageBps: 300,
+    jupSlippageBps: 300,
+    maxAccounts: 40,
+    config: {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
     },
-  );
+  });
 
   const result = await zap.getZapInDammV2DirectPoolParams({
     user: user.publicKey,

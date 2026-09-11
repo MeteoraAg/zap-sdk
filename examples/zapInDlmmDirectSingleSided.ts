@@ -46,6 +46,7 @@ async function main() {
   const favorXInActiveId = isSingleSidedX;
 
   const estimate = await estimateDlmmDirectSwap({
+    user: user.publicKey,
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,

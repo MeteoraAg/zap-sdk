@@ -65,15 +65,14 @@ const keypairPath = "";
   });
 
   const jupiterQuoteToA = await getJupiterQuote(
-    NATIVE_MINT,
-    poolState.tokenAMint,
-    new BN(LAMPORTS_PER_SOL),
-    40, // maxAccounts,
-    50, //slippageBps,
-    false,
-    true,
-    true,
-    true,
+    {
+      inputMint: NATIVE_MINT,
+      outputMint: poolState.tokenAMint,
+      amount: new BN(LAMPORTS_PER_SOL),
+      user: user.publicKey,
+      maxAccounts: 40,
+      slippageBps: 50,
+    },
     {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
@@ -81,15 +80,14 @@ const keypairPath = "";
   );
 
   const jupiterQuoteToB = await getJupiterQuote(
-    NATIVE_MINT,
-    poolState.tokenBMint,
-    new BN(LAMPORTS_PER_SOL),
-    40, // maxAccounts,
-    50, //slippageBps,
-    false,
-    true,
-    true,
-    true,
+    {
+      inputMint: NATIVE_MINT,
+      outputMint: poolState.tokenBMint,
+      amount: new BN(LAMPORTS_PER_SOL),
+      user: user.publicKey,
+      maxAccounts: 40,
+      slippageBps: 50,
+    },
     {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,

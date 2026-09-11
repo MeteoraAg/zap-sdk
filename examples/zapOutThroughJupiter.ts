@@ -47,20 +47,22 @@ async function main() {
   try {
     console.log("Getting quote from Jupiter API...");
     const quoteResponse = await getJupiterQuote(
-      inputMint,
-      outputMint,
-      swapAmount,
-      40,
-      50,
-      false,
-      true,
-      true,
-      true,
+      {
+        inputMint,
+        outputMint,
+        amount: swapAmount,
+        user: wallet.publicKey,
+        maxAccounts: 40,
+        slippageBps: 50,
+      },
       {
         jupiterApiUrl: JUPITER_API_URL,
         jupiterApiKey: JUPITER_API_KEY,
       },
     );
+    if (!quoteResponse) {
+      throw new Error("Failed to get Jupiter quote");
+    }
 
     console.log("Getting swap instruction from Jupiter API...");
     const swapInstructionResponse = await getJupiterSwapInstruction(

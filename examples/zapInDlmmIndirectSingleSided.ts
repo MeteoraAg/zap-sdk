@@ -46,6 +46,7 @@ async function main() {
 
   // Pass singleSided to estimateIndirectSwap
   const estimate = await estimateDlmmIndirectSwap({
+    user: user.publicKey,
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,
