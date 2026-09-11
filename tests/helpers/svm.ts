@@ -10,6 +10,7 @@ import {
   LAMPORTS_PER_SOL,
   PublicKey,
   Transaction,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import { AccountLayout } from "@solana/spl-token";
 import { expect } from "chai";
@@ -56,10 +57,40 @@ export function createLiteSvmConnection(svm: LiteSVM): Connection {
     getAccountInfo: async (pubkey: PublicKey) => getAccountInfoResult(pubkey),
     getMultipleAccountsInfo: async (pubkeys: PublicKey[]) =>
       pubkeys.map(getAccountInfoResult),
+    getMultipleAccountsInfoAndContext: async (pubkeys: PublicKey[]) => ({
+      context: { slot: 0 },
+      value: pubkeys.map(getAccountInfoResult),
+    }),
     getAccountInfoAndContext: async (pubkey: PublicKey) => ({
       context: { slot: 0 },
       value: getAccountInfoResult(pubkey),
     }),
+    getLatestBlockhash: async () => ({
+      blockhash: svm.latestBlockhash(),
+      lastValidBlockHeight: Number(svm.getClock().slot) + 150,
+    }),
+    // The DLMM SDK simulates unsigned transactions with `replaceRecentBlockhash` to size the
+    // compute budget, so swap in a valid blockhash and skip signature checks for the simulation.
+    simulateTransaction: async (transaction: VersionedTransaction) => {
+      transaction.message.recentBlockhash = svm.latestBlockhash();
+      svm.withSigverify(false);
+      let result;
+      try {
+        result = svm.simulateTransaction(transaction);
+      } finally {
+        svm.withSigverify(true);
+      }
+      const meta = result.meta();
+      return {
+        context: { slot: 0 },
+        value: {
+          err:
+            result instanceof FailedTransactionMetadata ? result.err() : null,
+          logs: meta.logs(),
+          unitsConsumed: Number(meta.computeUnitsConsumed()),
+        },
+      };
+    },
     getTokenAccountBalance: async (pubkey: PublicKey) => {
       const account = svm.getAccount(pubkey);
       if (!account) throw new Error("Account not found");

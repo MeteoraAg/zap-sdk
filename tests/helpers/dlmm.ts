@@ -28,6 +28,8 @@ import DLMM, {
   deriveReserve,
   getBinArrayAccountMetasCoverage,
   getBinArrayIndexesCoverage,
+  LbPosition,
+  MAX_BIN_ARRAY_SIZE,
 } from "@meteora-ag/dlmm";
 
 import { DLMM_PROGRAM_ID, MEMO_PROGRAM_ID } from "../../src/constants";
@@ -333,16 +335,13 @@ export async function removeDlmmLiquidity(
     .transaction();
 }
 
-// Create a pool seeded with admin liquidity, add liquidity for `user`, and build (but not send)
-// the remove-liquidity tx, returning what a zap-out test needs to assert on balances afterwards.
-export async function setupDlmmPoolAndRemoveLiquidity(
+// Create a pool and seed it with admin liquidity so a later swap has something to trade against.
+export async function createSeededDlmmPool(
   svm: LiteSVM,
   admin: Keypair,
-  user: Keypair,
   tokenXMint: PublicKey,
   tokenYMint: PublicKey,
-  inputTokenMint: PublicKey,
-) {
+): Promise<PublicKey> {
   const lbPair = await createDlmmPool({
     svm,
     creator: admin,
@@ -354,7 +353,6 @@ export async function setupDlmmPoolAndRemoveLiquidity(
   // withdrawn after the activation slot, so move one slot forward.
   svm.warpToSlot(svm.getClock().slot + BigInt(1));
 
-  // Admin liquidity stays in the pool so the zap-out swap has something to trade against.
   await createDlmmPositionAndAddLiquidity(
     svm,
     admin,
@@ -362,6 +360,45 @@ export async function setupDlmmPoolAndRemoveLiquidity(
     DLMM_SEED_LIQUIDITY_AMOUNT,
     DLMM_SEED_LIQUIDITY_AMOUNT,
   );
+
+  // Positions always reference the bin array above their lower one, so a position that
+  // starts at the active bin needs the next array up. Create two arrays on each side.
+  const { activeId } = getLbPair(svm, lbPair);
+  const binArraySpan = MAX_BIN_ARRAY_SIZE.toNumber() * 2;
+  await createBinArrays(
+    svm,
+    admin,
+    lbPair,
+    activeId - binArraySpan,
+    activeId + binArraySpan - 1,
+  );
+
+  return lbPair;
+}
+
+export async function getDlmmPosition(
+  svm: LiteSVM,
+  lbPair: PublicKey,
+  position: PublicKey,
+): Promise<LbPosition> {
+  const dlmm = await DLMM.create(createLiteSvmConnection(svm), lbPair, {
+    cluster: "mainnet-beta",
+    programId: DLMM_PROGRAM_ID,
+  });
+  return await dlmm.getPosition(position);
+}
+
+// Seed a pool, add liquidity for `user`, and build (but not send) the remove-liquidity tx,
+// returning what a zap-out test needs to assert on balances afterwards.
+export async function setupDlmmPoolAndRemoveLiquidity(
+  svm: LiteSVM,
+  admin: Keypair,
+  user: Keypair,
+  tokenXMint: PublicKey,
+  tokenYMint: PublicKey,
+  inputTokenMint: PublicKey,
+) {
+  const lbPair = await createSeededDlmmPool(svm, admin, tokenXMint, tokenYMint);
 
   const { position, lowerBinId, upperBinId } =
     await createDlmmPositionAndAddLiquidity(
@@ -384,11 +421,7 @@ export async function setupDlmmPoolAndRemoveLiquidity(
   const lbPairState = getLbPair(svm, lbPair);
   const outputTokenMint = getDlmmOutputMint(lbPairState, inputTokenMint);
 
-  const dlmm = await DLMM.create(createLiteSvmConnection(svm), lbPair, {
-    cluster: "mainnet-beta",
-    programId: DLMM_PROGRAM_ID,
-  });
-  const { positionData } = await dlmm.getPosition(position);
+  const { positionData } = await getDlmmPosition(svm, lbPair, position);
   const estimatedAmountIn = lbPairState.tokenXMint.equals(inputTokenMint)
     ? positionData.totalXAmountExcludeTransferFee
     : positionData.totalYAmountExcludeTransferFee;
