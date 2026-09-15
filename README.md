@@ -63,3 +63,9 @@ Refer to the [docs](./docs.md) for how to use the functions.
 
 - Mainnet-beta: zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz
 - Devnet: zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz
+
+## License
+
+This SDK is released under the [MIT License](./LICENSE).
+
+The on-chain Zap program is licensed separately and is not covered by this MIT license.
