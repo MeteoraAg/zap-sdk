@@ -39,6 +39,7 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
   const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const estimate = await estimateDlmmIndirectSwap({
+    user: user.publicKey,
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,

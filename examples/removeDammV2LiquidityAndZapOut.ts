@@ -141,15 +141,14 @@ async function main() {
         tokenBDecimal,
       }),
       getJupiterQuote(
-        inputMint,
-        outputMint,
-        amountARemoved,
-        50,
-        50,
-        false,
-        true,
-        true,
-        true,
+        {
+          inputMint: inputMint,
+          outputMint: outputMint,
+          amount: amountARemoved,
+          user: wallet.publicKey,
+          maxAccounts: 50,
+          slippageBps: 50,
+        },
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,

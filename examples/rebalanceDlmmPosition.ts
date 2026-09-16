@@ -68,6 +68,7 @@ async function main() {
   });
 
   const estimate = await estimateDlmmRebalanceSwap({
+    user: user.publicKey,
     lbPair: dlmmPool,
     position: positionAddress,
     connection,

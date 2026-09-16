@@ -120,15 +120,14 @@ async function main() {
           dlmm.swapQuote(amountXRemoved, true, new BN(50), binArrays),
         ),
       getJupiterQuote(
-        inputMint,
-        outputMint,
-        amountXRemoved,
-        50,
-        20,
-        false,
-        true,
-        true,
-        true,
+        {
+          inputMint: inputMint,
+          outputMint: outputMint,
+          amount: amountXRemoved,
+          user: wallet.publicKey,
+          maxAccounts: 50,
+          slippageBps: 20,
+        },
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,

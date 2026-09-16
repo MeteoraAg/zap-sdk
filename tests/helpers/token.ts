@@ -16,7 +16,7 @@ import {
 } from "@solana/spl-token";
 import { BN } from "@coral-xyz/anchor";
 
-import { signAndSendTransaction } from "./svm";
+import { getAccount, signAndSendTransaction } from "./svm";
 
 export const TOKEN_DECIMALS = 9;
 const RAW_AMOUNT = BigInt(1_000_000_000) * BigInt(10 ** TOKEN_DECIMALS);
@@ -86,7 +86,7 @@ export function getOrCreateAta(
 ): PublicKey {
   const ataKey = getAssociatedTokenAddressSync(mint, owner, true, tokenProgram);
 
-  const account = svm.getAccount(ataKey);
+  const account = getAccount(svm, ataKey);
   if (account === null) {
     const createAtaIx = createAssociatedTokenAccountInstruction(
       payer.publicKey,
@@ -104,7 +104,7 @@ export function getOrCreateAta(
 }
 
 export function getTokenBalance(svm: LiteSVM, tokenAccount: PublicKey): BN {
-  const account = svm.getAccount(tokenAccount);
+  const account = getAccount(svm, tokenAccount);
   if (!account?.data) {
     return new BN(0);
   }
@@ -112,5 +112,5 @@ export function getTokenBalance(svm: LiteSVM, tokenAccount: PublicKey): BN {
 }
 
 export function getTokenProgram(svm: LiteSVM, tokenMint: PublicKey): PublicKey {
-  return svm.getAccount(tokenMint)!.owner;
+  return getAccount(svm, tokenMint)!.owner;
 }

@@ -11,9 +11,9 @@ import {
   mintToken,
   getTokenBalance,
   getTokenProgram,
-  setupPoolAndRemoveLiquidity,
-  zapOutDammV2,
-  zapOutJupV6ThroughDammv2,
+  setupDlmmPoolAndRemoveLiquidity,
+  zapOutDlmm,
+  zapOutJupV6ThroughDlmm,
   createLiteSvmConnection,
   mockJupiterFetch,
   JUPITER_API_VERSION_CASES,
@@ -25,12 +25,12 @@ import {
   getJupiterSwapInstruction,
 } from "../src/helpers/jupiter";
 
-describe("Zap out DAMM V2", () => {
+describe("Zap out DLMM", () => {
   let svm: LiteSVM;
   let user: Keypair;
   let admin: Keypair;
-  let tokenAMint: PublicKey;
-  let tokenBMint: PublicKey;
+  let tokenXMint: PublicKey;
+  let tokenYMint: PublicKey;
   let restoreJupiterFetch: (() => void) | null = null;
 
   afterEach(() => {
@@ -46,40 +46,40 @@ describe("Zap out DAMM V2", () => {
     user = generateKpAndFund(svm);
     admin = generateKpAndFund(svm);
 
-    tokenAMint = createToken(svm, admin, admin.publicKey, null);
-    tokenBMint = createToken(svm, admin, admin.publicKey, null);
-    mintToken(svm, admin, tokenAMint, admin, admin.publicKey);
-    mintToken(svm, admin, tokenBMint, admin, admin.publicKey);
+    tokenXMint = createToken(svm, admin, admin.publicKey, null);
+    tokenYMint = createToken(svm, admin, admin.publicKey, null);
+    mintToken(svm, admin, tokenXMint, admin, admin.publicKey);
+    mintToken(svm, admin, tokenYMint, admin, admin.publicKey);
 
-    mintToken(svm, admin, tokenAMint, admin, user.publicKey);
-    mintToken(svm, admin, tokenBMint, admin, user.publicKey);
+    mintToken(svm, admin, tokenXMint, admin, user.publicKey);
+    mintToken(svm, admin, tokenYMint, admin, user.publicKey);
   });
 
-  for (const direction of ["a->b", "b->a"] as const) {
-    it(`zap out ${direction} through DAMM V2 pool`, async () => {
-      const inputTokenMint = direction === "a->b" ? tokenAMint : tokenBMint;
+  for (const direction of ["x->y", "y->x"] as const) {
+    it(`zap out ${direction} through DLMM pool`, async () => {
+      const inputTokenMint = direction === "x->y" ? tokenXMint : tokenYMint;
       const {
-        pool,
+        lbPair,
         removeLiquidityTx,
         userTokenInAccount,
         userTokenOutAccount,
         preUserTokenInBalance,
         preUserTokenOutBalance,
         estimatedAmountIn,
-      } = await setupPoolAndRemoveLiquidity(
+      } = await setupDlmmPoolAndRemoveLiquidity(
         svm,
         admin,
         user,
-        tokenAMint,
-        tokenBMint,
+        tokenXMint,
+        tokenYMint,
         inputTokenMint,
       );
 
-      const zapOutTx = await zapOutDammV2(
+      const zapOutTx = await zapOutDlmm(
         svm,
         user.publicKey,
         inputTokenMint,
-        pool,
+        lbPair,
         estimatedAmountIn,
       );
 
@@ -99,28 +99,28 @@ describe("Zap out DAMM V2", () => {
     });
 
     it(`zap out ${direction} through Jupiter`, async () => {
-      const inputTokenMint = direction === "a->b" ? tokenAMint : tokenBMint;
+      const inputTokenMint = direction === "x->y" ? tokenXMint : tokenYMint;
       const {
-        pool,
+        lbPair,
         removeLiquidityTx,
         userTokenInAccount,
         userTokenOutAccount,
         preUserTokenInBalance,
         preUserTokenOutBalance,
-      } = await setupPoolAndRemoveLiquidity(
+      } = await setupDlmmPoolAndRemoveLiquidity(
         svm,
         admin,
         user,
-        tokenAMint,
-        tokenBMint,
+        tokenXMint,
+        tokenYMint,
         inputTokenMint,
       );
 
-      const zapOutTx = await zapOutJupV6ThroughDammv2(
+      const zapOutTx = await zapOutJupV6ThroughDlmm(
         svm,
         user.publicKey,
         inputTokenMint,
-        pool,
+        lbPair,
       );
 
       const finalTransaction = new Transaction()
@@ -144,24 +144,24 @@ describe("Zap out DAMM V2", () => {
     discriminator,
     amountInOffset,
   } of JUPITER_API_VERSION_CASES) {
-    for (const direction of ["a->b", "b->a"] as const) {
+    for (const direction of ["x->y", "y->x"] as const) {
       it(`zapOutThroughJupiter ${direction} with Jupiter API ${version}`, async () => {
-        const inputTokenMint = direction === "a->b" ? tokenAMint : tokenBMint;
-        const outputTokenMint = direction === "a->b" ? tokenBMint : tokenAMint;
+        const inputTokenMint = direction === "x->y" ? tokenXMint : tokenYMint;
+        const outputTokenMint = direction === "x->y" ? tokenYMint : tokenXMint;
         const {
-          pool,
+          lbPair,
           removeLiquidityTx,
           userTokenInAccount,
           userTokenOutAccount,
           preUserTokenInBalance,
           preUserTokenOutBalance,
           estimatedAmountIn,
-        } = await setupPoolAndRemoveLiquidity(
+        } = await setupDlmmPoolAndRemoveLiquidity(
           svm,
           admin,
           user,
-          tokenAMint,
-          tokenBMint,
+          tokenXMint,
+          tokenYMint,
           inputTokenMint,
         );
 
@@ -173,8 +173,9 @@ describe("Zap out DAMM V2", () => {
           [
             {
               outputMint: outputTokenMint,
-              swapPool: pool,
+              swapPool: lbPair,
               outAmount: new BN(1),
+              poolType: "dlmm",
             },
           ],
         ).restore;
@@ -232,8 +233,7 @@ describe("Zap out DAMM V2", () => {
         );
 
         expect(postUserTokenOutBalance.gt(preUserTokenOutBalance)).to.be.true;
-        // 100% of the removed input token is swapped, so the input balance must end exactly where it started.
-        // A wrong amount_in offset makes the program splice into the wrong bytes and swap a different amount.
+        // 100% of the removed input token is swapped, so the input balance must equal the starting balance.
         expect(postUserTokenInBalance.toString()).to.equal(
           preUserTokenInBalance.toString(),
         );

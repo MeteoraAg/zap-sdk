@@ -104,7 +104,7 @@ interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
-  jupiterSwapResponse: JupiterSwapInstructionResponse;
+  jupiterSwapResponse: Pick<JupiterSwapInstructions, "swapInstruction">; // v2 build response or v1 swap-instructions response (deprecated)
   maxSwapAmount: BN;
   percentageToZapOut: number;
 }
@@ -118,19 +118,22 @@ A transaction that can be signed and sent to the network.
 
 ```typescript
 const quoteResponse = await getJupiterQuote(
-  inputMint,
-  outputMint,
-  swapAmount,
-  40,
-  50,
-  false,
-  true,
-  true,
+  {
+    inputMint,
+    outputMint,
+    amount: swapAmount,
+    user: wallet.publicKey,
+    maxAccounts: 40,
+    slippageBps: 50,
+  },
   {
     jupiterApiUrl: "https://api.jup.ag",
     jupiterApiKey: "YOUR_JUPITER_API_KEY",
   },
 );
+if (!quoteResponse) {
+  throw new Error("Failed to get Jupiter quote");
+}
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
@@ -337,14 +340,7 @@ Get Jupiter quote from Jupiter API.
 
 ```typescript
 async getJupiterQuote(
-  inputMint: PublicKey,
-  outputMint: PublicKey,
-  amount: BN,
-  maxAccounts: number,
-  slippageBps: number,
-  dynamicSlippage: boolean = false,
-  onlyDirectRoutes: boolean,
-  restrictIntermediateTokens: boolean,
+  params: GetJupiterQuoteParams,
   config: ZapConfig = {}
 ): Promise<JupiterQuoteResponse | null>
 ```
@@ -352,40 +348,45 @@ async getJupiterQuote(
 #### Parameters
 
 ```typescript
-interface GetJupiterQuoteParams {
+type GetJupiterQuoteParams = {
   inputMint: PublicKey;
   outputMint: PublicKey;
   amount: BN;
+  user: PublicKey; // Wallet the swap is built for. Sent as `taker` under v2, unused under v1.
   maxAccounts: number;
   slippageBps: number;
-  dynamicSlippage: boolean;
-  onlyDirectRoutes: boolean;
-  restrictIntermediateTokens: boolean;
-  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
-}
+  dynamicSlippage?: boolean; // Default: false
+  onlyDirectRoutes?: boolean; // Default: true
+  restrictIntermediateTokens?: boolean; // Default: true
+  forJitoBundle?: boolean; // Default: true
+};
 
-interface ZapConfig {
+type ZapConfig = {
   jupiterApiUrl?: string; // Default: "https://api.jup.ag"
   jupiterApiKey?: string; // Default: ""
-}
+  jupiterApiVersion?: JupiterApiVersion; // Default: JupiterApiVersion.V2
+};
 ```
 
 #### Returns
 
-A Jupiter quote response.
+A Jupiter quote response, or `null` when the request fails.
+
+- v2 (default): the `GET /swap/v2/build` response (`JupiterBuildResponse`), which contains the quote fields and the swap instructions built for `user`.
+- v1: the `GET /swap/v1/quote` response. (deprecated)
 
 #### Example
 
 ```typescript
 const quoteResponse = await getJupiterQuote(
-  new PublicKey("So11111111111111111111111111111111111111112"),
-  new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  new BN(1000000000),
-  40,
-  50,
-  false,
-  true,
-  true,
+  {
+    inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
+    outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    amount: new BN(1000000000),
+    user: wallet.publicKey,
+    maxAccounts: 40,
+    slippageBps: 50,
+  },
   {
     jupiterApiUrl: "https://api.jup.ag",
     jupiterApiKey: "YOUR_JUPITER_API_KEY",
@@ -396,22 +397,22 @@ const quoteResponse = await getJupiterQuote(
 #### Notes
 
 - This function is used to get Jupiter quote from Jupiter API.
-- Any issues with the api you can check out [Jupiter's Quote API Documentation](https://dev.jup.ag/docs/swap-api/get-quote)
+- Any issues with the api you can check out [Jupiter's Build API Documentation](https://developers.jup.ag/docs/swap/build)
 
 ---
 
 ### getJupiterSwapInstruction
 
-Get Jupiter swap instruction from Jupiter API.
+Get Jupiter swap instruction for a quote.
 
 #### Function
 
 ```typescript
 async getJupiterSwapInstruction(
   userPublicKey: PublicKey,
-  quoteResponse: any,
+  quoteResponse: JupiterQuoteResponse,
   config: ZapConfig = {}
-): Promise<JupiterSwapInstructionResponse>
+): Promise<JupiterSwapInstructions>
 ```
 
 #### Parameters
@@ -419,37 +420,38 @@ async getJupiterSwapInstruction(
 ```typescript
 interface GetJupiterSwapInstructionParams {
   userPublicKey: PublicKey;
-  quoteResponse: any;
-  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
-}
-
-interface ZapConfig {
-  jupiterApiUrl?: string; // Default: "https://api.jup.ag"
-  jupiterApiKey?: string; // Default: ""
+  quoteResponse: JupiterQuoteResponse; // From getJupiterQuote
+  config?: ZapConfig; // Optional config object containing jupiterApiUrl, jupiterApiKey and jupiterApiVersion
 }
 ```
 
 #### Returns
 
-A Jupiter swap instruction response.
+The swap instructions (`swapInstruction`, `setupInstructions`, `cleanupInstruction`, `addressesByLookupTableAddress`, ...).
+
+- v2 (default): when `quoteResponse` came from `getJupiterQuote` under v2 for the same `userPublicKey`, it is returned as is without another request. Otherwise one `GET /swap/v2/build` request is made.
+- v1: `POST /swap/v1/swap-instructions`.
 
 #### Example
 
 ```typescript
 const quoteResponse = await getJupiterQuote(
-  new PublicKey("So11111111111111111111111111111111111111112"),
-  new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  new BN(1000000000),
-  40,
-  50,
-  false,
-  true,
-  true,
+  {
+    inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
+    outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    amount: new BN(1000000000),
+    user: wallet.publicKey,
+    maxAccounts: 40,
+    slippageBps: 50,
+  },
   {
     jupiterApiUrl: "https://api.jup.ag",
     jupiterApiKey: "YOUR_JUPITER_API_KEY",
   },
 );
+if (!quoteResponse) {
+  throw new Error("Failed to get Jupiter quote");
+}
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
@@ -464,4 +466,4 @@ const swapInstructionResponse = await getJupiterSwapInstruction(
 #### Notes
 
 - This function is used to get Jupiter swap instruction from Jupiter API.
-- Any issues with the api you can check out [Jupiter's Swap Instruction API Documentation](https://dev.jup.ag/docs/swap-api/build-swap-transaction#build-your-own-transaction-with-instructions)
+- Any issues with the api you can check out [Jupiter's Build API Documentation](https://developers.jup.ag/docs/swap/build)
