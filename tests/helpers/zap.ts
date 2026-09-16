@@ -52,8 +52,8 @@ function getDammV2Quote(
       inputTokenMint,
       slippage: 0.5,
       poolState: poolState as any,
-      currentTime: 0,
-      currentSlot: 0,
+      currentTime: Number(svm.getClock().unixTimestamp),
+      currentSlot: Number(svm.getClock().slot),
       tokenADecimal: TOKEN_DECIMALS,
       tokenBDecimal: TOKEN_DECIMALS,
     });

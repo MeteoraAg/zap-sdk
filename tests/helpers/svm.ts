@@ -1,9 +1,15 @@
 import {
   FailedTransactionMetadata,
-  FeatureSet,
   LiteSVM,
   TransactionMetadata,
 } from "litesvm";
+import {
+  address,
+  getTransactionDecoder,
+  lamports,
+  type Address,
+  type Transaction as KitTransaction,
+} from "@solana/kit";
 import {
   Connection,
   Keypair,
@@ -20,38 +26,62 @@ import DammV2IDL from "../fixtures/damm_v2.json";
 import JupiterIDL from "../fixtures/jupiter.json";
 import DlmmIDL from "../fixtures/dlmm.json";
 
-export function startSvm(): LiteSVM {
-  const svm = new LiteSVM().withFeatureSet(FeatureSet.allEnabled());
+export interface SvmAccount {
+  lamports: number;
+  owner: PublicKey;
+  data: Buffer;
+  executable: boolean;
+}
 
+export function toAddress(pubkey: PublicKey): Address {
+  return address(pubkey.toBase58());
+}
+
+// litesvm 1.x consumes @solana/kit transactions. The SDK builds web3.js transactions, so
+// decode the wire bytes into the kit shape. Unsigned slots decode to `null` signatures.
+export function toKitTransaction(
+  transaction: Transaction | VersionedTransaction,
+): KitTransaction {
+  const wire =
+    transaction instanceof VersionedTransaction
+      ? transaction.serialize()
+      : transaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+  return getTransactionDecoder().decode(wire);
+}
+
+export function getAccount(svm: LiteSVM, pubkey: PublicKey): SvmAccount | null {
+  const account = svm.getAccount(toAddress(pubkey));
+  if (!account.exists) return null;
+  return {
+    lamports: Number(account.lamports),
+    owner: new PublicKey(account.programAddress),
+    data: Buffer.from(account.data),
+    executable: account.executable,
+  };
+}
+
+export function startSvm(): LiteSVM {
+  const svm = new LiteSVM();
+
+  svm.addProgramFromFile(address(ZapIDL.address), "tests/fixtures/zap.so");
   svm.addProgramFromFile(
-    new PublicKey(ZapIDL.address),
-    "tests/fixtures/zap.so",
-  );
-  svm.addProgramFromFile(
-    new PublicKey(DammV2IDL.address),
+    address(DammV2IDL.address),
     "tests/fixtures/damm_v2.so",
   );
   svm.addProgramFromFile(
-    new PublicKey(JupiterIDL.address),
+    address(JupiterIDL.address),
     "tests/fixtures/jupiter.so",
   );
-  svm.addProgramFromFile(
-    new PublicKey(DlmmIDL.address),
-    "tests/fixtures/dlmm.so",
-  );
+  svm.addProgramFromFile(address(DlmmIDL.address), "tests/fixtures/dlmm.so");
 
   return svm;
 }
 
 export function createLiteSvmConnection(svm: LiteSVM): Connection {
-  const getAccountInfoResult = (pubkey: PublicKey) => {
-    const account = svm.getAccount(pubkey);
-    if (!account) return null;
-    return {
-      ...account,
-      data: Buffer.from(account.data),
-    };
-  };
+  const getAccountInfoResult = (pubkey: PublicKey) => getAccount(svm, pubkey);
 
   return {
     getAccountInfo: async (pubkey: PublicKey) => getAccountInfoResult(pubkey),
@@ -76,7 +106,7 @@ export function createLiteSvmConnection(svm: LiteSVM): Connection {
       svm.withSigverify(false);
       let result;
       try {
-        result = svm.simulateTransaction(transaction);
+        result = svm.simulateTransaction(toKitTransaction(transaction));
       } finally {
         svm.withSigverify(true);
       }
@@ -92,7 +122,7 @@ export function createLiteSvmConnection(svm: LiteSVM): Connection {
       };
     },
     getTokenAccountBalance: async (pubkey: PublicKey) => {
-      const account = svm.getAccount(pubkey);
+      const account = getAccount(svm, pubkey);
       if (!account) throw new Error("Account not found");
       const decoded = AccountLayout.decode(account.data);
       return {
@@ -110,7 +140,10 @@ export function createLiteSvmConnection(svm: LiteSVM): Connection {
 
 export function generateKpAndFund(svm: LiteSVM): Keypair {
   const kp = Keypair.generate();
-  svm.airdrop(kp.publicKey, BigInt(100 * LAMPORTS_PER_SOL));
+  svm.airdrop(
+    toAddress(kp.publicKey),
+    lamports(BigInt(100 * LAMPORTS_PER_SOL)),
+  );
   return kp;
 }
 
@@ -122,7 +155,7 @@ export function signAndSendTransaction(
   transaction.recentBlockhash = svm.latestBlockhash();
   transaction.sign(...signers);
 
-  const result = svm.sendTransaction(transaction);
+  const result = svm.sendTransaction(toKitTransaction(transaction));
   if (result instanceof FailedTransactionMetadata) {
     console.log(result.meta().logs());
   }

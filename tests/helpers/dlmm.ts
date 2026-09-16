@@ -35,7 +35,11 @@ import DLMM, {
 import { DLMM_PROGRAM_ID, MEMO_PROGRAM_ID } from "../../src/constants";
 import { LbClmm } from "../fixtures/dlmm";
 import DlmmIDL from "../fixtures/dlmm.json";
-import { createLiteSvmConnection, signAndSendTransaction } from "./svm";
+import {
+  createLiteSvmConnection,
+  getAccount,
+  signAndSendTransaction,
+} from "./svm";
 import { getTokenBalance } from "./token";
 
 export type DlmmProgram = Program<LbClmm>;
@@ -67,7 +71,7 @@ export function createDlmmProgram(): DlmmProgram {
 
 export function getLbPair(svm: LiteSVM, lbPair: PublicKey): LbPairState {
   const program = createDlmmProgram();
-  const account = svm.getAccount(lbPair);
+  const account = getAccount(svm, lbPair);
   return program.coder.accounts.decode("lbPair", Buffer.from(account!.data));
 }
 
@@ -168,7 +172,7 @@ export async function createBinArrays(
 
   for (const index of indexes) {
     const [binArray] = deriveBinArray(lbPair, index, DLMM_PROGRAM_ID);
-    if (svm.getAccount(binArray)) {
+    if (getAccount(svm, binArray)) {
       continue;
     }
 

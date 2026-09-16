@@ -41,7 +41,7 @@ import {
   U64_MAX,
 } from "@meteora-ag/cp-amm-sdk";
 
-import { signAndSendTransaction } from "./svm";
+import { getAccount, signAndSendTransaction } from "./svm";
 import { getTokenBalance, getTokenProgram } from "./token";
 import { deriveDammV2EventAuthority } from "../../src/helpers";
 
@@ -90,7 +90,7 @@ export function encodeFeeTimeSchedulerParams(
 
 export function getDammV2Pool(svm: LiteSVM, pool: PublicKey): Pool {
   const program = createDammV2Program();
-  const account = svm.getAccount(pool);
+  const account = getAccount(svm, pool);
   return program.coder.accounts.decode("pool", Buffer.from(account!.data));
 }
 
@@ -105,7 +105,7 @@ export function getDammV2OutputMint(
 
 export function getDammV2Position(svm: LiteSVM, position: PublicKey): Position {
   const program = createDammV2Program();
-  const account = svm.getAccount(position);
+  const account = getAccount(svm, position);
   return program.coder.accounts.decode("position", Buffer.from(account!.data));
 }
 
@@ -144,8 +144,8 @@ export async function createDammV2Pool(params: {
   const tokenAVault = deriveTokenVaultAddress(tokenAMint, pool);
   const tokenBVault = deriveTokenVaultAddress(tokenBMint, pool);
 
-  const tokenAProgram = svm.getAccount(tokenAMint)!.owner;
-  const tokenBProgram = svm.getAccount(tokenBMint)!.owner;
+  const tokenAProgram = getAccount(svm, tokenAMint)!.owner;
+  const tokenBProgram = getAccount(svm, tokenBMint)!.owner;
 
   const payerTokenA = getAssociatedTokenAddressSync(
     tokenAMint,
@@ -236,7 +236,7 @@ export async function createDammV2PoolWithConfig(params: {
 
   // 1. Create operator for the creator
   const operatorAddress = deriveOperatorAddress(creator.publicKey);
-  const operatorAccount = svm.getAccount(operatorAddress);
+  const operatorAccount = getAccount(svm, operatorAddress);
   if (!operatorAccount) {
     const createOperatorTx = await program.methods
       .createOperatorAccount(new BN(1)) // permission bit 0 = CreateConfigKey
@@ -301,8 +301,8 @@ export async function createDammV2PoolWithConfig(params: {
   const tokenAVault = deriveTokenVaultAddress(tokenAMint, pool);
   const tokenBVault = deriveTokenVaultAddress(tokenBMint, pool);
 
-  const tokenAProgram = svm.getAccount(tokenAMint)!.owner;
-  const tokenBProgram = svm.getAccount(tokenBMint)!.owner;
+  const tokenAProgram = getAccount(svm, tokenAMint)!.owner;
+  const tokenBProgram = getAccount(svm, tokenBMint)!.owner;
 
   const payerTokenA = getAssociatedTokenAddressSync(
     tokenAMint,
