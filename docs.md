@@ -397,6 +397,9 @@ const quoteResponse = await getJupiterQuote(
 
 - This function is used to get Jupiter quote from Jupiter API.
 - Any issues with the api you can check out [Jupiter's Quote API Documentation](https://dev.jup.ag/docs/swap-api/get-quote)
+- `onlyDirectRoutes=true` and a low `maxAccounts` (examples use `40` or `50`) restrict Jupiter to single-hop / account-capped routes. That is **not** the same as a Jupiter UI quote.
+- `slippageBps` only covers move within the quoted route. It does **not** mean `outAmount` is a fair market vs input. Validate output / impact / simulated balances before signing. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).
+- Direct zap-in estimators currently call this helper with `onlyDirectRoutes=true` and `maxAccounts=50`.
 
 ---
 

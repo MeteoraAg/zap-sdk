@@ -53,6 +53,8 @@ async function main() {
     },
   });
 
+  // Example only: maxAccounts=50 + Direct estimator (onlyDirectRoutes=true).
+  // Validate quoted outAmount vs market before sending. Not safe for every pool/size.
   const result = await zap.getZapInDlmmDirectParams({
     user: user.publicKey,
     directSwapEstimate: estimate.result,

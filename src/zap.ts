@@ -1350,8 +1350,8 @@ export class Zap {
    * @param params.maxDeltaId - The bin delta relative to the active bin for the upper bin position
    * @param params.strategy - The liquidity distribution strategy
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
-   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
-   * @param params.swapSlippageBps - The swap slippage tolerance in basis points
+   * @param params.maxAccounts - Max accounts for the Jupiter swap query. Example value is `50`; this is not safe for every pool/size. Combined with Direct estimators (`onlyDirectRoutes=true`) this can select a much thinner route than Jupiter UI.
+   * @param params.swapSlippageBps - Swap slippage vs the **quoted route**, not vs a fair input/output price. Validate `directSwapEstimate` / `outAmount` before send.
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @param params.maxActiveBinSlippage - The maximum active bin slippage
    * @param params.directSwapEstimate - The result from the direct swap estimate

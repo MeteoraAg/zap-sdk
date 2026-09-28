@@ -12,6 +12,17 @@ import {
 } from "../types";
 import { DEFAULT_JUPITER_API_URL } from "../constants";
 
+/**
+ * Fetch a Jupiter `/swap/v1/quote`.
+ *
+ * `onlyDirectRoutes` and `maxAccounts` are forwarded as-is. Direct zap-in
+ * estimators pass `onlyDirectRoutes=true` and `maxAccounts=50`, which can
+ * return a much thinner route than the Jupiter UI (those limits are not set
+ * in the UI). `slippageBps` only bounds execution vs this quote — it does
+ * not mean `outAmount` is a reasonable market vs the input size. Callers
+ * must validate output / price impact / simulated token deltas before send.
+ * @see https://developers.jup.ag/docs/resources/support#customer-support
+ */
 export async function getJupiterQuote(
   inputMint: PublicKey,
   outputMint: PublicKey,
