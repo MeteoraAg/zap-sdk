@@ -151,6 +151,8 @@ async function getBestSwapQuoteJupiterDlmm(
     // dlmm quote can fail, if the pool has insufficient liquidity
     console.error("Error getting DLMM quote, using jupiter quote only:", error);
   }
+  // Direct Jupiter quote: onlyDirectRoutes=true, maxAccounts=50.
+  // Not equivalent to Jupiter UI. Caller must validate outAmount.
   const jupiterQuoteResult = await getJupiterQuote(
     inMint,
     outMint,
