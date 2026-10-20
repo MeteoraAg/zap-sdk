@@ -92,6 +92,7 @@ export async function getJupAndDammV2Quotes({
   dammV2SlippageBps,
   jupSlippageBps,
   maxAccounts,
+  jupiterQuoteOptions,
   config = {},
 }: GetJupAndDammV2QuotesParams): Promise<{
   dammV2Quote: {
@@ -148,6 +149,7 @@ export async function getJupAndDammV2Quotes({
       user,
       maxAccounts,
       slippageBps: jupSlippageBps,
+      ...jupiterQuoteOptions,
     },
     config,
   );

@@ -429,7 +429,7 @@ interface GetJupiterSwapInstructionParams {
 
 The swap instructions (`swapInstruction`, `setupInstructions`, `cleanupInstruction`, `addressesByLookupTableAddress`, ...).
 
-- v2 (default): when `quoteResponse` came from `getJupiterQuote` under v2 for the same `userPublicKey`, it is returned as is without another request. Otherwise one `GET /swap/v2/build` request is made.
+- v2 (default): `quoteResponse` must come from `getJupiterQuote` under v2 for the same `userPublicKey`, and it is returned as is without another request, so the executed swap is the quoted one. Otherwise it throws.
 - v1: `POST /swap/v1/swap-instructions`.
 
 #### Example

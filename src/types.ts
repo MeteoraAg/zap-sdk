@@ -90,15 +90,21 @@ export type GetJupiterQuoteParams = {
   user: PublicKey;
   maxAccounts: number;
   slippageBps: number;
-  /** Default false */
+  // see `DEFAULT_JUPITER_QUOTE_OPTIONS`
   dynamicSlippage?: boolean;
-  /** Default true */
   onlyDirectRoutes?: boolean;
-  /** Default true */
   restrictIntermediateTokens?: boolean;
-  /** Default true */
   forJitoBundle?: boolean;
 };
+
+/** Jupiter route options forwarded to `getJupiterQuote`. Each option falls back to the `getJupiterQuote` default when omitted. */
+export type JupiterQuoteOptions = Pick<
+  GetJupiterQuoteParams,
+  | "dynamicSlippage"
+  | "onlyDirectRoutes"
+  | "restrictIntermediateTokens"
+  | "forJitoBundle"
+>;
 
 export type GetJupAndDammV2QuotesParams = {
   connection: Connection;
@@ -110,6 +116,7 @@ export type GetJupAndDammV2QuotesParams = {
   dammV2SlippageBps: number;
   jupSlippageBps: number;
   maxAccounts: number;
+  jupiterQuoteOptions?: JupiterQuoteOptions;
   config?: ZapConfig;
 };
 
@@ -244,6 +251,7 @@ export type GetZapInDammV2DirectPoolParams = {
     priceImpact: Decimal;
   } | null;
   jupiterQuote: JupiterQuoteResponse | null;
+  jupiterQuoteOptions?: JupiterQuoteOptions;
 };
 
 export type GetZapInDammV2IndirectPoolParams = {
@@ -258,6 +266,7 @@ export type GetZapInDammV2IndirectPoolParams = {
   slippageBps: number;
   jupiterQuoteToA: JupiterQuoteResponse | null;
   jupiterQuoteToB: JupiterQuoteResponse | null;
+  jupiterQuoteOptions?: JupiterQuoteOptions;
 };
 
 export enum ZapInDammV2PoolSwapRoute {
@@ -362,6 +371,7 @@ export interface EstimateDlmmDirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  jupiterQuoteOptions?: JupiterQuoteOptions;
   config?: ZapConfig;
 }
 
@@ -400,6 +410,7 @@ export interface EstimateDlmmRebalanceSwapParams {
   maxDeltaId: number;
   swapSlippageBps: number;
   strategy: StrategyType;
+  jupiterQuoteOptions?: JupiterQuoteOptions;
   config?: ZapConfig;
 }
 
@@ -430,6 +441,7 @@ export interface EstimateDlmmIndirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  jupiterQuoteOptions?: JupiterQuoteOptions;
   config?: ZapConfig;
 }
 

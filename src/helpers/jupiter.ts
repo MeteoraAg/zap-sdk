@@ -10,6 +10,7 @@ import {
   JupiterBuildResponse,
   JupiterInstruction,
   JupiterInstructionLayout,
+  JupiterQuoteOptions,
   JupiterQuoteResponse,
   JupiterSwapInstructionResponse,
   JupiterSwapInstructions,
@@ -18,6 +19,7 @@ import {
 import {
   DEFAULT_JUPITER_API_URL,
   DEFAULT_JUPITER_API_VERSION,
+  DEFAULT_JUPITER_QUOTE_OPTIONS,
   JUPITER_INSTRUCTION_LAYOUTS,
 } from "../constants";
 
@@ -174,10 +176,15 @@ export async function getJupiterQuote(
     amount: params.amount.toString(),
     slippageBps: params.slippageBps,
     maxAccounts: params.maxAccounts,
-    dynamicSlippage: params.dynamicSlippage ?? false,
-    onlyDirectRoutes: params.onlyDirectRoutes ?? true,
-    restrictIntermediateTokens: params.restrictIntermediateTokens ?? true,
-    forJitoBundle: params.forJitoBundle ?? true,
+    dynamicSlippage:
+      params.dynamicSlippage ?? DEFAULT_JUPITER_QUOTE_OPTIONS.dynamicSlippage,
+    onlyDirectRoutes:
+      params.onlyDirectRoutes ?? DEFAULT_JUPITER_QUOTE_OPTIONS.onlyDirectRoutes,
+    restrictIntermediateTokens:
+      params.restrictIntermediateTokens ??
+      DEFAULT_JUPITER_QUOTE_OPTIONS.restrictIntermediateTokens,
+    forJitoBundle:
+      params.forJitoBundle ?? DEFAULT_JUPITER_QUOTE_OPTIONS.forJitoBundle,
   };
 
   const { version } = resolveJupiterConfig(config);
@@ -224,9 +231,9 @@ async function fetchJupiterSwapInstructionV1(
 /**
  * Get the Jupiter swap instructions for a quote.
  * - v1: `POST /swap/v1/swap-instructions`.
- * - v2: returns `quoteResponse` as is when it already carries swap instructions built for `userPublicKey`;
- *   otherwise calls `GET /swap/v2/build` once for the quote's mints, amount and slippage.
- * Throws when the request fails.
+ * - v2: returns `quoteResponse` as is. It must be a `GET /swap/v2/build` response built for `userPublicKey`,
+ *   so the executed swap is the quoted one.
+ * Throws when the request fails, or under v2 when `quoteResponse` has no swap instructions built for `userPublicKey`.
  */
 export async function getJupiterSwapInstruction(
   userPublicKey: PublicKey,
@@ -238,41 +245,29 @@ export async function getJupiterSwapInstruction(
     return fetchJupiterSwapInstructionV1(userPublicKey, quoteResponse, config);
   }
 
+  if (!isJupiterBuildResponse(quoteResponse)) {
+    throw new Error(
+      "Jupiter quote has no swap instructions, get the quote with getJupiterQuote under Jupiter API v2",
+    );
+  }
   if (
-    isJupiterBuildResponse(quoteResponse) &&
-    isJupiterSwapInstructionForUser(
+    !isJupiterSwapInstructionForUser(
       quoteResponse.swapInstruction,
       userPublicKey,
     )
   ) {
-    return quoteResponse;
+    throw new Error(
+      `Jupiter quote swap instructions are not built for ${userPublicKey.toBase58()}`,
+    );
   }
-
-  const buildResponse = await fetchJupiterBuildV2(
-    {
-      inputMint: new PublicKey(quoteResponse.inputMint),
-      outputMint: new PublicKey(quoteResponse.outputMint),
-      amount: quoteResponse.inAmount,
-      slippageBps: quoteResponse.slippageBps,
-      dynamicSlippage: false,
-      onlyDirectRoutes: true,
-      restrictIntermediateTokens: true,
-      forJitoBundle: true,
-    },
-    userPublicKey,
-    config,
-  );
-  if (!buildResponse) {
-    throw new Error(`Jupiter swap instruction failed to fetch`);
-  }
-  return buildResponse;
+  return quoteResponse;
 }
 
 /**
- * Whether `quoteResponse` can be reused for a swap of `amount` by `user` without a new request:
+ * Whether `quoteResponse` is a quote for a swap of `amount` by `user`:
  * the quoted amount must match and, when it carries instructions, they must be built for `user`.
  */
-function canReuseQuote(
+function isQuoteMatchesSwap(
   quoteResponse: JupiterQuoteResponse,
   user: PublicKey,
   amount: BN,
@@ -286,6 +281,12 @@ function canReuseQuote(
   return true;
 }
 
+/**
+ * Build the Jupiter swap transaction.
+ * When `jupiterQuoteResponse` is given it is executed as is, and it must be a quote for `amount` by `user`.
+ * Otherwise a new quote is fetched with `maxAccounts`, `slippageBps` and `jupiterQuoteOptions`.
+ * Throws when `jupiterQuoteResponse` does not match the swap or when the quote request fails.
+ */
 export async function buildJupiterSwapTransaction(
   user: PublicKey,
   inputMint: PublicKey,
@@ -295,24 +296,34 @@ export async function buildJupiterSwapTransaction(
   slippageBps: number,
   jupiterQuoteResponse?: JupiterQuoteResponse,
   config: ZapConfig = {},
+  jupiterQuoteOptions: JupiterQuoteOptions = {},
 ): Promise<{
   transaction: Transaction;
   quoteResponse: JupiterQuoteResponse;
 }> {
+  if (
+    jupiterQuoteResponse &&
+    !isQuoteMatchesSwap(jupiterQuoteResponse, user, amount)
+  ) {
+    throw new Error(
+      `Jupiter quote does not match the swap of ${amount.toString()} by ${user.toBase58()} (quoted inAmount ${jupiterQuoteResponse.inAmount})`,
+    );
+  }
+
   const quoteResponse =
-    jupiterQuoteResponse && canReuseQuote(jupiterQuoteResponse, user, amount)
-      ? jupiterQuoteResponse
-      : await getJupiterQuote(
-          {
-            inputMint,
-            outputMint,
-            amount,
-            user,
-            maxAccounts,
-            slippageBps,
-          },
-          config,
-        );
+    jupiterQuoteResponse ??
+    (await getJupiterQuote(
+      {
+        inputMint,
+        outputMint,
+        amount,
+        user,
+        maxAccounts,
+        slippageBps,
+        ...jupiterQuoteOptions,
+      },
+      config,
+    ));
 
   if (!quoteResponse) {
     throw new Error(

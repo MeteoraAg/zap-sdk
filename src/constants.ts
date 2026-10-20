@@ -1,6 +1,10 @@
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
-import { JupiterApiVersion, JupiterInstructionLayout } from "./types";
+import {
+  JupiterApiVersion,
+  JupiterInstructionLayout,
+  JupiterQuoteOptions,
+} from "./types";
 import {
   BIN_ARRAY_BITMAP_SIZE,
   EXTENSION_BINARRAY_BITMAP_SIZE,
@@ -108,3 +112,10 @@ export const DAMM_V2_SWAP_DISCRIMINATOR = [
 
 export const DEFAULT_JUPITER_API_URL = "https://api.jup.ag";
 export const DEFAULT_JUPITER_API_VERSION = JupiterApiVersion.V2;
+
+export const DEFAULT_JUPITER_QUOTE_OPTIONS: Required<JupiterQuoteOptions> = {
+  dynamicSlippage: false,
+  onlyDirectRoutes: true,
+  restrictIntermediateTokens: true,
+  forJitoBundle: true,
+};
