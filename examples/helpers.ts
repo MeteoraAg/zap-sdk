@@ -4,23 +4,25 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import { mnemonicToSeedSync } from "bip39";
-import { derivePath } from "ed25519-hd-key";
+import { readFileSync } from "fs";
 
-const STANDARD_DERIVATION_PATH = "m/44'/501'/0'/0'";
 // https://jito-foundation.gitbook.io/mev/mev-payment-and-distribution/on-chain-addresses
 const JITO_TIP_ACCOUNT = new PublicKey(
   "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
 );
 
-// Derives a Keypair from a seed phrase using Solana's standard derivation path
-export function getKeypairFromSeed(
-  seedPhrase: string,
-  derivationPath: string = STANDARD_DERIVATION_PATH,
+// Loads a Keypair from the Solana CLI keypair JSON file whose path is stored in the given env var
+export function loadKeypairFromEnv(
+  envVar: string = "SECRET_KEY_PATH",
 ): Keypair {
-  const seed = mnemonicToSeedSync(seedPhrase, "");
-  const derivedSeed = derivePath(derivationPath, seed.toString("hex")).key;
-  return Keypair.fromSeed(derivedSeed);
+  const keypairPath = process.env[envVar];
+  if (!keypairPath) {
+    throw new Error(
+      `${envVar} is not set. Set it to the path of a Solana keypair JSON file.`,
+    );
+  }
+  const secretKey = JSON.parse(readFileSync(keypairPath, "utf-8"));
+  return Keypair.fromSecretKey(Uint8Array.from(secretKey));
 }
 
 export function createJitoTipIx({

@@ -10,19 +10,16 @@ import { Zap, estimateDlmmIndirectSwap } from "../src";
 import Decimal from "decimal.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
-import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
+import { createJitoTipIx, loadKeypairFromEnv, sendJitoBundle } from "./helpers";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
-
-const keypairPath = "";
 
 const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
 (async () => {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
-  // const user = getKeypairFromSeed(process.env.SEED_PHRASE!);
-  const user = Keypair.fromSecretKey(Uint8Array.from([]));
+  const user = loadKeypairFromEnv();
   // MET-USDC pool
   const dlmmPool = new PublicKey(
     "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd",

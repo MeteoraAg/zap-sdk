@@ -4,19 +4,16 @@ import { Connection } from "@solana/web3.js";
 import { estimateDlmmRebalanceSwap, Zap } from "../src";
 import Decimal from "decimal.js";
 import BN from "bn.js";
-import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
+import { createJitoTipIx, loadKeypairFromEnv, sendJitoBundle } from "./helpers";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
-const keypairPath = "";
-
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
-  // const user = getKeypairFromSeed(process.env.SEED_PHRASE!);
-  const user = Keypair.fromSecretKey(Uint8Array.from([]));
+  const user = loadKeypairFromEnv();
   // ZEC-USDC
   const dlmmPool = new PublicKey(
     "9ToMYnmEeYKc1AWYAFo8yjPKM1bt3vPhgw1U6qh9RxBd",

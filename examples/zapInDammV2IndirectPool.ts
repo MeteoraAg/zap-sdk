@@ -14,18 +14,16 @@ import { getJupiterQuote, Zap } from "../src";
 import Decimal from "decimal.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
-import { createJitoTipIx, sendJitoBundle } from "./helpers";
+import { createJitoTipIx, loadKeypairFromEnv, sendJitoBundle } from "./helpers";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const MAINNET_RPC_URL = "";
 
-const JITO_PRIVATE_KEY = "";
-
-const keypairPath = "";
+const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 (async () => {
   const connection = new Connection(MAINNET_RPC_URL);
-  const user = Keypair.fromSecretKey(Uint8Array.from(require(keypairPath)));
+  const user = loadKeypairFromEnv();
   const dammV2Instance = new CpAmm(connection);
   const pool = new PublicKey("Ep5MouzWgvdSSwUyekGQ3UyHMzaa4FKLZga4fEqk2VHG");
   const usdcMint = new PublicKey(

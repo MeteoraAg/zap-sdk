@@ -10,19 +10,17 @@ import { Zap } from "../src";
 import Decimal from "decimal.js";
 import { getJupAndDammV2Quotes } from "../src/helpers/zapin";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { createJitoTipIx, sendJitoBundle } from "./helpers";
+import { createJitoTipIx, loadKeypairFromEnv, sendJitoBundle } from "./helpers";
 import BN from "bn.js";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
 const MAINNET_RPC_URL = "";
 
-const JITO_PRIVATE_KEY = "";
-
-const keypairPath = "";
+const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 async function main() {
   const connection = new Connection(MAINNET_RPC_URL);
-  const user = Keypair.fromSecretKey(Uint8Array.from(require(keypairPath)));
+  const user = loadKeypairFromEnv();
   const dammV2Instance = new CpAmm(connection);
   const pool = new PublicKey("BnztueWcXv93mgW7yJe8WYpnCxpz34nujPhfjQT6SLu1");
   const usdcMint = new PublicKey(

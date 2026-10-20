@@ -1,7 +1,6 @@
 import {
   Connection,
   PublicKey,
-  Keypair,
   Transaction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
@@ -19,11 +18,12 @@ import {
 } from "@meteora-ag/cp-amm-sdk";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { JUPITER_API_URL, JUPITER_API_KEY } from "./constants";
+import { loadKeypairFromEnv } from "./helpers";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
+  const wallet = loadKeypairFromEnv();
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const inputMint = new PublicKey(

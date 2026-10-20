@@ -1,6 +1,5 @@
 import {
   Connection,
-  Keypair,
   PublicKey,
   Transaction,
   sendAndConfirmTransaction,
@@ -20,14 +19,15 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import { loadKeypairFromEnv } from "./helpers";
 
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
+  const wallet = loadKeypairFromEnv();
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
-  const anotherWallet = Keypair.fromSecretKey(Uint8Array.from([]));
+  const anotherWallet = loadKeypairFromEnv("ANOTHER_SECRET_KEY_PATH");
   console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
   const zap = new Zap(connection, {
