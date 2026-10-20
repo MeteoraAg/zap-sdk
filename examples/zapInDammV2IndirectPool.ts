@@ -1,14 +1,5 @@
-import {
-  CpAmm,
-  derivePositionAddress,
-  derivePositionNftAccount,
-} from "@meteora-ag/cp-amm-sdk";
-import {
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+import { CpAmm } from "@meteora-ag/cp-amm-sdk";
+import { LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { getJupiterQuote, Zap } from "../src";
 import Decimal from "decimal.js";

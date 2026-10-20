@@ -1,4 +1,4 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
+import { StrategyType } from "@meteora-ag/dlmm";
 import {
   Keypair,
   LAMPORTS_PER_SOL,
@@ -32,7 +32,6 @@ async function main() {
     jupiterApiUrl: JUPITER_API_URL,
     jupiterApiKey: JUPITER_API_KEY,
   });
-  const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const singleSided = DlmmSingleSided.X; // MET
   // @ts-ignore this is intentional

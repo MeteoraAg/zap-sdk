@@ -9,11 +9,7 @@ import {
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
-import {
-  SwapQuote,
-  StrategyType,
-  RemainingAccountInfo,
-} from "@meteora-ag/dlmm";
+import { SwapQuote, StrategyType } from "@meteora-ag/dlmm";
 import { PoolState } from "@meteora-ag/cp-amm-sdk";
 
 export type ZapProgram = Program<Zap>;

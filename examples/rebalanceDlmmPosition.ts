@@ -1,9 +1,8 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { StrategyType } from "@meteora-ag/dlmm";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { estimateDlmmRebalanceSwap, Zap } from "../src";
 import Decimal from "decimal.js";
-import BN from "bn.js";
 import { createJitoTipIx, loadKeypairFromEnv, sendJitoBundle } from "./helpers";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
 
@@ -18,13 +17,12 @@ async function main() {
   const dlmmPool = new PublicKey(
     "9ToMYnmEeYKc1AWYAFo8yjPKM1bt3vPhgw1U6qh9RxBd",
   );
-  const usdcMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-  );
+  // const usdcMint = new PublicKey(
+  //   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  // );
   const binDelta = 34;
 
-  const dlmm = await DLMM.create(connection, dlmmPool);
-
+  // const dlmm = await DLMM.create(connection, dlmmPool);
   // const activeBin = await dlmm.getActiveBin();
   // const minBinId = activeBin.binId - binDelta;
   // const maxBinId = activeBin.binId + binDelta;

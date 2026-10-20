@@ -40,9 +40,6 @@ async function main() {
   });
 
   try {
-    const currentSlot = await connection.getSlot();
-    const currentTime = await connection.getBlockTime(currentSlot);
-
     const { userPositions } = await dlmm.getPositionsByUserAndLbPair(
       wallet.publicKey,
     );

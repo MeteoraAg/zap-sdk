@@ -1,4 +1,4 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
+import { StrategyType } from "@meteora-ag/dlmm";
 import {
   Keypair,
   LAMPORTS_PER_SOL,
@@ -33,7 +33,6 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
     jupiterApiKey: JUPITER_API_KEY,
   });
 
-  const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const estimate = await estimateDlmmIndirectSwap({
     user: user.publicKey,

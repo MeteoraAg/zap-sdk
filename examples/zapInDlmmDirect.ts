@@ -1,14 +1,9 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import {
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+import { StrategyType } from "@meteora-ag/dlmm";
+import { NATIVE_MINT } from "@solana/spl-token";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { estimateDlmmDirectSwap, Zap } from "../src";
 import Decimal from "decimal.js";
-import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
 import { createJitoTipIx, loadKeypairFromEnv, sendJitoBundle } from "./helpers";
 import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
@@ -20,20 +15,15 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 async function main() {
   const connection = new Connection("https://api.mainnet-beta.solana.com");
   const user = loadKeypairFromEnv();
-  // PUMP-SOL
-  const dlmmPool = new PublicKey(
-    "HbjYfcWZBjCBYTJpZkLGxqArVmZVu3mQcRudb6Wg1sVh",
-  );
-  const inputTokenMint = new PublicKey(
-    "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
-  );
-  const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
+  // SOL-USDC
+  const dlmmPool = new PublicKey("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6");
+  const inputTokenMint = NATIVE_MINT;
+  const amountUseToAddLiquidity = new BN(0.1 * 10 ** 9); // 0.1 SOL
 
   const zap = new Zap(connection, {
     jupiterApiUrl: JUPITER_API_URL,
     jupiterApiKey: JUPITER_API_KEY,
   });
-  const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const estimate = await estimateDlmmDirectSwap({
     user: user.publicKey,

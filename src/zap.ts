@@ -2391,7 +2391,7 @@ export class Zap {
 
     const [
       { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
-      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
+      { ix: outputTokenAccountIx },
     ] = await Promise.all([
       getOrCreateATAInstruction(
         this.connection,

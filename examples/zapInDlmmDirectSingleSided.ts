@@ -1,10 +1,5 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import {
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+import { StrategyType } from "@meteora-ag/dlmm";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { estimateDlmmDirectSwap, Zap, DlmmSingleSided } from "../src";
 import Decimal from "decimal.js";
@@ -32,9 +27,7 @@ async function main() {
     jupiterApiUrl: JUPITER_API_URL,
     jupiterApiKey: JUPITER_API_KEY,
   });
-  const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 68;
-  const isInputTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
   const singleSided = DlmmSingleSided.Y; // SOL
   // @ts-ignore this is intentional
   const isSingleSidedX = singleSided === DlmmSingleSided.X;
