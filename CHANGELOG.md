@@ -20,15 +20,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Breaking Changes
 
-## [2.0.0] - [PR #23](https://github.com/MeteoraAg/zap-sdk/pull/33)
+## [2.0.0] - [PR #33](https://github.com/MeteoraAg/zap-sdk/pull/33)
 
 ### Added
 
+- Added `jupiterApiVersion` in `ZapConfig`, using the new enum `JupiterApiVersion`, to choose the Jupiter Swap API version.
+- Added the optional `jupiterQuoteOptions` field in `GetZapInDammV2DirectPoolParams`, `GetZapInDammV2IndirectPoolParams`, `GetJupAndDammV2QuotesParams`, `EstimateDlmmDirectSwapParams`, `EstimateDlmmIndirectSwapParams` and `EstimateDlmmRebalanceSwapParams` to set the Jupiter quote options. Omitted options keep the values the SDK used before.
 - Added helpers `toAddressLookupTableAccounts`, `fetchAddressLookupTableAccounts`, `getJupiterAddressLookupTableAccounts` and `mergeAddressLookupTableAccounts` for the lookup tables of Jupiter swaps, and `filterOutComputeBudgetInstructions`.
+- Added helpers `getJupiterInstructionLayout`, `isJupiterBuildResponse` and `isJupiterSwapInstructionForUser`.
 
 ### Changed
 
-- `zapOutThroughJupiter` accepts the optional `addressesByLookupTableAddress` (v2) and `addressLookupTableAddresses` (v1) fields on `jupiterSwapResponse` and returns those lookup tables. v1 tables are fetched with one RPC call.
+- `zapOutThroughJupiter` accepts the optional `addressesByLookupTableAddress` (v2) and `addressLookupTableAddresses` (v1) fields on `jupiterSwapResponse` and returns those lookup tables.
+- `zapOutThroughJupiter` accepts `route_v2` and `shared_accounts_route_v2` swap instructions, and throws for a Jupiter instruction it does not support.
+
+### Deprecated
+
+- Deprecated `JupiterApiVersion.V1` in favour of `JupiterApiVersion.V2`. V1 will be removed in a future major version.
+- Deprecated the type `JupiterSwapInstructionResponse` in favour of `JupiterSwapInstructions` and `JupiterBuildResponse`.
+- Deprecated `AMOUNT_IN_JUP_V6_REVERSE_OFFSET` in favour of `getJupiterInstructionLayout`.
 
 ### Removed
 
@@ -36,10 +46,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Breaking Changes
 
-- `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `rebalanceDlmmPosition`, `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2` and `zapOutThroughDlmm` return `ZapInstructionsResponse`: `instructions` in execution order and the `addressLookupTableAccounts` they use, so the caller builds legacy or v0 transactions and decides where to split them. They previously returned legacy `Transaction` objects. `rebalanceDlmmPosition` still returns `estimation`.
-- The returned instructions contain no compute budget instructions, so the caller sets the compute unit limit. `rebalanceDlmmPosition` previously set a limit of 600,000 compute units on its zap-in transaction, and the DLMM swap and rebalance transactions previously carried the limit added by the DLMM SDK.
+- `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `rebalanceDlmmPosition`, `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2` and `zapOutThroughDlmm` return `ZapInstructionsResponse`, which holds `instructions` in execution order and the `addressLookupTableAccounts` they use. They previously returned legacy `Transaction` objects. `rebalanceDlmmPosition` still returns `estimation`.
+- The returned instructions contain no compute budget instructions, so the caller sets the compute unit limit. Previously the transactions carried compute unit limits, including 600,000 units on the `rebalanceDlmmPosition` zap-in transaction.
 - `getZapInDammV2DirectPoolParams`, `getZapInDammV2IndirectPoolParams`, `getZapInDlmmDirectParams` and `getZapInDlmmIndirectParams` return `swapInstructions` and `addressLookupTableAccounts` instead of `swapTransactions`.
 - `buildJupiterSwapTransaction` takes a `connection` as its first argument and returns `instruction` and `addressLookupTableAccounts` instead of `transaction`.
+- The SDK uses Jupiter API v2 (`GET /swap/v2/build`) by default. Previously it used `GET /swap/v1/quote` and `POST /swap/v1/swap-instructions`. Set `jupiterApiVersion` to `JupiterApiVersion.V1` in `ZapConfig` to keep the v1 calls.
+- `getJupiterQuote` takes one `GetJupiterQuoteParams` object with a required `user` field. It previously took positional arguments.
+- `getJupAndDammV2Quotes` takes one `GetJupAndDammV2QuotesParams` object with a required `user` field. It previously took positional arguments.
+- `EstimateDlmmDirectSwapParams`, `EstimateDlmmIndirectSwapParams` and `EstimateDlmmRebalanceSwapParams` require `user`, the wallet the Jupiter swap is built for.
+- `getJupiterSwapInstruction` returns `JupiterSwapInstructions` instead of `JupiterSwapInstructionResponse`. Under v2 it makes no request and returns the instructions in the quote, so the quote must come from `getJupiterQuote` for the same user. Previously it always called `POST /swap/v1/swap-instructions`.
+- `buildJupiterSwapTransaction` throws when the supplied `jupiterQuoteResponse` has an `inAmount` different from `amount`, or carries swap instructions built for another wallet. Previously it used the supplied quote without a check.
+- The fields of `JupiterQuoteResponse` that only v1 returns are optional.
+- The SDK depends on `@anchor-lang/core` instead of `@coral-xyz/anchor`, so `ZapProgram` and `Zap.zapProgram` are a `Program` from `@anchor-lang/core`.
 
 ## [1.3.2] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/32)
 
