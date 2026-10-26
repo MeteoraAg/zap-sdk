@@ -504,7 +504,7 @@ export class Zap {
     const tokenBProgram = getTokenProgram(tokenBFlag);
 
     const preInstructions: TransactionInstruction[] = [];
-    if (tokenAMint.equals(NATIVE_MINT) || tokenBMint.equals(NATIVE_MINT)) {
+    if (inputTokenMint.equals(NATIVE_MINT)) {
       const { ataPubkey: userWrapSolAcc, ix: initializeUserWrapSOLAta } =
         await getOrCreateATAInstruction(
           this.connection,

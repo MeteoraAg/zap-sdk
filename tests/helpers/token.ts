@@ -10,13 +10,17 @@ import {
   createAssociatedTokenAccountInstruction,
   createInitializeMint2Instruction,
   createMintToInstruction,
+  createSyncNativeInstruction,
   getAssociatedTokenAddressSync,
   MINT_SIZE,
+  MintLayout,
+  NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { lamports } from "@solana/kit";
 import { BN } from "@anchor-lang/core";
 
-import { getAccount, signAndSendTransaction } from "./svm";
+import { getAccount, signAndSendTransaction, toAddress } from "./svm";
 
 export const TOKEN_DECIMALS = 9;
 const RAW_AMOUNT = BigInt(1_000_000_000) * BigInt(10 ** TOKEN_DECIMALS);
@@ -113,4 +117,48 @@ export function getTokenBalance(svm: LiteSVM, tokenAccount: PublicKey): BN {
 
 export function getTokenProgram(svm: LiteSVM, tokenMint: PublicKey): PublicKey {
   return getAccount(svm, tokenMint)!.owner;
+}
+
+// LiteSVM starts without the wrapped SOL mint, so write it in the layout the token program expects.
+export function createNativeMint(svm: LiteSVM): void {
+  const data = Buffer.alloc(MINT_SIZE);
+  MintLayout.encode(
+    {
+      mintAuthorityOption: 0,
+      mintAuthority: PublicKey.default,
+      supply: BigInt(0),
+      decimals: 9,
+      isInitialized: true,
+      freezeAuthorityOption: 0,
+      freezeAuthority: PublicKey.default,
+    },
+    data,
+  );
+  svm.setAccount({
+    address: toAddress(NATIVE_MINT),
+    data,
+    executable: false,
+    lamports: lamports(svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE))),
+    programAddress: toAddress(TOKEN_PROGRAM_ID),
+    space: BigInt(MINT_SIZE),
+  });
+}
+
+export function wrapSol(svm: LiteSVM, owner: Keypair, amount: bigint): void {
+  const wrapSolAccount = getOrCreateAta(
+    svm,
+    owner,
+    NATIVE_MINT,
+    owner.publicKey,
+    TOKEN_PROGRAM_ID,
+  );
+  const transaction = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: owner.publicKey,
+      toPubkey: wrapSolAccount,
+      lamports: amount,
+    }),
+    createSyncNativeInstruction(wrapSolAccount),
+  );
+  signAndSendTransaction(svm, transaction, [owner]);
 }

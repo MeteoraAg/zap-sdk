@@ -2,7 +2,8 @@ import Decimal from "decimal.js";
 import { LiteSVM } from "litesvm";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
+import { lamports } from "@solana/kit";
 import { BN } from "@anchor-lang/core";
 import {
   CollectFeeMode,
@@ -21,6 +22,9 @@ import {
   sendV0Instructions,
   createLiteSvmConnection,
   createToken,
+  createNativeMint,
+  wrapSol,
+  toAddress,
   mintToken,
   createDammV2Pool,
   createDammV2PoolWithConfig,
@@ -37,6 +41,7 @@ import {
   SQRT_MIN_PRICE,
   SQRT_PRICE_70A_30B,
   SQRT_PRICE_50A_50B,
+  LIQUIDITY_DELTA_2,
 } from "./helpers";
 
 interface UserBalances {
@@ -190,6 +195,51 @@ describe("Zap in DAMM V2", () => {
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
       expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
+    });
+
+    // Only a SOL input is wrapped. The input here is worth more than the user's 100 SOL,
+    // so wrapping it as SOL would fail.
+    it("zap in direct - tokenB into SOL-tokenB pool does not wrap the user's SOL", async () => {
+      createNativeMint(svm);
+      svm.airdrop(
+        toAddress(admin.publicKey),
+        lamports(BigInt(30_000 * LAMPORTS_PER_SOL)),
+      );
+      wrapSol(svm, admin, BigInt(20_000 * LAMPORTS_PER_SOL));
+
+      const pool = await createDammV2Pool({
+        svm,
+        creator: admin,
+        tokenAMint: NATIVE_MINT,
+        tokenBMint,
+        liquidity: LIQUIDITY_DELTA_2.muln(10),
+      });
+
+      const { positionNftMint } = await createPosition(svm, user, pool);
+
+      const preUserLamports = svm.getBalance(toAddress(user.publicKey))!;
+
+      const zapInAmount = new BN(200).mul(new BN(LAMPORTS_PER_SOL));
+      const { instructions } = await zapInDammV2Direct(
+        svm,
+        user.publicKey,
+        tokenBMint,
+        pool,
+        positionNftMint,
+        zapInAmount,
+      );
+
+      sendInstructions(svm, instructions, [user]);
+
+      const position = derivePositionAddress(positionNftMint);
+      const positionState = getDammV2Position(svm, position);
+      expect(positionState.unlockedLiquidity.gt(new BN(0))).to.be.true;
+
+      // Only transaction fees are paid in SOL; the temporary accounts' rent is returned.
+      const postUserLamports = svm.getBalance(toAddress(user.publicKey))!;
+      expect(
+        preUserLamports - postUserLamports < BigInt(LAMPORTS_PER_SOL / 100),
+      ).to.be.true;
     });
 
     it("zap in direct - tokenA into single-sided tokenA pool", async () => {
