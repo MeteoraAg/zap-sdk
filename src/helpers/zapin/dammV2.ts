@@ -37,7 +37,7 @@ export function calculateDirectPoolSwapAmount(
       .add(poolBalanceTokenB);
 
     swapAmountDecimal = numerator.div(denominator);
-  } else { 
+  } else {
     const numerator = amountDecimal.mul(poolBalanceTokenA);
     const denominator = currentPrice
       .mul(poolBalanceTokenB)

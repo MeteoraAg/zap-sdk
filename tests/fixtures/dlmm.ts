@@ -8,7 +8,7 @@ export type LbClmm = {
   "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
   "metadata": {
     "name": "lbClmm",
-    "version": "0.13.0",
+    "version": "0.13.1",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
@@ -5514,154 +5514,6 @@ export type LbClmm = {
           }
         }
       ]
-    },
-    {
-      "name": "withdrawProtocolFee",
-      "discriminator": [
-        158,
-        201,
-        158,
-        189,
-        33,
-        93,
-        162,
-        103
-      ],
-      "accounts": [
-        {
-          "name": "lbPair",
-          "writable": true
-        },
-        {
-          "name": "reserveX",
-          "writable": true,
-          "relations": [
-            "lbPair"
-          ]
-        },
-        {
-          "name": "reserveY",
-          "writable": true,
-          "relations": [
-            "lbPair"
-          ]
-        },
-        {
-          "name": "tokenXMint",
-          "relations": [
-            "lbPair"
-          ]
-        },
-        {
-          "name": "tokenYMint",
-          "relations": [
-            "lbPair"
-          ]
-        },
-        {
-          "name": "receiverTokenX",
-          "writable": true
-        },
-        {
-          "name": "receiverTokenY",
-          "writable": true
-        },
-        {
-          "name": "operator"
-        },
-        {
-          "name": "signer",
-          "docs": [
-            "operator"
-          ],
-          "signer": true
-        },
-        {
-          "name": "tokenXProgram"
-        },
-        {
-          "name": "tokenYProgram"
-        }
-      ],
-      "args": [
-        {
-          "name": "maxAmountX",
-          "type": "u64"
-        },
-        {
-          "name": "maxAmountY",
-          "type": "u64"
-        },
-        {
-          "name": "remainingAccountsInfo",
-          "type": {
-            "defined": {
-              "name": "remainingAccountsInfo"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "zapProtocolFee",
-      "discriminator": [
-        213,
-        155,
-        187,
-        34,
-        56,
-        182,
-        91,
-        240
-      ],
-      "accounts": [
-        {
-          "name": "lbPair",
-          "writable": true
-        },
-        {
-          "name": "reserve",
-          "writable": true
-        },
-        {
-          "name": "tokenMint"
-        },
-        {
-          "name": "receiverToken",
-          "writable": true
-        },
-        {
-          "name": "operator"
-        },
-        {
-          "name": "signer",
-          "docs": [
-            "operator"
-          ],
-          "signer": true
-        },
-        {
-          "name": "tokenProgram"
-        },
-        {
-          "name": "sysvarInstructions",
-          "address": "Sysvar1nstructions1111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "maxAmount",
-          "type": "u64"
-        },
-        {
-          "name": "remainingAccountsInfo",
-          "type": {
-            "defined": {
-              "name": "remainingAccountsInfo"
-            }
-          }
-        }
-      ]
     }
   ],
   "accounts": [
@@ -6159,6 +6011,19 @@ export type LbClmm = {
         27,
         84,
         77
+      ]
+    },
+    {
+      "name": "swap3Evt",
+      "discriminator": [
+        243,
+        37,
+        128,
+        57,
+        200,
+        30,
+        159,
+        216
       ]
     },
     {
@@ -10168,6 +10033,115 @@ export type LbClmm = {
             "name": "amountOut",
             "docs": [
               "Total amount transfer to user, including transfer fee"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "mmFee",
+            "docs": [
+              "Market maker fee"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "protocolFee",
+            "docs": [
+              "Total protocol fee"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "limitOrderFee",
+            "docs": [
+              "Total limit order fee"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hostFee",
+            "docs": [
+              "Total host fee"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "feesOnInput",
+            "docs": [
+              "check if fees on input"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "feesOnTokenX",
+            "docs": [
+              "check if fees is on token x"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "swap3Evt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "lbPair",
+            "type": "pubkey"
+          },
+          {
+            "name": "from",
+            "type": "pubkey"
+          },
+          {
+            "name": "startBinId",
+            "type": "i32"
+          },
+          {
+            "name": "endBinId",
+            "type": "i32"
+          },
+          {
+            "name": "swapForY",
+            "type": "bool"
+          },
+          {
+            "name": "feeBps",
+            "type": "u128"
+          },
+          {
+            "name": "includedTransferFeeAmountIn",
+            "docs": [
+              "Amount the user transfers out, before the token transfer fee is deducted"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "excludedTransferFeeAmountIn",
+            "docs": [
+              "Amount the pool receives, after the token transfer fee is deducted. Includes the trading fee"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "includedTransferFeeAmountOut",
+            "docs": [
+              "Amount the pool transfers out, before the token transfer fee is deducted"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "excludedTransferFeeAmountOut",
+            "docs": [
+              "Amount the user receives, after the token transfer fee is deducted"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amountLeft",
+            "docs": [
+              "Leftover amount"
             ],
             "type": "u64"
           },

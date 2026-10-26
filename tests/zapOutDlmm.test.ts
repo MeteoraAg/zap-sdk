@@ -24,6 +24,7 @@ import {
   getJupiterQuote,
   getJupiterSwapInstruction,
 } from "../src/helpers/jupiter";
+import { DEFAULT_JUPITER_API_VERSION } from "../src/constants";
 
 describe("Zap out DLMM", () => {
   let svm: LiteSVM;
@@ -147,109 +148,100 @@ describe("Zap out DLMM", () => {
     });
   }
 
-  for (const {
-    version,
-    discriminator,
-    amountInOffset,
-  } of JUPITER_API_VERSION_CASES) {
-    for (const direction of ["x->y", "y->x"] as const) {
-      it(`zapOutThroughJupiter ${direction} with Jupiter API ${version}`, async () => {
-        const inputTokenMint = direction === "x->y" ? tokenXMint : tokenYMint;
-        const outputTokenMint = direction === "x->y" ? tokenYMint : tokenXMint;
-        const {
-          lbPair,
-          removeLiquidityTx,
-          userTokenInAccount,
-          userTokenOutAccount,
-          preUserTokenInBalance,
-          preUserTokenOutBalance,
-          estimatedAmountIn,
-        } = await setupDlmmPoolAndRemoveLiquidity(
-          svm,
-          admin,
-          user,
-          tokenXMint,
-          tokenYMint,
-          inputTokenMint,
-        );
+  // The swap is quoted and built under the SDK default Jupiter API version.
+  const { discriminator, amountInOffset } = JUPITER_API_VERSION_CASES.find(
+    ({ version }) => version === DEFAULT_JUPITER_API_VERSION,
+  )!;
 
-        const config = { jupiterApiVersion: version };
-        restoreJupiterFetch = mockJupiterFetch(
-          svm,
-          user.publicKey,
-          inputTokenMint,
-          [
-            {
-              outputMint: outputTokenMint,
-              swapPool: lbPair,
-              outAmount: new BN(1),
-              poolType: "dlmm",
-            },
-          ],
-        ).restore;
+  for (const direction of ["x->y", "y->x"] as const) {
+    it(`zapOutThroughJupiter ${direction}`, async () => {
+      const inputTokenMint = direction === "x->y" ? tokenXMint : tokenYMint;
+      const outputTokenMint = direction === "x->y" ? tokenYMint : tokenXMint;
+      const {
+        lbPair,
+        removeLiquidityTx,
+        userTokenInAccount,
+        userTokenOutAccount,
+        preUserTokenInBalance,
+        preUserTokenOutBalance,
+        estimatedAmountIn,
+      } = await setupDlmmPoolAndRemoveLiquidity(
+        svm,
+        admin,
+        user,
+        tokenXMint,
+        tokenYMint,
+        inputTokenMint,
+      );
 
-        const quoteResponse = await getJupiterQuote(
+      restoreJupiterFetch = mockJupiterFetch(
+        svm,
+        user.publicKey,
+        inputTokenMint,
+        [
           {
-            inputMint: inputTokenMint,
             outputMint: outputTokenMint,
-            amount: estimatedAmountIn,
-            user: user.publicKey,
-            maxAccounts: 50,
-            slippageBps: 50,
+            swapPool: lbPair,
+            outAmount: new BN(1),
+            poolType: "dlmm",
           },
-          config,
-        );
-        expect(quoteResponse).to.not.be.null;
+        ],
+      ).restore;
 
-        const swapInstructionResponse = await getJupiterSwapInstruction(
-          user.publicKey,
-          quoteResponse!,
-          config,
-        );
-
-        const data = Buffer.from(
-          swapInstructionResponse.swapInstruction.data,
-          "base64",
-        );
-        expect([...data.subarray(0, 8)]).to.deep.equal(discriminator);
-        expect(
-          getJupiterInstructionLayout(data).amountInOffset(data.length),
-        ).to.equal(amountInOffset(data.length));
-
-        const zap = new Zap(createLiteSvmConnection(svm), config);
-        const zapOutTx = await zap.zapOutThroughJupiter({
-          user: user.publicKey,
-          inputMint: inputTokenMint,
-          outputMint: outputTokenMint,
-          inputTokenProgram: getTokenProgram(svm, inputTokenMint),
-          outputTokenProgram: getTokenProgram(svm, outputTokenMint),
-          jupiterSwapResponse: swapInstructionResponse,
-          maxSwapAmount: new BN("1000000000000"),
-          percentageToZapOut: 100,
-        });
-
-        sendV0Instructions(
-          svm,
-
-          [...removeLiquidityTx.instructions, ...zapOutTx.instructions],
-
-          zapOutTx.addressLookupTableAccounts,
-
-          [user],
-        );
-
-        const postUserTokenInBalance = getTokenBalance(svm, userTokenInAccount);
-        const postUserTokenOutBalance = getTokenBalance(
-          svm,
-          userTokenOutAccount,
-        );
-
-        expect(postUserTokenOutBalance.gt(preUserTokenOutBalance)).to.be.true;
-        // 100% of the removed input token is swapped, so the input balance must equal the starting balance.
-        expect(postUserTokenInBalance.toString()).to.equal(
-          preUserTokenInBalance.toString(),
-        );
+      const quoteResponse = await getJupiterQuote({
+        inputMint: inputTokenMint,
+        outputMint: outputTokenMint,
+        amount: estimatedAmountIn,
+        user: user.publicKey,
+        maxAccounts: 50,
+        slippageBps: 50,
       });
-    }
+      expect(quoteResponse).to.not.be.null;
+
+      const swapInstructionResponse = await getJupiterSwapInstruction(
+        user.publicKey,
+        quoteResponse!,
+      );
+
+      const data = Buffer.from(
+        swapInstructionResponse.swapInstruction.data,
+        "base64",
+      );
+      expect([...data.subarray(0, 8)]).to.deep.equal(discriminator);
+      expect(
+        getJupiterInstructionLayout(data).amountInOffset(data.length),
+      ).to.equal(amountInOffset(data.length));
+
+      const zap = new Zap(createLiteSvmConnection(svm));
+      const zapOutTx = await zap.zapOutThroughJupiter({
+        user: user.publicKey,
+        inputMint: inputTokenMint,
+        outputMint: outputTokenMint,
+        inputTokenProgram: getTokenProgram(svm, inputTokenMint),
+        outputTokenProgram: getTokenProgram(svm, outputTokenMint),
+        jupiterSwapResponse: swapInstructionResponse,
+        maxSwapAmount: new BN("1000000000000"),
+        percentageToZapOut: 100,
+      });
+
+      sendV0Instructions(
+        svm,
+
+        [...removeLiquidityTx.instructions, ...zapOutTx.instructions],
+
+        zapOutTx.addressLookupTableAccounts,
+
+        [user],
+      );
+
+      const postUserTokenInBalance = getTokenBalance(svm, userTokenInAccount);
+      const postUserTokenOutBalance = getTokenBalance(svm, userTokenOutAccount);
+
+      expect(postUserTokenOutBalance.gt(preUserTokenOutBalance)).to.be.true;
+      // 100% of the removed input token is swapped, so the input balance must equal the starting balance.
+      expect(postUserTokenInBalance.toString()).to.equal(
+        preUserTokenInBalance.toString(),
+      );
+    });
   }
 });

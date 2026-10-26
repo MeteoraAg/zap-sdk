@@ -5,7 +5,7 @@ import {
   IdlAccounts,
   Program,
   Wallet,
-} from "@coral-xyz/anchor";
+} from "@anchor-lang/core";
 import { LiteSVM } from "litesvm";
 import {
   clusterApiUrl,
@@ -279,6 +279,7 @@ export async function createDammV2PoolWithConfig(params: {
       poolCreatorAuthority: PublicKey.default,
       activationType: 0,
       collectFeeMode: 1,
+      permission: new BN(0),
     })
     .accountsPartial({
       config,

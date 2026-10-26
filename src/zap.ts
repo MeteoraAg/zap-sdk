@@ -7,7 +7,7 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import invariant from "invariant";
-import { BN, Program } from "@coral-xyz/anchor";
+import { BN, Program } from "@anchor-lang/core";
 import ZapIDL from "./idl/zap/idl.json";
 import { Zap as ZapTypes } from "./idl/zap/idl";
 import {

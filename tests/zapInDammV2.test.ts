@@ -3,7 +3,7 @@ import { LiteSVM } from "litesvm";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { BN } from "@coral-xyz/anchor";
+import { BN } from "@anchor-lang/core";
 import {
   CollectFeeMode,
   derivePositionAddress,
@@ -14,7 +14,6 @@ import {
 
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
 import { Zap } from "../src/zap";
-import { JupiterApiVersion } from "../src/types";
 import {
   startSvm,
   generateKpAndFund,
@@ -32,7 +31,7 @@ import {
   getDammV2Position,
   zapInDammV2Direct,
   zapInDammV2Indirect,
-  buildJupiterQuoteResponse,
+  buildJupiterBuildResponse,
   mockJupiterFetch,
   SQRT_MAX_PRICE,
   SQRT_MIN_PRICE,
@@ -284,13 +283,17 @@ describe("Zap in DAMM V2", () => {
         [{ outputMint: outputTokenMint, swapPool, outAmount: estimatedOut }],
       ).restore;
 
-      const zap = new Zap(createLiteSvmConnection(svm), {
-        jupiterApiVersion: JupiterApiVersion.V1,
-      });
+      const zap = new Zap(createLiteSvmConnection(svm));
 
-      const jupiterQuote = buildJupiterQuoteResponse(
+      const jupiterQuote = await buildJupiterBuildResponse(
+        svm,
+        {
+          outputMint: outputTokenMint,
+          swapPool,
+          outAmount: estimatedOut,
+        },
+        user.publicKey,
         inputTokenMint,
-        outputTokenMint,
         new BN("1000000000"),
         estimatedOut,
       );
@@ -354,9 +357,7 @@ describe("Zap in DAMM V2", () => {
         priceImpact: new Decimal(0),
       };
 
-      const zap = new Zap(createLiteSvmConnection(svm), {
-        jupiterApiVersion: JupiterApiVersion.V1,
-      });
+      const zap = new Zap(createLiteSvmConnection(svm));
 
       const params = await zap.getZapInDammV2DirectPoolParams({
         user: user.publicKey,
@@ -480,13 +481,17 @@ describe("Zap in DAMM V2", () => {
         [{ outputMint: outputTokenMint, swapPool, outAmount: estimatedOut }],
       ).restore;
 
-      const zap = new Zap(createLiteSvmConnection(svm), {
-        jupiterApiVersion: JupiterApiVersion.V1,
-      });
+      const zap = new Zap(createLiteSvmConnection(svm));
 
-      const jupiterQuote = buildJupiterQuoteResponse(
+      const jupiterQuote = await buildJupiterBuildResponse(
+        svm,
+        {
+          outputMint: outputTokenMint,
+          swapPool,
+          outAmount: estimatedOut,
+        },
+        user.publicKey,
         inputTokenMint,
-        outputTokenMint,
         new BN("1000000000"),
         estimatedOut,
       );
@@ -550,9 +555,7 @@ describe("Zap in DAMM V2", () => {
         tokenBDecimal: 9,
       });
 
-      const zap = new Zap(createLiteSvmConnection(svm), {
-        jupiterApiVersion: JupiterApiVersion.V1,
-      });
+      const zap = new Zap(createLiteSvmConnection(svm));
 
       const params = await zap.getZapInDammV2DirectPoolParams({
         user: user.publicKey,
@@ -761,15 +764,27 @@ describe("Zap in DAMM V2", () => {
         },
       ]).restore;
 
-      const jupiterQuoteToA = buildJupiterQuoteResponse(
+      const jupiterQuoteToA = await buildJupiterBuildResponse(
+        svm,
+        {
+          outputMint: poolState.tokenAMint,
+          swapPool: swapPoolA,
+          outAmount: quoteA.swapOutAmount,
+        },
+        user.publicKey,
         tokenCMint,
-        poolState.tokenAMint,
         oneToken,
         quoteA.swapOutAmount,
       );
-      const jupiterQuoteToB = buildJupiterQuoteResponse(
+      const jupiterQuoteToB = await buildJupiterBuildResponse(
+        svm,
+        {
+          outputMint: poolState.tokenBMint,
+          swapPool: swapPoolB,
+          outAmount: quoteB.swapOutAmount,
+        },
+        user.publicKey,
         tokenCMint,
-        poolState.tokenBMint,
         oneToken,
         quoteB.swapOutAmount,
       );
@@ -843,9 +858,15 @@ describe("Zap in DAMM V2", () => {
         },
       ]).restore;
 
-      const jupiterQuoteToA = buildJupiterQuoteResponse(
+      const jupiterQuoteToA = await buildJupiterBuildResponse(
+        svm,
+        {
+          outputMint: poolState.tokenAMint,
+          swapPool,
+          outAmount: estimatedOut,
+        },
+        user.publicKey,
         tokenCMint,
-        poolState.tokenAMint,
         new BN("1000000000"),
         estimatedOut,
       );
@@ -925,9 +946,15 @@ describe("Zap in DAMM V2", () => {
         },
       ]).restore;
 
-      const jupiterQuoteToB = buildJupiterQuoteResponse(
+      const jupiterQuoteToB = await buildJupiterBuildResponse(
+        svm,
+        {
+          outputMint: poolState.tokenBMint,
+          swapPool,
+          outAmount: estimatedOut,
+        },
+        user.publicKey,
         tokenCMint,
-        poolState.tokenBMint,
         new BN("1000000000"),
         estimatedOut,
       );

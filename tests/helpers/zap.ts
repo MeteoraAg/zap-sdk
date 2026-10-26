@@ -1,4 +1,4 @@
-import { BN } from "@coral-xyz/anchor";
+import { BN } from "@anchor-lang/core";
 import { LiteSVM } from "litesvm";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
@@ -20,9 +20,9 @@ import {
   DlmmDirectSwapEstimate,
   DlmmIndirectSwapEstimate,
   DlmmSingleSided,
-  JupiterApiVersion,
   JupiterQuoteResponse,
   RebalanceDlmmPositionResponse,
+  ZapConfig,
   ZapInstructionsResponse,
 } from "../../src/types";
 import { getDammV2OutputMint, getDammV2Pool } from "./damm_v2";
@@ -73,9 +73,7 @@ export async function zapOutDammV2(
   pool: PublicKey,
   amountIn: BN,
 ): Promise<ZapInstructionsResponse> {
-  const zap = new Zap(createLiteSvmConnection(svm), {
-    jupiterApiVersion: JupiterApiVersion.V1,
-  });
+  const zap = new Zap(createLiteSvmConnection(svm));
   const poolState = getDammV2Pool(svm, pool);
   const outputTokenMint = getDammV2OutputMint(poolState, inputTokenMint);
 
@@ -107,9 +105,7 @@ export async function zapInDammV2Direct(
   amountIn: BN,
   maxSlippageBps: number = 1000,
 ): Promise<ZapInstructionsResponse> {
-  const zap = new Zap(createLiteSvmConnection(svm), {
-    jupiterApiVersion: JupiterApiVersion.V1,
-  });
+  const zap = new Zap(createLiteSvmConnection(svm));
 
   const dammV2Quote = getDammV2Quote(svm, pool, inputTokenMint, amountIn);
 
@@ -141,9 +137,7 @@ export async function zapInDammV2Indirect(
   jupiterQuoteToB: JupiterQuoteResponse | null,
   maxSlippageBps: number = 5000,
 ): Promise<ZapInstructionsResponse> {
-  const zap = new Zap(createLiteSvmConnection(svm), {
-    jupiterApiVersion: JupiterApiVersion.V1,
-  });
+  const zap = new Zap(createLiteSvmConnection(svm));
 
   const params = await zap.getZapInDammV2IndirectPoolParams({
     user,
@@ -230,9 +224,7 @@ async function zapOutJupV6(
     userTokenOutAccount: PublicKey,
   ) => JupiterSwapLeg | Promise<JupiterSwapLeg>,
 ): Promise<ZapInstructionsResponse> {
-  const zap = new Zap(createLiteSvmConnection(svm), {
-    jupiterApiVersion: JupiterApiVersion.V1,
-  });
+  const zap = new Zap(createLiteSvmConnection(svm));
 
   const inputTokenProgram = getTokenProgram(svm, inputTokenMint);
   const outputTokenProgram = getTokenProgram(svm, outputTokenMint);
@@ -300,9 +292,7 @@ export async function zapOutDlmm(
   lbPair: PublicKey,
   amountIn: BN,
 ): Promise<ZapInstructionsResponse> {
-  const zap = new Zap(createLiteSvmConnection(svm), {
-    jupiterApiVersion: JupiterApiVersion.V1,
-  });
+  const zap = new Zap(createLiteSvmConnection(svm));
   const lbPairState = getLbPair(svm, lbPair);
   const outputTokenMint = getDlmmOutputMint(lbPairState, inputTokenMint);
 
@@ -363,9 +353,8 @@ export async function zapInDlmmDirect(
     estimate: DlmmDirectSwapEstimate;
   } & ZapInstructionsResponse
 > {
-  const config = { jupiterApiVersion: JupiterApiVersion.V1 };
   const connection = createLiteSvmConnection(svm);
-  const zap = new Zap(connection, config);
+  const zap = new Zap(connection);
   const { minDeltaId, maxDeltaId, favorXInActiveId } =
     getZapInDlmmRange(options);
 
@@ -380,7 +369,6 @@ export async function zapInDlmmDirect(
     maxDeltaId,
     strategy: StrategyType.Spot,
     singleSided: options.singleSided,
-    config,
   });
 
   const params = await zap.getZapInDlmmDirectParams({
@@ -411,13 +399,13 @@ export async function zapInDlmmIndirect(
   lbPair: PublicKey,
   amountIn: BN,
   options: ZapInDlmmOptions = {},
+  config: ZapConfig = {},
 ): Promise<
   {
     position: Keypair;
     estimate: DlmmIndirectSwapEstimate;
   } & ZapInstructionsResponse
 > {
-  const config = { jupiterApiVersion: JupiterApiVersion.V1 };
   const connection = createLiteSvmConnection(svm);
   const zap = new Zap(connection, config);
   const { minDeltaId, maxDeltaId, favorXInActiveId } =
@@ -467,9 +455,8 @@ export async function rebalanceDlmmPosition(
 ): Promise<
   RebalanceDlmmPositionResponse & { estimate: DlmmDirectRebalanceEstimate }
 > {
-  const config = { jupiterApiVersion: JupiterApiVersion.V1 };
   const connection = createLiteSvmConnection(svm);
-  const zap = new Zap(connection, config);
+  const zap = new Zap(connection);
 
   const estimate = await estimateDlmmRebalanceSwap({
     user,
@@ -480,7 +467,6 @@ export async function rebalanceDlmmPosition(
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
-    config,
   });
 
   const result = await zap.rebalanceDlmmPosition({

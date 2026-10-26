@@ -22,6 +22,7 @@ import {
   zapInDlmmIndirect,
   mockJupiterFetch,
   JupiterMockRoute,
+  JUPITER_API_VERSION_CASES,
   SQRT_PRICE_50A_50B,
 } from "./helpers";
 import { DlmmSingleSided, ZapInstructionsResponse } from "../src/types";
@@ -164,90 +165,99 @@ describe("Zap in DLMM indirect", () => {
     return positionData;
   }
 
-  it("zap in indirect - tokenC into tokenX-tokenY pool (proportional split)", async () => {
-    const lbPair = await createSeededDlmmPool(
-      svm,
-      admin,
-      tokenXMint,
-      tokenYMint,
-    );
-    await mockJupiterLegs(["X", "Y"]);
+  for (const { version } of JUPITER_API_VERSION_CASES) {
+    describe(`with Jupiter API ${version}`, () => {
+      const config = { jupiterApiVersion: version };
 
-    const result = await zapInDlmmIndirect(
-      svm,
-      user.publicKey,
-      tokenCMint,
-      lbPair,
-      zapInAmount,
-      { binDelta },
-    );
+      it("zap in indirect - tokenC into tokenX-tokenY pool (proportional split)", async () => {
+        const lbPair = await createSeededDlmmPool(
+          svm,
+          admin,
+          tokenXMint,
+          tokenYMint,
+        );
+        await mockJupiterLegs(["X", "Y"]);
 
-    sendZapIn(result);
+        const result = await zapInDlmmIndirect(
+          svm,
+          user.publicKey,
+          tokenCMint,
+          lbPair,
+          zapInAmount,
+          { binDelta },
+          config,
+        );
 
-    const positionData = await expectPosition(
-      lbPair,
-      result.position.publicKey,
-      { minDeltaId: -binDelta, maxDeltaId: binDelta },
-    );
-    expect(positionData.totalXAmountExcludeTransferFee.gt(new BN(0))).to.be
-      .true;
-    expect(positionData.totalYAmountExcludeTransferFee.gt(new BN(0))).to.be
-      .true;
-  });
+        sendZapIn(result);
 
-  // A single-sided position sits entirely on one side of the active bin and only takes
-  // that side's token, the DLMM counterpart of a DAMM V2 pool priced at its bound.
-  for (const side of ["X", "Y"] as const) {
-    const singleSided = side === "X" ? DlmmSingleSided.X : DlmmSingleSided.Y;
-    const range =
-      side === "X"
-        ? { minDeltaId: 0, maxDeltaId: binDelta }
-        : { minDeltaId: -binDelta, maxDeltaId: 0 };
-    const other: TokenSide = side === "X" ? "Y" : "X";
+        const positionData = await expectPosition(
+          lbPair,
+          result.position.publicKey,
+          { minDeltaId: -binDelta, maxDeltaId: binDelta },
+        );
+        expect(positionData.totalXAmountExcludeTransferFee.gt(new BN(0))).to.be
+          .true;
+        expect(positionData.totalYAmountExcludeTransferFee.gt(new BN(0))).to.be
+          .true;
+      });
 
-    it(`zap in indirect - tokenC into single-sided token${side} position`, async () => {
-      const lbPair = await createSeededDlmmPool(
-        svm,
-        admin,
-        tokenXMint,
-        tokenYMint,
-      );
-      await mockJupiterLegs([side]);
+      // A single-sided position sits entirely on one side of the active bin and only takes
+      // that side's token, the DLMM counterpart of a DAMM V2 pool priced at its bound.
+      for (const side of ["X", "Y"] as const) {
+        const singleSided =
+          side === "X" ? DlmmSingleSided.X : DlmmSingleSided.Y;
+        const range =
+          side === "X"
+            ? { minDeltaId: 0, maxDeltaId: binDelta }
+            : { minDeltaId: -binDelta, maxDeltaId: 0 };
+        const other: TokenSide = side === "X" ? "Y" : "X";
 
-      const pre = snapshotUserBalances(svm, lbPair, user.publicKey);
+        it(`zap in indirect - tokenC into single-sided token${side} position`, async () => {
+          const lbPair = await createSeededDlmmPool(
+            svm,
+            admin,
+            tokenXMint,
+            tokenYMint,
+          );
+          await mockJupiterLegs([side]);
 
-      const result = await zapInDlmmIndirect(
-        svm,
-        user.publicKey,
-        tokenCMint,
-        lbPair,
-        zapInAmount,
-        { binDelta, singleSided },
-      );
+          const pre = snapshotUserBalances(svm, lbPair, user.publicKey);
 
-      sendZapIn(result);
+          const result = await zapInDlmmIndirect(
+            svm,
+            user.publicKey,
+            tokenCMint,
+            lbPair,
+            zapInAmount,
+            { binDelta, singleSided },
+            config,
+          );
 
-      // The other pool token is never touched.
-      const post = snapshotUserBalances(svm, lbPair, user.publicKey);
-      expect(balanceOf(post, other).eq(balanceOf(pre, other))).to.be.true;
+          sendZapIn(result);
 
-      // Only the deposited token goes in, but shares in the active bin claim a slice of
-      // both reserves, so the other side is small rather than zero.
-      const positionData = await expectPosition(
-        lbPair,
-        result.position.publicKey,
-        range,
-      );
-      const deposited =
-        side === "X"
-          ? positionData.totalXAmountExcludeTransferFee
-          : positionData.totalYAmountExcludeTransferFee;
-      const rest =
-        side === "X"
-          ? positionData.totalYAmountExcludeTransferFee
-          : positionData.totalXAmountExcludeTransferFee;
-      expect(deposited.gt(new BN(0))).to.be.true;
-      expect(deposited.gt(rest)).to.be.true;
+          // The other pool token is never touched.
+          const post = snapshotUserBalances(svm, lbPair, user.publicKey);
+          expect(balanceOf(post, other).eq(balanceOf(pre, other))).to.be.true;
+
+          // Only the deposited token goes in, but shares in the active bin claim a slice of
+          // both reserves, so the other side is small rather than zero.
+          const positionData = await expectPosition(
+            lbPair,
+            result.position.publicKey,
+            range,
+          );
+          const deposited =
+            side === "X"
+              ? positionData.totalXAmountExcludeTransferFee
+              : positionData.totalYAmountExcludeTransferFee;
+          const rest =
+            side === "X"
+              ? positionData.totalYAmountExcludeTransferFee
+              : positionData.totalXAmountExcludeTransferFee;
+          expect(deposited.gt(new BN(0))).to.be.true;
+          expect(deposited.gt(rest)).to.be.true;
+        });
+      }
     });
   }
 });

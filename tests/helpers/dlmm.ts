@@ -4,7 +4,7 @@ import {
   IdlAccounts,
   Program,
   Wallet,
-} from "@coral-xyz/anchor";
+} from "@anchor-lang/core";
 import { LiteSVM } from "litesvm";
 import {
   clusterApiUrl,

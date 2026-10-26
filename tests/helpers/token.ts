@@ -14,7 +14,7 @@ import {
   MINT_SIZE,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { BN } from "@coral-xyz/anchor";
+import { BN } from "@anchor-lang/core";
 
 import { getAccount, signAndSendTransaction } from "./svm";
 

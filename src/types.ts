@@ -1,4 +1,4 @@
-import { Program, IdlTypes } from "@coral-xyz/anchor";
+import { Program, IdlTypes } from "@anchor-lang/core";
 import {
   AccountMeta,
   AddressLookupTableAccount,
