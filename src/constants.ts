@@ -113,7 +113,9 @@ export const DAMM_V2_SWAP_DISCRIMINATOR = [
 export const DEFAULT_JUPITER_API_URL = "https://api.jup.ag";
 export const DEFAULT_JUPITER_API_VERSION = JupiterApiVersion.V2;
 
-export const DEFAULT_JUPITER_QUOTE_OPTIONS: Required<JupiterQuoteOptions> = {
+export const DEFAULT_JUPITER_QUOTE_OPTIONS: Required<
+  Omit<JupiterQuoteOptions, "additionalQueryParams">
+> = {
   dynamicSlippage: false,
   onlyDirectRoutes: true,
   restrictIntermediateTokens: true,

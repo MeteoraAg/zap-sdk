@@ -87,20 +87,33 @@ export type GetJupiterQuoteParams = {
   user: PublicKey;
   maxAccounts: number;
   slippageBps: number;
-  // see `DEFAULT_JUPITER_QUOTE_OPTIONS`
+  // see `JupiterQuoteOptions`
   dynamicSlippage?: boolean;
   onlyDirectRoutes?: boolean;
   restrictIntermediateTokens?: boolean;
   forJitoBundle?: boolean;
+  additionalQueryParams?: Record<string, string>;
 };
 
-/** Jupiter route options forwarded to `getJupiterQuote`. Each option falls back to the `getJupiterQuote` default when omitted. */
+/**
+ * Jupiter options for the quote request. The SDK forwards them to Jupiter as-is and does not decide
+ * which ones Jupiter honours, because Jupiter also accepts options it does not document.
+ * Jupiter's API docs are the source of truth for what each option does:
+ * - v1 `GET /swap/v1/quote`: https://developers.jup.ag/docs/api-reference/swap/v1/quote
+ * - v2 `GET /swap/v2/build`: https://developers.jup.ag/docs/api-reference/swap/build
+ *
+ * `dynamicSlippage`, `onlyDirectRoutes`, `restrictIntermediateTokens` and `forJitoBundle` fall back to
+ * `DEFAULT_JUPITER_QUOTE_OPTIONS` when omitted.
+ * `additionalQueryParams` holds any other Jupiter query parameter, as a name to string value map. It is
+ * added last, so it overrides parameters the SDK sets, except `taker` under v2.
+ */
 export type JupiterQuoteOptions = Pick<
   GetJupiterQuoteParams,
   | "dynamicSlippage"
   | "onlyDirectRoutes"
   | "restrictIntermediateTokens"
   | "forJitoBundle"
+  | "additionalQueryParams"
 >;
 
 export type GetJupAndDammV2QuotesParams = {

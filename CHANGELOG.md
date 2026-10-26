@@ -8,21 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Breaking Changes
+
+## [2.0.0] - [PR #23](https://github.com/MeteoraAg/zap-sdk/pull/33)
+
+### Added
+
 - Added helpers `toAddressLookupTableAccounts`, `fetchAddressLookupTableAccounts`, `getJupiterAddressLookupTableAccounts` and `mergeAddressLookupTableAccounts` for the lookup tables of Jupiter swaps, and `filterOutComputeBudgetInstructions`.
 
 ### Changed
 
 - `zapOutThroughJupiter` accepts the optional `addressesByLookupTableAddress` (v2) and `addressLookupTableAddresses` (v1) fields on `jupiterSwapResponse` and returns those lookup tables. v1 tables are fetched with one RPC call.
 
-### Deprecated
-
 ### Removed
 
 - Removed types `ZapInDammV2Response` and `ZapInDlmmResponse`. Use `ZapInstructionsResponse`.
-
-### Fixed
-
-### Security
 
 ### Breaking Changes
 

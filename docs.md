@@ -407,6 +407,7 @@ type GetJupiterQuoteParams = {
   onlyDirectRoutes?: boolean; // Default: true
   restrictIntermediateTokens?: boolean; // Default: true
   forJitoBundle?: boolean; // Default: true
+  additionalQueryParams?: Record<string, string>; // Any other Jupiter query parameter
 };
 
 type ZapConfig = {
@@ -446,7 +447,7 @@ const quoteResponse = await getJupiterQuote(
 
 - This function is used to get Jupiter quote from Jupiter API.
 - Any issues with the api you can check out [Jupiter's Build API Documentation](https://developers.jup.ag/docs/swap/build)
-- A low `maxAccounts` (examples use `40` or `50`) caps the route size, and `onlyDirectRoutes=true` restricts Jupiter v1 to single-hop routes. Jupiter v2 does not document `onlyDirectRoutes` and can still return multi-hop routes. Either way the route is **not** the same as a Jupiter UI quote.
+- `maxAccounts` and the route options are forwarded to Jupiter as-is. See `JupiterQuoteOptions` for what each option does. With a low `maxAccounts` (examples use `40` or `50`) and the default options, the route is **not** the same as a Jupiter UI quote.
 - `slippageBps` only covers move within the quoted route. It does **not** mean `outAmount` is a fair market vs input. Validate output / impact / simulated balances before signing. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).
 - Direct zap-in estimators currently call this helper with `onlyDirectRoutes=true` and `maxAccounts=50`.
 

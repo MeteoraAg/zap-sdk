@@ -95,10 +95,11 @@ type JupiterQuoteQuery = {
   onlyDirectRoutes: boolean;
   restrictIntermediateTokens: boolean;
   forJitoBundle: boolean;
+  additionalQueryParams?: Record<string, string>;
 };
 
 function toSearchParams(query: JupiterQuoteQuery): URLSearchParams {
-  return new URLSearchParams({
+  const params = new URLSearchParams({
     inputMint: query.inputMint.toString(),
     outputMint: query.outputMint.toString(),
     amount: query.amount,
@@ -111,6 +112,12 @@ function toSearchParams(query: JupiterQuoteQuery): URLSearchParams {
     dynamicSlippage: query.dynamicSlippage.toString(),
     forJitoBundle: query.forJitoBundle.toString(),
   });
+  for (const [name, value] of Object.entries(
+    query.additionalQueryParams ?? {},
+  )) {
+    params.set(name, value);
+  }
+  return params;
 }
 
 async function fetchJupiterQuoteV1(
@@ -169,11 +176,8 @@ async function fetchJupiterBuildV2(
  *   (a `JupiterBuildResponse`), so no second request is needed for the swap.
  * Returns null when the request fails.
  *
- * The route can be much thinner than a Jupiter UI quote, because the UI sets no route limits.
- * `maxAccounts` caps the accounts the route may use (the DLMM estimators pass 50).
- * `onlyDirectRoutes` defaults to true. v1 then always returns a single-hop route. v2 does not
- * document `onlyDirectRoutes`, `restrictIntermediateTokens` or `dynamicSlippage`, so under v2 a
- * multi-hop route can still come back.
+ * `maxAccounts` and the options in `JupiterQuoteOptions` are forwarded to Jupiter as-is. They can
+ * give a much thinner route than a Jupiter UI quote, because the UI does not set them.
  * `slippageBps` only bounds execution against this quote. It does not mean `outAmount` is a fair
  * price for the input size, so validate the output, price impact or simulated token balance
  * changes before sending.
@@ -198,6 +202,7 @@ export async function getJupiterQuote(
       DEFAULT_JUPITER_QUOTE_OPTIONS.restrictIntermediateTokens,
     forJitoBundle:
       params.forJitoBundle ?? DEFAULT_JUPITER_QUOTE_OPTIONS.forJitoBundle,
+    additionalQueryParams: params.additionalQueryParams,
   };
 
   const { version } = resolveJupiterConfig(config);

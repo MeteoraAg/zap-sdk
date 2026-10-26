@@ -459,7 +459,7 @@ export class Zap {
    * @param params.dammV2Quote - The DAMM V2 swap quote for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.jupiterQuote - The Jupiter swap quote for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
-   * @param params.jupiterQuoteOptions - Optional Jupiter route options for the swap quote (onlyDirectRoutes, restrictIntermediateTokens, dynamicSlippage, forJitoBundle); omitted options use the getJupiterQuote defaults
+   * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
    * @returns The zap-in transaction parameters for a DAMM V2 direct pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
    * @throws if failed to get both Jupiter and DAMM v2 swap quotes
@@ -755,7 +755,7 @@ export class Zap {
    * @param params.jupiterQuoteToA - The Jupiter quote for swapping to tokenA for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.jupiterQuoteToB - The Jupiter quote for swapping to tokenB for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
-   * @param params.jupiterQuoteOptions - Optional Jupiter route options for the swap quote (onlyDirectRoutes, restrictIntermediateTokens, dynamicSlippage, forJitoBundle); omitted options use the getJupiterQuote defaults
+   * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
    * @returns The zap-in transaction parameters for a DAMM V2 indirect pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
    * @throws if no Jupiter quote provided for both tokens

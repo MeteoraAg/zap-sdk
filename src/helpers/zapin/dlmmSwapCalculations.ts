@@ -156,7 +156,7 @@ async function getBestSwapQuoteJupiterDlmm(
     // dlmm quote can fail, if the pool has insufficient liquidity
     console.error("Error getting DLMM quote, using jupiter quote only:", error);
   }
-  // Jupiter quote with maxAccounts=50 and onlyDirectRoutes=true unless jupiterQuoteOptions overrides it.
+  // Jupiter quote with maxAccounts=50 and jupiterQuoteOptions.
   // Not equivalent to Jupiter UI. Caller must validate outAmount.
   const jupiterQuoteResult = await getJupiterQuote(
     {
@@ -361,7 +361,7 @@ function binarySearchRefineDirectSwapAmount(
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
  * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
- * @param params.jupiterQuoteOptions - Optional Jupiter route options (onlyDirectRoutes, restrictIntermediateTokens, dynamicSlippage, forJitoBundle); omitted options use the getJupiterQuote defaults
+ * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
  * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns IndirectSwapEstimate with swap details and post-swap token amounts
  * @throws if inputTokenMint matches any token in the DLMM pool
@@ -969,7 +969,7 @@ async function estimateDlmmDirectSwapCore({
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
  * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
- * @param params.jupiterQuoteOptions - Optional Jupiter route options (onlyDirectRoutes, restrictIntermediateTokens, dynamicSlippage, forJitoBundle); omitted options use the getJupiterQuote defaults
+ * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
  * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
@@ -1043,7 +1043,7 @@ export async function estimateDlmmDirectSwap({
  * @param params.minDeltaId - Minimum bin delta from active bin
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
- * @param params.jupiterQuoteOptions - Optional Jupiter route options (onlyDirectRoutes, restrictIntermediateTokens, dynamicSlippage, forJitoBundle); omitted options use the getJupiterQuote defaults
+ * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
  * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
