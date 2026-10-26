@@ -8,15 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Added
 
+- Added helpers `toAddressLookupTableAccounts`, `fetchAddressLookupTableAccounts`, `getJupiterAddressLookupTableAccounts` and `mergeAddressLookupTableAccounts` for the lookup tables of Jupiter swaps, and `filterOutComputeBudgetInstructions`.
+
 ### Changed
+
+- `zapOutThroughJupiter` accepts the optional `addressesByLookupTableAddress` (v2) and `addressLookupTableAddresses` (v1) fields on `jupiterSwapResponse` and returns those lookup tables. v1 tables are fetched with one RPC call.
 
 ### Deprecated
 
 ### Removed
 
+- Removed types `ZapInDammV2Response` and `ZapInDlmmResponse`. Use `ZapInstructionsResponse`.
+
 ### Fixed
 
 ### Security
+
+### Breaking Changes
+
+- `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `rebalanceDlmmPosition`, `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2` and `zapOutThroughDlmm` return `ZapInstructionsResponse`: `instructions` in execution order and the `addressLookupTableAccounts` they use, so the caller builds legacy or v0 transactions and decides where to split them. They previously returned legacy `Transaction` objects. `rebalanceDlmmPosition` still returns `estimation`.
+- The returned instructions contain no compute budget instructions, so the caller sets the compute unit limit. `rebalanceDlmmPosition` previously set a limit of 600,000 compute units on its zap-in transaction, and the DLMM swap and rebalance transactions previously carried the limit added by the DLMM SDK.
+- `getZapInDammV2DirectPoolParams`, `getZapInDammV2IndirectPoolParams`, `getZapInDlmmDirectParams` and `getZapInDlmmIndirectParams` return `swapInstructions` and `addressLookupTableAccounts` instead of `swapTransactions`.
+- `buildJupiterSwapTransaction` takes a `connection` as its first argument and returns `instruction` and `addressLookupTableAccounts` instead of `transaction`.
 
 ## [1.3.2] - [PR #27](https://github.com/MeteoraAg/zap-sdk/pull/32)
 

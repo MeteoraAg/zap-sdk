@@ -29,7 +29,11 @@ yarn add @meteora-ag/zap-sdk
 
 ## Jupiter API Setup
 
-All Jupiter-related functions (`getJupiterQuote`, `getJupiterSwapInstruction`, and estimate functions) support custom API configuration.
+All Jupiter-related functions (`getJupiterQuote`, `getJupiterSwapInstruction`, `getJupAndDammV2Quotes`, and the DLMM estimate functions) support custom API configuration.
+
+### API Version
+
+The SDK uses Jupiter Swap API v2 (`GET /swap/v2/build`) by default. v1 api support is deprecated in this SDK.
 
 ### Getting Your Jupiter API Key
 
@@ -39,10 +43,11 @@ For detailed setup instructions, see [Jupiter's Setup Guide](https://dev.jup.ag/
 
 ### API Parameters
 
-All Jupiter functions accept optional `jupiterApiUrl` and `jupiterApiKey` parameters:
+All Jupiter functions accept an optional `config: ZapConfig`:
 
 - `jupiterApiUrl` (optional): The Jupiter API endpoint. Default: `"https://api.jup.ag"`
 - `jupiterApiKey` (optional): Your Jupiter API key. Default: `""` (empty string)
+- `jupiterApiVersion` (optional): `JupiterApiVersion.V2` (default) or `JupiterApiVersion.V1` (deprecated)
 
 **Note**: While the API key parameter is optional in the function signature, Jupiter requires an API key for all requests. Using the default empty string may result in API errors.
 
@@ -53,17 +58,27 @@ import { Connection } from "@solana/web3.js";
 import { Zap } from "@meteora-ag/zap-sdk";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
-const jupiterApiUrl = "https://api.jup.ag";
-const jupiterApiKey = "YOUR_API_KEY_HERE";
 
-const zap = new Zap(connection, jupiterApiUrl, jupiterApiKey);
+const zap = new Zap(connection, {
+  jupiterApiUrl: "https://api.jup.ag",
+  jupiterApiKey: "YOUR_API_KEY_HERE",
+  // jupiterApiVersion: JupiterApiVersion.V1, // deprecated, defaults to V2 if unset
+});
 ```
 
 ## Usage
 
 Refer to the [docs](./docs.md) for how to use the functions.
 
+The zap methods return an ordered list of instructions and the address lookup tables they use, not transactions, so you can build legacy or v0 transactions and decide how to split them. See [Building Transactions](./docs.md#building-transactions) for the instruction order, compute budget and lookup table details.
+
 ### Program Address
 
 - Mainnet-beta: zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz
 - Devnet: zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz
+
+## License
+
+This SDK is released under the [MIT License](./LICENSE).
+
+The on-chain Zap program is licensed separately and is not covered by this MIT license.

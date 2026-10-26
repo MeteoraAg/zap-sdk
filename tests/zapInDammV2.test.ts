@@ -1,11 +1,6 @@
 import Decimal from "decimal.js";
 import { LiteSVM } from "litesvm";
-import {
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { BN } from "@coral-xyz/anchor";
@@ -19,10 +14,12 @@ import {
 
 import { CpAmm } from "@meteora-ag/cp-amm-sdk";
 import { Zap } from "../src/zap";
+import { JupiterApiVersion } from "../src/types";
 import {
   startSvm,
   generateKpAndFund,
-  signAndSendTransaction,
+  sendInstructions,
+  sendV0Instructions,
   createLiteSvmConnection,
   createToken,
   mintToken,
@@ -132,7 +129,8 @@ describe("Zap in DAMM V2", () => {
   });
 
   describe("zap in direct", () => {
-    it("zap in direct - tokenA into tokenA-tokenB pool", async () => {
+    // The instructions must also work for a client that sends legacy transactions without lookup tables.
+    it("zap in direct - tokenA into tokenA-tokenB pool, sent as legacy transactions", async () => {
       const pool = await createDammV2Pool({
         svm,
         creator: admin,
@@ -147,21 +145,16 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
-        await zapInDammV2Direct(
-          svm,
-          user.publicKey,
-          inputTokenMint,
-          pool,
-          positionNftMint,
-          zapInAmount,
-        );
+      const { instructions } = await zapInDammV2Direct(
+        svm,
+        user.publicKey,
+        inputTokenMint,
+        pool,
+        positionNftMint,
+        zapInAmount,
+      );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendInstructions(svm, instructions, [user]);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -183,7 +176,7 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
+      const { instructions, addressLookupTableAccounts } =
         await zapInDammV2Direct(
           svm,
           user.publicKey,
@@ -193,11 +186,7 @@ describe("Zap in DAMM V2", () => {
           zapInAmount,
         );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -224,7 +213,7 @@ describe("Zap in DAMM V2", () => {
       const zapInAmount = new BN("1000000000");
       const pre = snapshotUserBalances(svm, pool, user.publicKey);
 
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
+      const { instructions, addressLookupTableAccounts } =
         await zapInDammV2Direct(
           svm,
           user.publicKey,
@@ -234,11 +223,7 @@ describe("Zap in DAMM V2", () => {
           zapInAmount,
         );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const post = snapshotUserBalances(svm, pool, user.publicKey);
 
@@ -285,8 +270,8 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPool) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
@@ -299,7 +284,9 @@ describe("Zap in DAMM V2", () => {
         [{ outputMint: outputTokenMint, swapPool, outAmount: estimatedOut }],
       ).restore;
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const jupiterQuote = buildJupiterQuoteResponse(
         inputTokenMint,
@@ -324,18 +311,12 @@ describe("Zap in DAMM V2", () => {
 
       const result = await zap.buildZapInDammV2Transaction(params);
 
-      if (result.setupTransaction) {
-        signAndSendTransaction(svm, result.setupTransaction, [user]);
-      }
-      for (const swapTx of result.swapTransactions) {
-        signAndSendTransaction(svm, swapTx, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(result.ledgerTransaction)
-        .add(result.zapInTransaction)
-        .add(result.cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(
+        svm,
+        result.instructions,
+        result.addressLookupTableAccounts,
+        [user],
+      );
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -373,7 +354,9 @@ describe("Zap in DAMM V2", () => {
         priceImpact: new Decimal(0),
       };
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const params = await zap.getZapInDammV2DirectPoolParams({
         user: user.publicKey,
@@ -390,19 +373,16 @@ describe("Zap in DAMM V2", () => {
       });
 
       // verify SDK chose DammV2 route, no swap transactions built
-      expect(params.swapTransactions.length).to.equal(0);
+      expect(params.swapInstructions.length).to.equal(0);
 
       const result = await zap.buildZapInDammV2Transaction(params);
 
-      if (result.setupTransaction) {
-        signAndSendTransaction(svm, result.setupTransaction, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(result.ledgerTransaction)
-        .add(result.zapInTransaction)
-        .add(result.cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(
+        svm,
+        result.instructions,
+        result.addressLookupTableAccounts,
+        [user],
+      );
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -429,7 +409,7 @@ describe("Zap in DAMM V2", () => {
       const zapInAmount = new BN("1000000000");
       const pre = snapshotUserBalances(svm, pool, user.publicKey);
 
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
+      const { instructions, addressLookupTableAccounts } =
         await zapInDammV2Direct(
           svm,
           user.publicKey,
@@ -439,11 +419,7 @@ describe("Zap in DAMM V2", () => {
           zapInAmount,
         );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const post = snapshotUserBalances(svm, pool, user.publicKey);
 
@@ -490,8 +466,8 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPool) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
@@ -504,7 +480,9 @@ describe("Zap in DAMM V2", () => {
         [{ outputMint: outputTokenMint, swapPool, outAmount: estimatedOut }],
       ).restore;
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const jupiterQuote = buildJupiterQuoteResponse(
         inputTokenMint,
@@ -529,18 +507,12 @@ describe("Zap in DAMM V2", () => {
 
       const result = await zap.buildZapInDammV2Transaction(params);
 
-      if (result.setupTransaction) {
-        signAndSendTransaction(svm, result.setupTransaction, [user]);
-      }
-      for (const swapTx of result.swapTransactions) {
-        signAndSendTransaction(svm, swapTx, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(result.ledgerTransaction)
-        .add(result.zapInTransaction)
-        .add(result.cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(
+        svm,
+        result.instructions,
+        result.addressLookupTableAccounts,
+        [user],
+      );
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -572,13 +544,15 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, pool) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
 
-      const zap = new Zap(createLiteSvmConnection(svm));
+      const zap = new Zap(createLiteSvmConnection(svm), {
+        jupiterApiVersion: JupiterApiVersion.V1,
+      });
 
       const params = await zap.getZapInDammV2DirectPoolParams({
         user: user.publicKey,
@@ -595,19 +569,16 @@ describe("Zap in DAMM V2", () => {
       });
 
       // verify SDK chose DammV2 route, no swap transactions built
-      expect(params.swapTransactions.length).to.equal(0);
+      expect(params.swapInstructions.length).to.equal(0);
 
       const result = await zap.buildZapInDammV2Transaction(params);
 
-      if (result.setupTransaction) {
-        signAndSendTransaction(svm, result.setupTransaction, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(result.ledgerTransaction)
-        .add(result.zapInTransaction)
-        .add(result.cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(
+        svm,
+        result.instructions,
+        result.addressLookupTableAccounts,
+        [user],
+      );
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -631,7 +602,7 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
+      const { instructions, addressLookupTableAccounts } =
         await zapInDammV2Direct(
           svm,
           user.publicKey,
@@ -641,11 +612,7 @@ describe("Zap in DAMM V2", () => {
           zapInAmount,
         );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -669,7 +636,7 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
+      const { instructions, addressLookupTableAccounts } =
         await zapInDammV2Direct(
           svm,
           user.publicKey,
@@ -679,11 +646,7 @@ describe("Zap in DAMM V2", () => {
           zapInAmount,
         );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -707,7 +670,7 @@ describe("Zap in DAMM V2", () => {
       const { positionNftMint } = await createPosition(svm, user, pool);
 
       const zapInAmount = new BN("1000000000");
-      const { ledgerTransaction, zapInTransaction, cleanUpTransaction } =
+      const { instructions, addressLookupTableAccounts } =
         await zapInDammV2Direct(
           svm,
           user.publicKey,
@@ -717,11 +680,7 @@ describe("Zap in DAMM V2", () => {
           zapInAmount,
         );
 
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -769,8 +728,8 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint: tokenCMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPoolA) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
@@ -779,8 +738,8 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint: tokenCMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPoolB) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
@@ -815,36 +774,19 @@ describe("Zap in DAMM V2", () => {
         quoteB.swapOutAmount,
       );
 
-      const {
-        setupTransaction,
-        swapTransactions,
-        ledgerTransaction,
-        zapInTransaction,
-        cleanUpTransaction,
-      } = await zapInDammV2Indirect(
-        svm,
-        user.publicKey,
-        tokenCMint,
-        pool,
-        positionNftMint,
-        zapInAmount,
-        jupiterQuoteToA,
-        jupiterQuoteToB,
-      );
+      const { instructions, addressLookupTableAccounts } =
+        await zapInDammV2Indirect(
+          svm,
+          user.publicKey,
+          tokenCMint,
+          pool,
+          positionNftMint,
+          zapInAmount,
+          jupiterQuoteToA,
+          jupiterQuoteToB,
+        );
 
-      expect(swapTransactions.length).to.equal(2);
-      if (setupTransaction) {
-        signAndSendTransaction(svm, setupTransaction, [user]);
-      }
-      for (const swapTx of swapTransactions) {
-        signAndSendTransaction(svm, swapTx, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const position = derivePositionAddress(positionNftMint);
       const positionState = getDammV2Position(svm, position);
@@ -886,8 +828,8 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint: tokenCMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPool) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
@@ -908,37 +850,21 @@ describe("Zap in DAMM V2", () => {
         estimatedOut,
       );
 
-      const {
-        setupTransaction,
-        swapTransactions,
-        ledgerTransaction,
-        zapInTransaction,
-        cleanUpTransaction,
-      } = await zapInDammV2Indirect(
-        svm,
-        user.publicKey,
-        tokenCMint,
-        pool,
-        positionNftMint,
-        zapInAmount,
-        jupiterQuoteToA,
-        null,
-      );
+      const { instructions, addressLookupTableAccounts } =
+        await zapInDammV2Indirect(
+          svm,
+          user.publicKey,
+          tokenCMint,
+          pool,
+          positionNftMint,
+          zapInAmount,
+          jupiterQuoteToA,
+          null,
+        );
 
       const pre = snapshotUserBalances(svm, pool, user.publicKey);
 
-      if (setupTransaction) {
-        signAndSendTransaction(svm, setupTransaction, [user]);
-      }
-      for (const swapTx of swapTransactions) {
-        signAndSendTransaction(svm, swapTx, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const post = snapshotUserBalances(svm, pool, user.publicKey);
 
@@ -984,8 +910,8 @@ describe("Zap in DAMM V2", () => {
         inputTokenMint: tokenCMint,
         slippage: 0.5,
         poolState: getDammV2Pool(svm, swapPool) as any,
-        currentTime: 0,
-        currentSlot: 0,
+        currentTime: Number(svm.getClock().unixTimestamp),
+        currentSlot: Number(svm.getClock().slot),
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
@@ -1006,37 +932,21 @@ describe("Zap in DAMM V2", () => {
         estimatedOut,
       );
 
-      const {
-        setupTransaction,
-        swapTransactions,
-        ledgerTransaction,
-        zapInTransaction,
-        cleanUpTransaction,
-      } = await zapInDammV2Indirect(
-        svm,
-        user.publicKey,
-        tokenCMint,
-        pool,
-        positionNftMint,
-        zapInAmount,
-        null,
-        jupiterQuoteToB,
-      );
+      const { instructions, addressLookupTableAccounts } =
+        await zapInDammV2Indirect(
+          svm,
+          user.publicKey,
+          tokenCMint,
+          pool,
+          positionNftMint,
+          zapInAmount,
+          null,
+          jupiterQuoteToB,
+        );
 
       const pre = snapshotUserBalances(svm, pool, user.publicKey);
 
-      if (setupTransaction) {
-        signAndSendTransaction(svm, setupTransaction, [user]);
-      }
-      for (const swapTx of swapTransactions) {
-        signAndSendTransaction(svm, swapTx, [user]);
-      }
-
-      const tx = new Transaction()
-        .add(ledgerTransaction)
-        .add(zapInTransaction)
-        .add(cleanUpTransaction);
-      signAndSendTransaction(svm, tx, [user]);
+      sendV0Instructions(svm, instructions, addressLookupTableAccounts, [user]);
 
       const post = snapshotUserBalances(svm, pool, user.publicKey);
 

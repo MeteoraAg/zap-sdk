@@ -23,7 +23,7 @@ import {
  * @returns The token account and the instruction to create it if it doesn't exist
  */
 export const getOrCreateATAInstruction = async (
-  connection: Connection,
+  _connection: Connection,
   tokenMint: PublicKey,
   owner: PublicKey,
   payer: PublicKey,

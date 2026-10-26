@@ -1,1 +1,3 @@
 pnpm-lock.yaml
+src/idl/zap
+test/fixtures
