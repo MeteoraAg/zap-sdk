@@ -1,4 +1,5 @@
 import { strict as assert } from "assert";
+import { createServer } from "http";
 import BN from "bn.js";
 import {
   AccountInfo,
@@ -159,6 +160,55 @@ describe("pre-funded associated token account snapshots", () => {
       getTokenAccountBalance(rpc, tokenAccount, native),
       /exactly/,
     );
+  });
+
+  it("rejects a JSON-RPC rent error that web3.js converts to zero", async () => {
+    const native = { ...identity, mint: NATIVE_MINT };
+    const tokenAccount = getAssociatedTokenAddressSync(
+      native.mint,
+      native.owner,
+    );
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const rpc = JSON.parse(Buffer.concat(chunks).toString());
+      const payload =
+        rpc.method === "getMinimumBalanceForRentExemption"
+          ? { error: { code: -32603, message: "rent unavailable" } }
+          : {
+              result: {
+                context: { slot: 1 },
+                value: {
+                  owner: SystemProgram.programId.toBase58(),
+                  data: ["", "base64"],
+                  executable: false,
+                  lamports: 5000000,
+                  rentEpoch: 0,
+                },
+              },
+            };
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, ...payload }));
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    try {
+      const address = server.address();
+      assert(address && typeof address !== "string");
+      const rpc = new Connection(`http://127.0.0.1:${address.port}`);
+      // This public web3.js method warns and returns zero for JSON-RPC errors.
+      assert.equal(await rpc.getMinimumBalanceForRentExemption(165), 0);
+      await assert.rejects(
+        getTokenAccountBalance(rpc, tokenAccount, native),
+        /native ATA balance/,
+      );
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
   });
 
   for (const [mint, tokenProgram] of [

@@ -126,11 +126,12 @@ export async function getTokenAccountBalance(
       : ACCOUNT_SIZE;
     const rent =
       await connection.getMinimumBalanceForRentExemption(accountSize);
+    // web3.js also returns zero for JSON-RPC errors, so zero is ambiguous.
     if (
       !Number.isSafeInteger(accountInfo.lamports) ||
       !Number.isSafeInteger(rent) ||
       accountInfo.lamports < 0 ||
-      rent < 0
+      rent <= 0
     ) {
       throw new Error(
         "Cannot determine the pre-funded native ATA balance exactly",
