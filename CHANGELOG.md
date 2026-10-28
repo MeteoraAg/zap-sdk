@@ -25,12 +25,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Added
 
 - Added `jupiterApiVersion` in `ZapConfig`, using the new enum `JupiterApiVersion`, to choose the Jupiter Swap API version.
-- Added the optional `jupiterQuoteOptions` field in `GetZapInDammV2DirectPoolParams`, `GetZapInDammV2IndirectPoolParams`, `GetJupAndDammV2QuotesParams`, `EstimateDlmmDirectSwapParams`, `EstimateDlmmIndirectSwapParams` and `EstimateDlmmRebalanceSwapParams` to set the Jupiter quote options. Omitted options keep the values the SDK used before.
-- Added helpers `toAddressLookupTableAccounts`, `fetchAddressLookupTableAccounts`, `getJupiterAddressLookupTableAccounts` and `mergeAddressLookupTableAccounts` for the lookup tables of Jupiter swaps, and `filterOutComputeBudgetInstructions`.
-- Added helpers `getJupiterInstructionLayout`, `isJupiterBuildResponse` and `isJupiterSwapInstructionForUser`.
 
 ### Changed
 
+- The zap-in instructions from `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction` and `rebalanceDlmmPosition`, and the zap-out instructions from `zapOutThroughJupiter`, now create the user token accounts that Jupiter's `setupInstructions` ask for, such as one for an intermediate token of a multi-hop route. Each token account is created once, even when the zap and one or more Jupiter swaps all need it. Jupiter's other setup instructions, which wrap SOL, are still left out.
+- `buildJupiterSwapTransaction` also returns Jupiter's `setupInstructions` as `TransactionInstruction`s. The zap-in param builders add the token account create instructions among them to `preInstructions`.
+- `zapOutThroughJupiter` accepts the optional `setupInstructions` field on `jupiterSwapResponse`.
 - `zapOutThroughJupiter` accepts the optional `addressesByLookupTableAddress` (v2) and `addressLookupTableAddresses` (v1) fields on `jupiterSwapResponse` and returns those lookup tables.
 - `zapOutThroughJupiter` accepts `route_v2` and `shared_accounts_route_v2` swap instructions, and throws for a Jupiter instruction it does not support.
 
@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - Deprecated `JupiterApiVersion.V1` in favour of `JupiterApiVersion.V2`. V1 will be removed in a future major version.
 - Deprecated the type `JupiterSwapInstructionResponse` in favour of `JupiterSwapInstructions` and `JupiterBuildResponse`.
-- Deprecated `AMOUNT_IN_JUP_V6_REVERSE_OFFSET` in favour of `getJupiterInstructionLayout`.
+- Deprecated `AMOUNT_IN_JUP_V6_REVERSE_OFFSET`. It is only correct for the `route` and `shared_accounts_route` Jupiter instructions, and the SDK now finds the offset for each instruction itself.
 
 ### Removed
 
@@ -48,6 +48,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 - `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `rebalanceDlmmPosition`, `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2` and `zapOutThroughDlmm` return `ZapInstructionsResponse`, which holds `instructions` in execution order and the `addressLookupTableAccounts` they use. They previously returned legacy `Transaction` objects. `rebalanceDlmmPosition` still returns `estimation`.
 - The returned instructions contain no compute budget instructions, so the caller sets the compute unit limit. Previously the transactions carried compute unit limits, including 600,000 units on the `rebalanceDlmmPosition` zap-in transaction.
+- `GetJupiterQuoteParams` only has `inputMint`, `outputMint`, `amount`, `user` and the optional `queryParams`, of the new type `JupiterQueryParams`. Every other Jupiter query parameter, such as `slippageBps` and `maxAccounts`, goes in `queryParams`, which replaces `additionalQueryParams`. `getJupiterQuote` sends nothing else, so Jupiter uses its own defaults: it no longer sends `forJitoBundle=true`, and under v1 it no longer sends `onlyDirectRoutes=true` and `restrictIntermediateTokens=true`. `queryParams` cannot override `inputMint`, `outputMint`, `amount` or `taker`.
+- Removed `dynamicSlippage`, `onlyDirectRoutes`, `restrictIntermediateTokens`, `forJitoBundle`, `maxAccounts` and `slippageBps` from `GetJupiterQuoteParams`. Jupiter v2 `/swap/v2/build` does not support the first three. Pass any of them in `queryParams`.
+- Added the optional `jupiterQuoteOptions` field, of type `JupiterQueryParams`, in `GetZapInDammV2DirectPoolParams`, `GetZapInDammV2IndirectPoolParams`, `GetJupAndDammV2QuotesParams`, `EstimateDlmmDirectSwapParams`, `EstimateDlmmIndirectSwapParams` and `EstimateDlmmRebalanceSwapParams`. It holds the Jupiter query parameters for the quotes, for example `{ maxAccounts: 50 }`. These helpers still send their slippage argument as `slippageBps`, and `jupiterQuoteOptions` overrides it.
+- Removed the `maxAccounts` field from `GetZapInDammV2DirectPoolParams`, `GetZapInDammV2IndirectPoolParams` and `GetJupAndDammV2QuotesParams`. Pass it in `jupiterQuoteOptions`.
+- The DLMM estimators no longer send `maxAccounts=50`. Without `jupiterQuoteOptions.maxAccounts`, Jupiter uses its default of 64.
+- Removed the `maxAccounts` field from `GetZapInDlmmDirectParams`, `GetZapInDlmmIndirectParams` and `RebalanceDlmmPositionParams`. These functions execute the Jupiter quote from the estimate and did not use it.
+- `buildJupiterSwapTransaction` no longer takes `maxAccounts`. Pass it in the optional `jupiterQuoteOptions` argument.
 - `getZapInDammV2DirectPoolParams`, `getZapInDammV2IndirectPoolParams`, `getZapInDlmmDirectParams` and `getZapInDlmmIndirectParams` return `swapInstructions` and `addressLookupTableAccounts` instead of `swapTransactions`.
 - `buildJupiterSwapTransaction` takes a `connection` as its first argument and returns `instruction` and `addressLookupTableAccounts` instead of `transaction`.
 - The SDK uses Jupiter API v2 (`GET /swap/v2/build`) by default. Previously it used `GET /swap/v1/quote` and `POST /swap/v1/swap-instructions`. Set `jupiterApiVersion` to `JupiterApiVersion.V1` in `ZapConfig` to keep the v1 calls.

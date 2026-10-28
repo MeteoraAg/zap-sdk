@@ -53,8 +53,7 @@ async function main() {
         outputMint,
         amount: swapAmount,
         user: wallet.publicKey,
-        maxAccounts: 40,
-        slippageBps: 50,
+        queryParams: { maxAccounts: 40, slippageBps: 50 },
       },
       {
         jupiterApiUrl: JUPITER_API_URL,

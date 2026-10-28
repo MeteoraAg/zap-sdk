@@ -41,20 +41,20 @@ async function main() {
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     config: {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
     },
   });
 
-  // Example only: maxAccounts=50 + Direct estimator (onlyDirectRoutes=true).
+  // Example only: the estimate above quoted Jupiter with maxAccounts=50.
   // Validate quoted outAmount vs market before sending. Not safe for every pool/size.
   const result = await zap.getZapInDlmmDirectParams({
     user: user.publicKey,
     directSwapEstimate: estimate.result,
     maxActiveBinSlippage: 50,
     favorXInActiveId: false,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 0,
     ...estimate.context,
   });

@@ -91,9 +91,8 @@ export async function getJupAndDammV2Quotes({
   tokenBDecimal,
   dammV2SlippageBps,
   jupSlippageBps,
-  maxAccounts,
   jupiterQuoteOptions,
-  config = {},
+  config,
 }: GetJupAndDammV2QuotesParams): Promise<{
   dammV2Quote: {
     swapInAmount: BN;
@@ -147,9 +146,10 @@ export async function getJupAndDammV2Quotes({
       outputMint: outputTokenMint,
       amount: new BN(ONE_TOKEN.floor().toString()),
       user,
-      maxAccounts,
-      slippageBps: jupSlippageBps,
-      ...jupiterQuoteOptions,
+      queryParams: {
+        slippageBps: jupSlippageBps,
+        ...jupiterQuoteOptions,
+      },
     },
     config,
   );

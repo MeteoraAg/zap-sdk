@@ -15,6 +15,7 @@ import {
   zapOutDlmm,
   zapOutJupV6ThroughDlmm,
   createLiteSvmConnection,
+  getAccount,
   mockJupiterFetch,
   JUPITER_API_VERSION_CASES,
 } from "./helpers";
@@ -24,6 +25,8 @@ import {
   getJupiterQuote,
   getJupiterSwapInstruction,
 } from "../src/helpers/jupiter";
+import { isCreateAtaInstruction } from "../src/helpers/token";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { DEFAULT_JUPITER_API_VERSION } from "../src/constants";
 
 describe("Zap out DLMM", () => {
@@ -174,6 +177,15 @@ describe("Zap out DLMM", () => {
         inputTokenMint,
       );
 
+      // The route passes through token D, so Jupiter's setup creates the user's token D account.
+      const tokenDMint = createToken(svm, admin, admin.publicKey, null);
+      const userTokenD = getAssociatedTokenAddressSync(
+        tokenDMint,
+        user.publicKey,
+        true,
+        getTokenProgram(svm, tokenDMint),
+      );
+
       restoreJupiterFetch = mockJupiterFetch(
         svm,
         user.publicKey,
@@ -184,6 +196,7 @@ describe("Zap out DLMM", () => {
             swapPool: lbPair,
             outAmount: new BN(1),
             poolType: "dlmm",
+            intermediateMints: [tokenDMint],
           },
         ],
       ).restore;
@@ -193,8 +206,7 @@ describe("Zap out DLMM", () => {
         outputMint: outputTokenMint,
         amount: estimatedAmountIn,
         user: user.publicKey,
-        maxAccounts: 50,
-        slippageBps: 50,
+        queryParams: { maxAccounts: 50, slippageBps: 50 },
       });
       expect(quoteResponse).to.not.be.null;
 
@@ -224,6 +236,13 @@ describe("Zap out DLMM", () => {
         percentageToZapOut: 100,
       });
 
+      // Jupiter's setup repeats the input and output accounts the zap creates, and only token D is added.
+      const createdAccounts = zapOutTx.instructions
+        .filter(isCreateAtaInstruction)
+        .map((ix) => ix.keys[1].pubkey.toBase58());
+      expect(new Set(createdAccounts).size).to.equal(createdAccounts.length);
+      expect(createdAccounts).to.include(userTokenD.toBase58());
+
       sendV0Instructions(
         svm,
 
@@ -233,6 +252,8 @@ describe("Zap out DLMM", () => {
 
         [user],
       );
+
+      expect(getAccount(svm, userTokenD)).to.not.be.null;
 
       const postUserTokenInBalance = getTokenBalance(svm, userTokenInAccount);
       const postUserTokenOutBalance = getTokenBalance(svm, userTokenOutAccount);

@@ -15,6 +15,7 @@ import {
   getTokenBalance,
   getTokenProgram,
   createDammV2Pool,
+  getAccount,
   getDammV2Pool,
   createSeededDlmmPool,
   getDlmmPosition,
@@ -26,6 +27,7 @@ import {
   SQRT_PRICE_50A_50B,
 } from "./helpers";
 import { DlmmSingleSided, ZapInstructionsResponse } from "../src/types";
+import { isCreateAtaInstruction } from "../src/helpers/token";
 
 type TokenSide = "X" | "Y";
 
@@ -104,7 +106,10 @@ describe("Zap in DLMM indirect", () => {
   }
 
   // One DAMM V2 pool per pool token stands in for the Jupiter leg from token C to it.
-  async function mockJupiterLegs(sides: TokenSide[]) {
+  async function mockJupiterLegs(
+    sides: TokenSide[],
+    intermediateMints: PublicKey[] = [],
+  ) {
     const cpAmm = new CpAmm(createLiteSvmConnection(svm));
     const routes: JupiterMockRoute[] = [];
     for (const side of sides) {
@@ -126,7 +131,12 @@ describe("Zap in DLMM indirect", () => {
         tokenADecimal: 9,
         tokenBDecimal: 9,
       });
-      routes.push({ outputMint, swapPool, outAmount: quote.swapOutAmount });
+      routes.push({
+        outputMint,
+        swapPool,
+        outAmount: quote.swapOutAmount,
+        intermediateMints,
+      });
     }
     restoreJupiterFetch = mockJupiterFetch(
       svm,
@@ -199,6 +209,45 @@ describe("Zap in DLMM indirect", () => {
           .true;
         expect(positionData.totalYAmountExcludeTransferFee.gt(new BN(0))).to.be
           .true;
+      });
+
+      // Both Jupiter swaps route through token D, so each one's setup creates the user's token D
+      // account, next to the input and output accounts the zap creates as well.
+      it("zap in indirect - creates each token account once, including a route's intermediate token", async () => {
+        const lbPair = await createSeededDlmmPool(
+          svm,
+          admin,
+          tokenXMint,
+          tokenYMint,
+        );
+        const tokenDMint = createToken(svm, admin, admin.publicKey, null);
+        await mockJupiterLegs(["X", "Y"], [tokenDMint]);
+
+        const result = await zapInDlmmIndirect(
+          svm,
+          user.publicKey,
+          tokenCMint,
+          lbPair,
+          zapInAmount,
+          { binDelta },
+          config,
+        );
+
+        const createdAccounts = result.instructions
+          .filter(isCreateAtaInstruction)
+          .map((ix) => ix.keys[1].pubkey.toBase58());
+        expect(new Set(createdAccounts).size).to.equal(createdAccounts.length);
+        const userTokenD = getAssociatedTokenAddressSync(
+          tokenDMint,
+          user.publicKey,
+          true,
+          getTokenProgram(svm, tokenDMint),
+        );
+        expect(createdAccounts).to.include(userTokenD.toBase58());
+
+        sendZapIn(result);
+
+        expect(getAccount(svm, userTokenD)).to.not.be.null;
       });
 
       // A single-sided position sits entirely on one side of the active bin and only takes

@@ -212,8 +212,7 @@ describe("Zap out DAMM V2", () => {
         outputMint: outputTokenMint,
         amount: estimatedAmountIn,
         user: user.publicKey,
-        maxAccounts: 50,
-        slippageBps: 50,
+        queryParams: { maxAccounts: 50, slippageBps: 50 },
       });
       expect(quoteResponse).to.not.be.null;
 

@@ -8,12 +8,12 @@ import {
 import BN from "bn.js";
 import {
   GetJupiterQuoteParams,
+  JupiterQueryParams,
   JupiterAddressLookupTableFields,
   JupiterApiVersion,
   JupiterBuildResponse,
   JupiterInstruction,
   JupiterInstructionLayout,
-  JupiterQuoteOptions,
   JupiterQuoteResponse,
   JupiterSwapInstructionResponse,
   JupiterSwapInstructions,
@@ -22,19 +22,19 @@ import {
 import {
   DEFAULT_JUPITER_API_URL,
   DEFAULT_JUPITER_API_VERSION,
-  DEFAULT_JUPITER_QUOTE_OPTIONS,
   JUPITER_INSTRUCTION_LAYOUTS,
 } from "../constants";
+import { isCreateAtaInstruction } from "./token";
 
-export function resolveJupiterConfig(config: ZapConfig = {}): {
+function resolveJupiterConfig(config?: ZapConfig): {
   url: string;
   apiKey: string;
   version: JupiterApiVersion;
 } {
   return {
-    url: config.jupiterApiUrl || DEFAULT_JUPITER_API_URL,
-    apiKey: config.jupiterApiKey || "",
-    version: config.jupiterApiVersion ?? DEFAULT_JUPITER_API_VERSION,
+    url: config?.jupiterApiUrl || DEFAULT_JUPITER_API_URL,
+    apiKey: config?.jupiterApiKey || "",
+    version: config?.jupiterApiVersion ?? DEFAULT_JUPITER_API_VERSION,
   };
 }
 
@@ -51,7 +51,7 @@ export function getJupiterInstructionLayout(
   return layout;
 }
 
-export function isJupiterBuildResponse(
+function isJupiterBuildResponse(
   quoteResponse: JupiterQuoteResponse,
 ): quoteResponse is JupiterBuildResponse {
   return (
@@ -64,7 +64,7 @@ export function isJupiterBuildResponse(
  * Whether the swap instruction was built for `user`, i.e. `user` is its user transfer authority.
  * Throws for an unknown Jupiter instruction discriminator.
  */
-export function isJupiterSwapInstructionForUser(
+function isJupiterSwapInstructionForUser(
   swapInstruction: JupiterInstruction,
   user: PublicKey,
 ): boolean {
@@ -85,47 +85,23 @@ function jupiterHeaders(apiKey: string, json: boolean): Record<string, string> {
   };
 }
 
-type JupiterQuoteQuery = {
-  inputMint: PublicKey;
-  outputMint: PublicKey;
-  amount: string;
-  slippageBps: number;
-  maxAccounts?: number;
-  dynamicSlippage: boolean;
-  onlyDirectRoutes: boolean;
-  restrictIntermediateTokens: boolean;
-  forJitoBundle: boolean;
-  additionalQueryParams?: Record<string, string>;
-};
-
-function toSearchParams(query: JupiterQuoteQuery): URLSearchParams {
-  const params = new URLSearchParams({
-    inputMint: query.inputMint.toString(),
-    outputMint: query.outputMint.toString(),
-    amount: query.amount,
-    slippageBps: query.slippageBps.toString(),
-    ...(query.maxAccounts !== undefined
-      ? { maxAccounts: query.maxAccounts.toString() }
-      : {}),
-    onlyDirectRoutes: query.onlyDirectRoutes.toString(),
-    restrictIntermediateTokens: query.restrictIntermediateTokens.toString(),
-    dynamicSlippage: query.dynamicSlippage.toString(),
-    forJitoBundle: query.forJitoBundle.toString(),
-  });
-  for (const [name, value] of Object.entries(
-    query.additionalQueryParams ?? {},
-  )) {
-    params.set(name, value);
+function toSearchParams(params: GetJupiterQuoteParams): URLSearchParams {
+  const searchParams = new URLSearchParams();
+  for (const [name, value] of Object.entries(params.queryParams ?? {})) {
+    searchParams.set(name, value.toString());
   }
-  return params;
+  searchParams.set("inputMint", params.inputMint.toString());
+  searchParams.set("outputMint", params.outputMint.toString());
+  searchParams.set("amount", params.amount.toString());
+  return searchParams;
 }
 
 async function fetchJupiterQuoteV1(
-  query: JupiterQuoteQuery,
-  config: ZapConfig,
+  params: GetJupiterQuoteParams,
+  config?: ZapConfig,
 ): Promise<JupiterQuoteResponse | null> {
   const { url: baseUrl, apiKey } = resolveJupiterConfig(config);
-  const url = `${baseUrl}/swap/v1/quote?${toSearchParams(query).toString()}`;
+  const url = `${baseUrl}/swap/v1/quote?${toSearchParams(params).toString()}`;
 
   try {
     const response = await fetch(url, {
@@ -144,14 +120,13 @@ async function fetchJupiterQuoteV1(
 }
 
 async function fetchJupiterBuildV2(
-  query: JupiterQuoteQuery,
-  taker: PublicKey,
-  config: ZapConfig,
+  params: GetJupiterQuoteParams,
+  config?: ZapConfig,
 ): Promise<JupiterBuildResponse | null> {
   const { url: baseUrl, apiKey } = resolveJupiterConfig(config);
-  const params = toSearchParams(query);
-  params.set("taker", taker.toString());
-  const url = `${baseUrl}/swap/v2/build?${params.toString()}`;
+  const searchParams = toSearchParams(params);
+  searchParams.set("taker", params.user.toString());
+  const url = `${baseUrl}/swap/v2/build?${searchParams.toString()}`;
 
   try {
     const response = await fetch(url, {
@@ -176,8 +151,8 @@ async function fetchJupiterBuildV2(
  *   (a `JupiterBuildResponse`), so no second request is needed for the swap.
  * Returns null when the request fails.
  *
- * `maxAccounts` and the options in `JupiterQuoteOptions` are forwarded to Jupiter as-is. They can
- * give a much thinner route than a Jupiter UI quote, because the UI does not set them.
+ * `params.queryParams` is forwarded to Jupiter as-is, and Jupiter uses its own default for every
+ * parameter not given. A low `maxAccounts` can give a much thinner route than a Jupiter UI quote.
  * `slippageBps` only bounds execution against this quote. It does not mean `outAmount` is a fair
  * price for the input size, so validate the output, price impact or simulated token balance
  * changes before sending.
@@ -185,37 +160,19 @@ async function fetchJupiterBuildV2(
  */
 export async function getJupiterQuote(
   params: GetJupiterQuoteParams,
-  config: ZapConfig = {},
+  config?: ZapConfig,
 ): Promise<JupiterQuoteResponse | null> {
-  const query: JupiterQuoteQuery = {
-    inputMint: params.inputMint,
-    outputMint: params.outputMint,
-    amount: params.amount.toString(),
-    slippageBps: params.slippageBps,
-    maxAccounts: params.maxAccounts,
-    dynamicSlippage:
-      params.dynamicSlippage ?? DEFAULT_JUPITER_QUOTE_OPTIONS.dynamicSlippage,
-    onlyDirectRoutes:
-      params.onlyDirectRoutes ?? DEFAULT_JUPITER_QUOTE_OPTIONS.onlyDirectRoutes,
-    restrictIntermediateTokens:
-      params.restrictIntermediateTokens ??
-      DEFAULT_JUPITER_QUOTE_OPTIONS.restrictIntermediateTokens,
-    forJitoBundle:
-      params.forJitoBundle ?? DEFAULT_JUPITER_QUOTE_OPTIONS.forJitoBundle,
-    additionalQueryParams: params.additionalQueryParams,
-  };
-
   const { version } = resolveJupiterConfig(config);
   if (version === JupiterApiVersion.V1) {
-    return fetchJupiterQuoteV1(query, config);
+    return fetchJupiterQuoteV1(params, config);
   }
-  return fetchJupiterBuildV2(query, params.user, config);
+  return fetchJupiterBuildV2(params, config);
 }
 
 async function fetchJupiterSwapInstructionV1(
   userPublicKey: PublicKey,
   quoteResponse: JupiterQuoteResponse,
-  config: ZapConfig,
+  config?: ZapConfig,
 ): Promise<JupiterSwapInstructionResponse> {
   const { url: baseUrl, apiKey } = resolveJupiterConfig(config);
   const url = `${baseUrl}/swap/v1/swap-instructions`;
@@ -256,7 +213,7 @@ async function fetchJupiterSwapInstructionV1(
 export async function getJupiterSwapInstruction(
   userPublicKey: PublicKey,
   quoteResponse: JupiterQuoteResponse,
-  config: ZapConfig = {},
+  config?: ZapConfig,
 ): Promise<JupiterSwapInstructions> {
   const { version } = resolveJupiterConfig(config);
   if (version === JupiterApiVersion.V1) {
@@ -328,7 +285,7 @@ export function toAddressLookupTableAccounts(
  * only `addressLookupTableAddresses`.
  * Throws when a table does not exist or is not owned by the address lookup table program.
  */
-export async function fetchAddressLookupTableAccounts(
+async function fetchAddressLookupTableAccounts(
   connection: Connection,
   addresses: string[],
 ): Promise<AddressLookupTableAccount[]> {
@@ -387,10 +344,37 @@ export async function getJupiterAddressLookupTableAccounts(
   );
 }
 
+export function toTransactionInstruction(
+  instruction: JupiterInstruction,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    keys: instruction.accounts.map((item) => ({
+      pubkey: new PublicKey(item.pubkey),
+      isSigner: item.isSigner,
+      isWritable: item.isWritable,
+    })),
+    programId: new PublicKey(instruction.programId),
+    data: Buffer.from(instruction.data, "base64"),
+  });
+}
+
+/**
+ * The token account create instructions in Jupiter's `setupInstructions`. A multi-hop route can
+ * need user token accounts that the zap does not create, such as one for an intermediate token.
+ * Jupiter's other setup instructions wrap SOL and are left out, because the zap wraps SOL itself.
+ */
+export function getJupiterCreateAtaInstructions(
+  setupInstructions: TransactionInstruction[],
+): TransactionInstruction[] {
+  return setupInstructions.filter(isCreateAtaInstruction);
+}
+
 /**
  * Get the Jupiter swap instruction for swapping `amount` of `inputMint` to `outputMint`, and the lookup tables it uses.
  * When `jupiterQuoteResponse` is given it is executed as is, and it must be a quote for `amount` by `user`.
- * Otherwise a new quote is fetched with `maxAccounts`, `slippageBps` and `jupiterQuoteOptions`.
+ * Otherwise a new quote is fetched with `slippageBps`, which `jupiterQuoteOptions` can override.
+ * `setupInstructions` holds all of Jupiter's setup instructions. Their token account create instructions must run
+ * before the swap. The rest wrap SOL, which the zap does itself.
  * Throws when the quote does not match the swap, or when the quote, swap instruction or lookup tables cannot be fetched.
  */
 export async function buildJupiterSwapTransaction(
@@ -399,13 +383,13 @@ export async function buildJupiterSwapTransaction(
   inputMint: PublicKey,
   outputMint: PublicKey,
   amount: BN,
-  maxAccounts: number,
   slippageBps: number,
   jupiterQuoteResponse?: JupiterQuoteResponse,
-  config: ZapConfig = {},
-  jupiterQuoteOptions: JupiterQuoteOptions = {},
+  config?: ZapConfig,
+  jupiterQuoteOptions?: JupiterQueryParams,
 ): Promise<{
   instruction: TransactionInstruction;
+  setupInstructions: TransactionInstruction[];
   addressLookupTableAccounts: AddressLookupTableAccount[];
   quoteResponse: JupiterQuoteResponse;
 }> {
@@ -426,9 +410,7 @@ export async function buildJupiterSwapTransaction(
         outputMint,
         amount,
         user,
-        maxAccounts,
-        slippageBps,
-        ...jupiterQuoteOptions,
+        queryParams: { slippageBps, ...jupiterQuoteOptions },
       },
       config,
     ));
@@ -444,22 +426,22 @@ export async function buildJupiterSwapTransaction(
     quoteResponse,
     config,
   );
-  const instruction = new TransactionInstruction({
-    keys: swapInstructionResponse.swapInstruction.accounts.map((item) => {
-      return {
-        pubkey: new PublicKey(item.pubkey),
-        isSigner: item.isSigner,
-        isWritable: item.isWritable,
-      };
-    }),
-    programId: new PublicKey(swapInstructionResponse.swapInstruction.programId),
-    data: Buffer.from(swapInstructionResponse.swapInstruction.data, "base64"),
-  });
+  const instruction = toTransactionInstruction(
+    swapInstructionResponse.swapInstruction,
+  );
+  const setupInstructions = swapInstructionResponse.setupInstructions.map(
+    toTransactionInstruction,
+  );
 
   const addressLookupTableAccounts = await getJupiterAddressLookupTableAccounts(
     connection,
     swapInstructionResponse,
   );
 
-  return { instruction, addressLookupTableAccounts, quoteResponse };
+  return {
+    instruction,
+    setupInstructions,
+    addressLookupTableAccounts,
+    quoteResponse,
+  };
 }

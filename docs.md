@@ -152,6 +152,7 @@ interface ZapOutThroughJupiterParams {
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
   jupiterSwapResponse: Pick<JupiterSwapInstructions, "swapInstruction"> &
+    Partial<Pick<JupiterSwapInstructions, "setupInstructions">> &
     JupiterAddressLookupTableFields; // v2 build response or v1 swap-instructions response (deprecated)
   maxSwapAmount: BN;
   percentageToZapOut: number;
@@ -162,6 +163,8 @@ interface ZapOutThroughJupiterParams {
 
 A `ZapInstructionsResponse`: the ordered instructions and the lookup tables of the Jupiter swap. The tables come from `addressesByLookupTableAddress` (v2) or are fetched from `addressLookupTableAddresses` (v1) when the response carries them. See [Building Transactions](#building-transactions).
 
+The instructions create the user's input and output token accounts. When `jupiterSwapResponse` carries `setupInstructions`, they also create the other token accounts Jupiter asks for, such as one for an intermediate token of a multi-hop route. Each token account is created once. Pass the whole Jupiter response so these are included.
+
 #### Example
 
 ```typescript
@@ -171,8 +174,7 @@ const quoteResponse = await getJupiterQuote(
     outputMint,
     amount: swapAmount,
     user: wallet.publicKey,
-    maxAccounts: 40,
-    slippageBps: 50,
+    queryParams: { maxAccounts: 40, slippageBps: 50 },
   },
   {
     jupiterApiUrl: "https://api.jup.ag",
@@ -401,13 +403,7 @@ type GetJupiterQuoteParams = {
   outputMint: PublicKey;
   amount: BN;
   user: PublicKey; // Wallet the swap is built for. Sent as `taker` under v2, unused under v1.
-  maxAccounts: number;
-  slippageBps: number;
-  dynamicSlippage?: boolean; // Default: false
-  onlyDirectRoutes?: boolean; // Default: true
-  restrictIntermediateTokens?: boolean; // Default: true
-  forJitoBundle?: boolean; // Default: true
-  additionalQueryParams?: Record<string, string>; // Any other Jupiter query parameter
+  queryParams?: Record<string, string | number | boolean>; // Any other Jupiter query parameter, such as slippageBps or maxAccounts
 };
 
 type ZapConfig = {
@@ -433,8 +429,7 @@ const quoteResponse = await getJupiterQuote(
     outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     amount: new BN(1000000000),
     user: wallet.publicKey,
-    maxAccounts: 40,
-    slippageBps: 50,
+    queryParams: { maxAccounts: 40, slippageBps: 50 },
   },
   {
     jupiterApiUrl: "https://api.jup.ag",
@@ -447,9 +442,10 @@ const quoteResponse = await getJupiterQuote(
 
 - This function is used to get Jupiter quote from Jupiter API.
 - Any issues with the api you can check out [Jupiter's Build API Documentation](https://developers.jup.ag/docs/swap/build)
-- `maxAccounts` and the route options are forwarded to Jupiter as-is. See `JupiterQuoteOptions` for what each option does. With a low `maxAccounts` (examples use `40` or `50`) and the default options, the route is **not** the same as a Jupiter UI quote.
+- `queryParams` is forwarded to Jupiter as-is, and nothing else is sent, so Jupiter uses its own default for every parameter not given. Check Jupiter's docs for the parameters each API version accepts. `queryParams` cannot override `inputMint`, `outputMint`, `amount` or `taker`.
+- With a low `maxAccounts` (examples use `40` or `50`), the route is **not** the same as a Jupiter UI quote.
 - `slippageBps` only covers move within the quoted route. It does **not** mean `outAmount` is a fair market vs input. Validate output / impact / simulated balances before signing. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).
-- Direct zap-in estimators currently call this helper with `onlyDirectRoutes=true` and `maxAccounts=50`.
+- The zap-in helpers call this helper with their slippage argument as `slippageBps`, plus the Jupiter query parameters in `jupiterQuoteOptions`, which can override it. When `jupiterQuoteOptions` is omitted, they send only `slippageBps`.
 
 ---
 
@@ -493,8 +489,7 @@ const quoteResponse = await getJupiterQuote(
     outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     amount: new BN(1000000000),
     user: wallet.publicKey,
-    maxAccounts: 40,
-    slippageBps: 50,
+    queryParams: { maxAccounts: 40, slippageBps: 50 },
   },
   {
     jupiterApiUrl: "https://api.jup.ag",

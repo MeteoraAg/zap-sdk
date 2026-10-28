@@ -51,8 +51,7 @@ const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
       outputMint: poolState.tokenAMint,
       amount: new BN(LAMPORTS_PER_SOL),
       user: user.publicKey,
-      maxAccounts: 40,
-      slippageBps: 50,
+      queryParams: { maxAccounts: 40, slippageBps: 50 },
     },
     {
       jupiterApiUrl: JUPITER_API_URL,
@@ -66,8 +65,7 @@ const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
       outputMint: poolState.tokenBMint,
       amount: new BN(LAMPORTS_PER_SOL),
       user: user.publicKey,
-      maxAccounts: 40,
-      slippageBps: 50,
+      queryParams: { maxAccounts: 40, slippageBps: 50 },
     },
     {
       jupiterApiUrl: JUPITER_API_URL,
@@ -82,7 +80,7 @@ const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
     pool,
     positionNftMint,
     maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps,
-    maxAccounts: 50,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     slippageBps: 300,
     maxTransferAmountExtendPercentage: 20,
     jupiterQuoteToA,

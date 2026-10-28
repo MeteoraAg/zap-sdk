@@ -9,8 +9,8 @@ import {
   estimateDlmmDirectSwap,
   estimateDlmmIndirectSwap,
   estimateDlmmRebalanceSwap,
-  toAddressLookupTableAccounts,
 } from "../../src/helpers";
+import { toAddressLookupTableAccounts } from "../../src/helpers/jupiter";
 import {
   AMOUNT_IN_JUP_V6_REVERSE_OFFSET,
   JUP_V6_PROGRAM_ID,
@@ -117,7 +117,7 @@ export async function zapInDammV2Direct(
     positionNftMint,
     maxSqrtPriceChangeBps: maxSlippageBps,
     maxTransferAmountExtendPercentage: 20,
-    maxAccounts: 40,
+    jupiterQuoteOptions: { maxAccounts: 40 },
     slippageBps: 300,
     dammV2Quote,
     jupiterQuote: null,
@@ -147,7 +147,7 @@ export async function zapInDammV2Indirect(
     positionNftMint,
     maxSqrtPriceChangeBps: maxSlippageBps,
     maxTransferAmountExtendPercentage: 20,
-    maxAccounts: 40,
+    jupiterQuoteOptions: { maxAccounts: 40 },
     slippageBps: 300,
     jupiterQuoteToA,
     jupiterQuoteToB,
@@ -368,6 +368,7 @@ export async function zapInDlmmDirect(
     minDeltaId,
     maxDeltaId,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     singleSided: options.singleSided,
   });
 
@@ -376,7 +377,6 @@ export async function zapInDlmmDirect(
     directSwapEstimate: estimate.result,
     maxActiveBinSlippage: 50,
     favorXInActiveId,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 20,
     ...estimate.context,
   });
@@ -421,6 +421,7 @@ export async function zapInDlmmIndirect(
     minDeltaId,
     maxDeltaId,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     singleSided: options.singleSided,
     config,
   });
@@ -430,7 +431,6 @@ export async function zapInDlmmIndirect(
     indirectSwapEstimate: estimate.result,
     maxActiveBinSlippage: 50,
     favorXInActiveId,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 20,
     ...estimate.context,
   });
@@ -467,6 +467,7 @@ export async function rebalanceDlmmPosition(
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
   });
 
   const result = await zap.rebalanceDlmmPosition({

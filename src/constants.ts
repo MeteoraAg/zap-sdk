@@ -1,10 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
-import {
-  JupiterApiVersion,
-  JupiterInstructionLayout,
-  JupiterQuoteOptions,
-} from "./types";
+import { JupiterApiVersion, JupiterInstructionLayout } from "./types";
 import {
   BIN_ARRAY_BITMAP_SIZE,
   EXTENSION_BINARRAY_BITMAP_SIZE,
@@ -50,7 +46,7 @@ export const DLMM_SWAP_DISCRIMINATOR = [65, 75, 63, 76, 235, 91, 91, 136];
 export const AMOUNT_IN_DLMM_OFFSET = 8;
 
 /**
- * @deprecated Use `getJupiterInstructionLayout` from helpers; the offset depends on the instruction variant.
+ * @deprecated Only correct for the `route` and `shared_accounts_route` Jupiter instructions. The offset depends on the instruction variant, and the SDK finds it for each one itself.
  * Offset for amount_in in reverse order of jupiter Route instruction data:
  * amount_in(u64) + quoted_out_amount(64) + slippage_bps(u16) + platform_fee_bps(u8) = 19 bytes
  */
@@ -112,12 +108,3 @@ export const DAMM_V2_SWAP_DISCRIMINATOR = [
 
 export const DEFAULT_JUPITER_API_URL = "https://api.jup.ag";
 export const DEFAULT_JUPITER_API_VERSION = JupiterApiVersion.V2;
-
-export const DEFAULT_JUPITER_QUOTE_OPTIONS: Required<
-  Omit<JupiterQuoteOptions, "additionalQueryParams">
-> = {
-  dynamicSlippage: false,
-  onlyDirectRoutes: true,
-  restrictIntermediateTokens: true,
-  forJitoBundle: true,
-};

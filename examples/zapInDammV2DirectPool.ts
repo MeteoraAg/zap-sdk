@@ -73,7 +73,7 @@ async function main() {
     tokenBDecimal,
     dammV2SlippageBps: 300,
     jupSlippageBps: 300,
-    maxAccounts: 40,
+    jupiterQuoteOptions: { maxAccounts: 40 },
     config: {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
@@ -87,7 +87,7 @@ async function main() {
     pool,
     positionNftMint,
     maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps
-    maxAccounts: 40,
+    jupiterQuoteOptions: { maxAccounts: 40 },
     maxTransferAmountExtendPercentage: 20,
     slippageBps: 300,
     jupiterQuote,

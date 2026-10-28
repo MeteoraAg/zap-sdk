@@ -1,6 +1,7 @@
 import { LiteSVM } from "litesvm";
 import { AccountMeta, Keypair, PublicKey } from "@solana/web3.js";
 import {
+  createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -19,6 +20,7 @@ import {
 import {
   JupiterApiVersion,
   JupiterBuildResponse,
+  JupiterInstruction,
   JupiterQuoteResponse,
   JupiterSwapInstructionResponse,
 } from "../../src/types";
@@ -376,6 +378,34 @@ function encodeJupRouteV2Data(inAmount: BN, swapEnum: number): Buffer {
 }
 
 // Mock of `GET /swap/v2/build`: quote fields plus a route_v2 swap instruction through the pool.
+// Like the real API, the setup creates the user's input and output token accounts, plus one for
+// each intermediate token of the route. The real API also wraps SOL here, which the SDK leaves out.
+function buildSetupInstructions(
+  svm: LiteSVM,
+  user: PublicKey,
+  mints: PublicKey[],
+): JupiterInstruction[] {
+  return mints.map((mint) => {
+    const tokenProgram = getTokenProgram(svm, mint);
+    const ix = createAssociatedTokenAccountIdempotentInstruction(
+      user,
+      getAssociatedTokenAddressSync(mint, user, true, tokenProgram),
+      user,
+      mint,
+      tokenProgram,
+    );
+    return {
+      programId: ix.programId.toBase58(),
+      accounts: ix.keys.map((key) => ({
+        pubkey: key.pubkey.toBase58(),
+        isSigner: key.isSigner,
+        isWritable: key.isWritable,
+      })),
+      data: ix.data.toString("base64"),
+    };
+  });
+}
+
 export async function buildJupiterBuildResponse(
   svm: LiteSVM,
   route: JupiterMockRoute,
@@ -433,7 +463,11 @@ export async function buildJupiterBuildResponse(
     priceImpactPct: "0",
     routePlan: [],
     computeBudgetInstructions: [],
-    setupInstructions: [],
+    setupInstructions: buildSetupInstructions(svm, taker, [
+      inputTokenMint,
+      outputTokenMint,
+      ...(route.intermediateMints ?? []),
+    ]),
     swapInstruction: {
       programId: JUP_V6_PROGRAM_ID.toBase58(),
       accounts: accounts.map((a) => ({
@@ -517,7 +551,11 @@ async function buildJupiterSwapInstructionResponse(
   return {
     tokenLedgerInstruction: null,
     computeBudgetInstructions: [],
-    setupInstructions: [],
+    setupInstructions: buildSetupInstructions(svm, user, [
+      inputTokenMint,
+      outputTokenMint,
+      ...(route.intermediateMints ?? []),
+    ]),
     swapInstruction: {
       programId: JUP_V6_PROGRAM_ID.toBase58(),
       accounts: accounts.map((a) => ({
@@ -558,6 +596,9 @@ export type JupiterMockRoute = {
   outAmount: BN | ((inAmount: BN) => BN);
   // Defaults to "dammV2".
   poolType?: JupiterSwapPoolType;
+  // Tokens a multi-hop route passes through. The swap itself stays a single leg, but the setup
+  // creates the user's token account for each of them, as Jupiter does when a hop needs one.
+  intermediateMints?: PublicKey[];
 };
 
 // Puts the swap instruction's accounts into a lookup table at `key` and returns them as strings.

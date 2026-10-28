@@ -53,15 +53,23 @@ import {
   deriveDlmmEventAuthority,
   convertLamportsToUiAmount,
   buildJupiterSwapTransaction,
-  getJupiterInstructionLayout,
   toProgramStrategyType,
   filterOutCloseSplTokenAccountInstructions,
   isSingleSidedA,
   isSingleSidedB,
-  filterOutComputeBudgetInstructions,
+} from "./helpers";
+import {
+  getJupiterCreateAtaInstructions,
+  getJupiterInstructionLayout,
+  toTransactionInstruction,
   mergeAddressLookupTableAccounts,
   getJupiterAddressLookupTableAccounts,
-} from "./helpers";
+} from "./helpers/jupiter";
+import {
+  getCreateAtaInstructions,
+  dedupeCreateAtaInstructions,
+} from "./helpers/token";
+import { filterOutComputeBudgetInstructions } from "./helpers/common";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
   AMOUNT_IN_DLMM_OFFSET,
@@ -116,13 +124,13 @@ export class Zap {
    * @param connection - The connection to the Solana cluster
    * @param config - Optional configuration for Jupiter API URL (default: https://api.jup.ag), API key (default: empty string) and API version (default: JupiterApiVersion.V2)
    */
-  constructor(connection: Connection, config: ZapConfig = {}) {
+  constructor(connection: Connection, config?: ZapConfig) {
     this.connection = connection;
     this.zapProgram = new Program(ZapIDL as ZapTypes, { connection });
-    this.jupiterApiUrl = config.jupiterApiUrl || DEFAULT_JUPITER_API_URL;
-    this.jupiterApiKey = config.jupiterApiKey || "";
+    this.jupiterApiUrl = config?.jupiterApiUrl || DEFAULT_JUPITER_API_URL;
+    this.jupiterApiKey = config?.jupiterApiKey || "";
     this.jupiterApiVersion =
-      config.jupiterApiVersion ?? DEFAULT_JUPITER_API_VERSION;
+      config?.jupiterApiVersion ?? DEFAULT_JUPITER_API_VERSION;
   }
 
   /////// PRIVATE FUNDTIONS //////
@@ -453,13 +461,12 @@ export class Zap {
    * @param params.amountIn - The amount of input token
    * @param params.inputTokenMint - The input token mint
    * @param params.positionNftMint - The position NFT mint account's public key
-   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
    * @param params.slippageBps - The swap slippage tolerance in basis points
    * @param params.dammV2Quote - The DAMM V2 swap quote for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.jupiterQuote - The Jupiter swap quote for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
-   * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
+   * @param params.jupiterQuoteOptions - Optional Jupiter query parameters, see `GetJupiterQuoteParams.queryParams`
    * @returns The zap-in transaction parameters for a DAMM V2 direct pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
    * @throws if failed to get both Jupiter and DAMM v2 swap quotes
@@ -474,7 +481,6 @@ export class Zap {
       inputTokenMint,
       amountIn,
       positionNftMint,
-      maxAccounts,
       maxSqrtPriceChangeBps,
       slippageBps,
       dammV2Quote,
@@ -598,7 +604,6 @@ export class Zap {
           inputTokenMint,
           outputTokenMint,
           swapInAmount,
-          maxAccounts,
           slippageBps,
           undefined,
           {
@@ -607,6 +612,9 @@ export class Zap {
             jupiterApiVersion: this.jupiterApiVersion,
           },
           jupiterQuoteOptions,
+        );
+        preInstructions.push(
+          ...getJupiterCreateAtaInstructions(result.setupInstructions),
         );
         swapInstructions = [result.instruction];
         addressLookupTableAccounts = result.addressLookupTableAccounts;
@@ -658,7 +666,6 @@ export class Zap {
         inputTokenMint,
         outputTokenMint,
         swapInAmount,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -667,6 +674,9 @@ export class Zap {
           jupiterApiVersion: this.jupiterApiVersion,
         },
         jupiterQuoteOptions,
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(result.setupInstructions),
       );
       swapInstructions = [result.instruction];
       addressLookupTableAccounts = result.addressLookupTableAccounts;
@@ -749,13 +759,12 @@ export class Zap {
    * @param params.amountIn - The amount of input token
    * @param params.inputTokenMint - The input token mint
    * @param params.positionNftMint - The position NFT mint account's public key
-   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
    * @param params.slippageBps - The swap slippage tolerance in basis points
    * @param params.jupiterQuoteToA - The Jupiter quote for swapping to tokenA for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.jupiterQuoteToB - The Jupiter quote for swapping to tokenB for exactly 1 input token in lamports (used for price calculation, not the actual amountIn)
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
-   * @param params.jupiterQuoteOptions - Optional Jupiter quote options, see `JupiterQuoteOptions`
+   * @param params.jupiterQuoteOptions - Optional Jupiter query parameters, see `GetJupiterQuoteParams.queryParams`
    * @returns The zap-in transaction parameters for a DAMM V2 indirect pool
    * @throws if input token mint matches either tokenA or tokenB in the pool
    * @throws if no Jupiter quote provided for both tokens
@@ -770,7 +779,6 @@ export class Zap {
       pool,
       positionNftMint,
       amountIn,
-      maxAccounts,
       maxSqrtPriceChangeBps,
       maxTransferAmountExtendPercentage,
       slippageBps,
@@ -885,7 +893,6 @@ export class Zap {
         inputTokenMint,
         tokenAMint,
         amountIn,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -894,6 +901,9 @@ export class Zap {
           jupiterApiVersion: this.jupiterApiVersion,
         },
         jupiterQuoteOptions,
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(result.setupInstructions),
       );
 
       return {
@@ -942,7 +952,6 @@ export class Zap {
         inputTokenMint,
         tokenBMint,
         amountIn,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -951,6 +960,9 @@ export class Zap {
           jupiterApiVersion: this.jupiterApiVersion,
         },
         jupiterQuoteOptions,
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(result.setupInstructions),
       );
 
       return {
@@ -994,7 +1006,6 @@ export class Zap {
         inputTokenMint,
         tokenAMint,
         amountIn,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -1003,6 +1014,9 @@ export class Zap {
           jupiterApiVersion: this.jupiterApiVersion,
         },
         jupiterQuoteOptions,
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(result.setupInstructions),
       );
 
       return {
@@ -1046,7 +1060,6 @@ export class Zap {
         inputTokenMint,
         tokenBMint,
         amountIn,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -1055,6 +1068,9 @@ export class Zap {
           jupiterApiVersion: this.jupiterApiVersion,
         },
         jupiterQuoteOptions,
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(result.setupInstructions),
       );
 
       return {
@@ -1144,7 +1160,6 @@ export class Zap {
         inputTokenMint,
         tokenAMint,
         swapAmountToA,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -1154,6 +1169,9 @@ export class Zap {
         },
         jupiterQuoteOptions,
       );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(swapToA.setupInstructions),
+      );
 
       const swapToB = await buildJupiterSwapTransaction(
         this.connection,
@@ -1161,7 +1179,6 @@ export class Zap {
         inputTokenMint,
         tokenBMint,
         swapAmountToB,
-        maxAccounts,
         slippageBps,
         undefined,
         {
@@ -1170,6 +1187,9 @@ export class Zap {
           jupiterApiVersion: this.jupiterApiVersion,
         },
         jupiterQuoteOptions,
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(swapToB.setupInstructions),
       );
       return {
         ...baseParams,
@@ -1223,7 +1243,7 @@ export class Zap {
    * @param params.amount - The amount to deposit
    * @param params.preSqrtPrice - The sqrt price before the operation
    * @param params.maxSqrtPriceChangeBps - The maximum sqrt price change in basis points
-   * @param params.preInstructions - Instructions to run before the zap in
+   * @param params.preInstructions - Instructions to run before the zap in, including the token accounts the Jupiter swaps need. Token account creation repeated here is removed
    * @param params.swapInstructions - Swap instructions to execute
    * @param params.addressLookupTableAccounts - Lookup tables used by the swap instructions
    * @param params.cleanUpInstructions - Instructions to run after the zap in
@@ -1253,31 +1273,13 @@ export class Zap {
       cleanUpInstructions,
     } = params;
 
-    const [
-      { ataPubkey: tokenAAccount, ix: initializeTokenAIx },
-      { ataPubkey: tokenBAccount, ix: initializeTokenBIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        this.connection,
-        tokenAMint,
-        user,
-        user,
-        false,
-        tokenAProgram,
-      ),
-      getOrCreateATAInstruction(
-        this.connection,
-        tokenBMint,
-        user,
-        user,
-        false,
-        tokenBProgram,
-      ),
+    const {
+      tokenAccounts: [tokenAAccount, tokenBAccount],
+      instructions: setupInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: tokenAMint, tokenProgram: tokenAProgram },
+      { mint: tokenBMint, tokenProgram: tokenBProgram },
     ]);
-
-    const setupInstructions: TransactionInstruction[] = [];
-    initializeTokenAIx && setupInstructions.push(initializeTokenAIx);
-    initializeTokenBIx && setupInstructions.push(initializeTokenBIx);
     setupInstructions.push(...preInstructions);
 
     const ledgerInstructions = await this.resetOrInitializeLedgerAccount(user);
@@ -1371,7 +1373,7 @@ export class Zap {
 
     return {
       instructions: [
-        ...setupInstructions,
+        ...dedupeCreateAtaInstructions(setupInstructions),
         ...swapInstructions,
         ...ledgerInstructions,
         zapInInstruction,
@@ -1395,7 +1397,6 @@ export class Zap {
    * @param params.maxDeltaId - The bin delta relative to the active bin for the upper bin position
    * @param params.strategy - The liquidity distribution strategy
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
-   * @param params.maxAccounts - Max accounts for the Jupiter swap query. Example value is `50`; this is not safe for every pool/size. Combined with Direct estimators (`onlyDirectRoutes=true`) this can select a much thinner route than Jupiter UI.
    * @param params.swapSlippageBps - Swap slippage vs the **quoted route**, not vs a fair input/output price. Validate `directSwapEstimate` / `outAmount` before send.
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @param params.maxActiveBinSlippage - The maximum active bin slippage
@@ -1417,7 +1418,6 @@ export class Zap {
       maxDeltaId,
       strategy,
       favorXInActiveId,
-      maxAccounts,
       swapSlippageBps,
       maxTransferAmountExtendPercentage,
       maxActiveBinSlippage,
@@ -1476,7 +1476,6 @@ export class Zap {
             ? tokenYMint
             : tokenXMint,
           directSwapEstimate.swapAmount,
-          maxAccounts,
           swapSlippageBps,
           swapQuote.originalQuote,
           {
@@ -1484,6 +1483,9 @@ export class Zap {
             jupiterApiKey: this.jupiterApiKey,
             jupiterApiVersion: this.jupiterApiVersion,
           },
+        );
+        preInstructions.push(
+          ...getJupiterCreateAtaInstructions(swap.setupInstructions),
         );
         swapInstructions.push(swap.instruction);
         addressLookupTableAccounts = swap.addressLookupTableAccounts;
@@ -1602,7 +1604,6 @@ export class Zap {
    * @param params.strategy - The liquidity distribution strategy
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
    * @param params.indirectSwapEstimate - The result from the indirect swap estimate
-   * @param params.maxAccounts - The maximum number of accounts for the Jupiter swap query
    * @param params.swapSlippageBps - The swap slippage tolerance in basis points
    * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
    * @param params.maxActiveBinSlippage - The maximum active bin slippage
@@ -1624,7 +1625,6 @@ export class Zap {
       strategy,
       favorXInActiveId,
       indirectSwapEstimate,
-      maxAccounts,
       swapSlippageBps,
       maxTransferAmountExtendPercentage,
       maxActiveBinSlippage,
@@ -1690,7 +1690,6 @@ export class Zap {
         inputTokenMint,
         tokenXMint,
         swapAmountToXInLamports,
-        maxAccounts,
         swapSlippageBps,
         indirectSwapEstimate.swapToX,
         {
@@ -1698,6 +1697,9 @@ export class Zap {
           jupiterApiKey: this.jupiterApiKey,
           jupiterApiVersion: this.jupiterApiVersion,
         },
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(swapToX.setupInstructions),
       );
       swapInstructions.push(swapToX.instruction);
       swapLookupTables.push(swapToX.addressLookupTableAccounts);
@@ -1713,7 +1715,6 @@ export class Zap {
         inputTokenMint,
         tokenYMint,
         swapAmountToYInLamports,
-        maxAccounts,
         swapSlippageBps,
         indirectSwapEstimate.swapToY,
         {
@@ -1721,6 +1722,9 @@ export class Zap {
           jupiterApiKey: this.jupiterApiKey,
           jupiterApiVersion: this.jupiterApiVersion,
         },
+      );
+      preInstructions.push(
+        ...getJupiterCreateAtaInstructions(swapToY.setupInstructions),
       );
       swapInstructions.push(swapToY.instruction);
       swapLookupTables.push(swapToY.addressLookupTableAccounts);
@@ -1808,7 +1812,7 @@ export class Zap {
    * @param params.maxActiveBinSlippage - The maximum active bin slippage
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
    * @param params.strategy - The liquidity distribution strategy
-   * @param params.preInstructions - Instructions to run before the zap in
+   * @param params.preInstructions - Instructions to run before the zap in, including the token accounts the Jupiter swaps need. Token account creation repeated here is removed
    * @param params.swapInstructions - Swap instructions to execute
    * @param params.addressLookupTableAccounts - Lookup tables used by the swap instructions
    * @param params.cleanUpInstructions - Instructions to run after the zap in
@@ -1847,31 +1851,13 @@ export class Zap {
       singleSided,
     } = params;
 
-    const [
-      { ataPubkey: tokenXAccount, ix: initializeTokenXIx },
-      { ataPubkey: tokenYAccount, ix: initializeTokenYIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        this.connection,
-        tokenXMint,
-        user,
-        user,
-        false,
-        tokenXProgram,
-      ),
-      getOrCreateATAInstruction(
-        this.connection,
-        tokenYMint,
-        user,
-        user,
-        false,
-        tokenYProgram,
-      ),
+    const {
+      tokenAccounts: [tokenXAccount, tokenYAccount],
+      instructions: setupInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: tokenXMint, tokenProgram: tokenXProgram },
+      { mint: tokenYMint, tokenProgram: tokenYProgram },
     ]);
-
-    const setupInstructions: TransactionInstruction[] = [];
-    initializeTokenXIx && setupInstructions.push(initializeTokenXIx);
-    initializeTokenYIx && setupInstructions.push(initializeTokenYIx);
     setupInstructions.push(...preInstructions);
 
     const ledgerInstructions = await this.resetOrInitializeLedgerAccount(user);
@@ -2026,7 +2012,7 @@ export class Zap {
 
     return {
       instructions: [
-        ...setupInstructions,
+        ...dedupeCreateAtaInstructions(setupInstructions),
         ...swapInstructions,
         ...ledgerInstructions,
         zapInInstruction,
@@ -2059,7 +2045,6 @@ export class Zap {
    * @param params.strategy - The strategy to use for the rebalance
    * @param params.favorXInActiveId - Whether to favor token X in the active bin
    * @param params.directSwapEstimate - The estimate of the direct swap operation
-   * @param params.maxAccounts - The maximum number of accounts to use for the swap operation
    * @returns The ordered instructions, the lookup tables they use, and the estimated balances
    * @throws if fail to get jupiter quote or jupiter swap instruction
    */
@@ -2077,38 +2062,19 @@ export class Zap {
       strategy,
       favorXInActiveId,
       directSwapEstimate,
-      maxAccounts = 50,
     } = params;
 
     const dlmm = await DLMM.create(this.connection, lbPair);
     const userPosition = await dlmm.getPosition(position);
     const { tokenXProgram, tokenYProgram } = getTokenProgramId(dlmm.lbPair);
 
-    const [
-      { ataPubkey: userTokenX, ix: userTokenXIx },
-      { ataPubkey: userTokenY, ix: userTokenYIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        this.connection,
-        dlmm.lbPair.tokenXMint,
-        user,
-        user,
-        true,
-        tokenXProgram,
-      ),
-      getOrCreateATAInstruction(
-        this.connection,
-        dlmm.lbPair.tokenYMint,
-        user,
-        user,
-        true,
-        tokenYProgram,
-      ),
+    const {
+      tokenAccounts: [userTokenX, userTokenY],
+      instructions: setupInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: dlmm.lbPair.tokenXMint, tokenProgram: tokenXProgram },
+      { mint: dlmm.lbPair.tokenYMint, tokenProgram: tokenYProgram },
     ]);
-
-    const setupInstructions: TransactionInstruction[] = [];
-    userTokenXIx && setupInstructions.push(userTokenXIx);
-    userTokenYIx && setupInstructions.push(userTokenYIx);
 
     const strategyParamBuilder = getLiquidityStrategyParameterBuilder(strategy);
     const { x0, y0, deltaX, deltaY } = buildLiquidityStrategyParameters(
@@ -2198,7 +2164,6 @@ export class Zap {
             ? dlmm.lbPair.tokenYMint
             : dlmm.lbPair.tokenXMint,
           directSwapEstimate.swapAmount,
-          maxAccounts,
           swapSlippageBps,
           swapQuote.originalQuote,
           {
@@ -2206,6 +2171,9 @@ export class Zap {
             jupiterApiKey: this.jupiterApiKey,
             jupiterApiVersion: this.jupiterApiVersion,
           },
+        );
+        setupInstructions.push(
+          ...getJupiterCreateAtaInstructions(swap.setupInstructions),
         );
         swapInstructions = [swap.instruction];
         addressLookupTableAccounts = swap.addressLookupTableAccounts;
@@ -2340,7 +2308,7 @@ export class Zap {
 
     return {
       instructions: [
-        ...setupInstructions,
+        ...dedupeCreateAtaInstructions(setupInstructions),
         ...filterOutComputeBudgetInstructions(initBinArrayInstructions),
         ...rebalancePositionInstruction,
         ...swapInstructions,
@@ -2437,30 +2405,21 @@ export class Zap {
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
 
-    const [
-      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
-      { ix: outputTokenAccountIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        this.connection,
-        inputMint,
-        user,
-        user,
-        true,
-        inputTokenProgram,
-      ),
-      getOrCreateATAInstruction(
-        this.connection,
-        outputMint,
-        user,
-        user,
-        true,
-        outputTokenProgram,
-      ),
+    const {
+      tokenAccounts: [inputTokenAccount],
+      instructions: createAtaInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: inputMint, tokenProgram: inputTokenProgram },
+      { mint: outputMint, tokenProgram: outputTokenProgram },
     ]);
-
-    inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
-    outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+    preInstructions.push(...createAtaInstructions);
+    preInstructions.push(
+      ...getJupiterCreateAtaInstructions(
+        (jupiterSwapResponse.setupInstructions ?? []).map(
+          toTransactionInstruction,
+        ),
+      ),
+    );
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
@@ -2523,7 +2482,7 @@ export class Zap {
         },
         remainingAccounts,
         ammProgram: JUP_V6_PROGRAM_ID,
-        preInstructions,
+        preInstructions: dedupeCreateAtaInstructions(preInstructions),
         postInstructions,
       }),
       getJupiterAddressLookupTableAccounts(
@@ -2571,30 +2530,14 @@ export class Zap {
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
 
-    const [
-      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
-      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        this.connection,
-        inputMint,
-        user,
-        user,
-        true,
-        inputTokenProgram,
-      ),
-      getOrCreateATAInstruction(
-        this.connection,
-        outputMint,
-        user,
-        user,
-        true,
-        outputTokenProgram,
-      ),
+    const {
+      tokenAccounts: [inputTokenAccount, outputTokenAccount],
+      instructions: createAtaInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: inputMint, tokenProgram: inputTokenProgram },
+      { mint: outputMint, tokenProgram: outputTokenProgram },
     ]);
-
-    inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
-    outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+    preInstructions.push(...createAtaInstructions);
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
@@ -2687,30 +2630,14 @@ export class Zap {
     const preInstructions: TransactionInstruction[] = [];
     const postInstructions: TransactionInstruction[] = [];
 
-    const [
-      { ataPubkey: inputTokenAccount, ix: inputTokenAccountIx },
-      { ataPubkey: outputTokenAccount, ix: outputTokenAccountIx },
-    ] = await Promise.all([
-      getOrCreateATAInstruction(
-        this.connection,
-        inputMint,
-        user,
-        user,
-        true,
-        inputTokenProgram,
-      ),
-      getOrCreateATAInstruction(
-        this.connection,
-        outputMint,
-        user,
-        user,
-        true,
-        outputTokenProgram,
-      ),
+    const {
+      tokenAccounts: [inputTokenAccount, outputTokenAccount],
+      instructions: createAtaInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: inputMint, tokenProgram: inputTokenProgram },
+      { mint: outputMint, tokenProgram: outputTokenProgram },
     ]);
-
-    inputTokenAccountIx && preInstructions.push(inputTokenAccountIx);
-    outputTokenAccountIx && preInstructions.push(outputTokenAccountIx);
+    preInstructions.push(...createAtaInstructions);
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 

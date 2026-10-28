@@ -45,6 +45,7 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     config: {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
@@ -56,7 +57,6 @@ const SWAP_SLIPPAGE_BPS = 1.5 * 100;
     maxActiveBinSlippage: 50,
     favorXInActiveId: false,
     indirectSwapEstimate: estimate.result,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 0,
     ...estimate.context,
   });

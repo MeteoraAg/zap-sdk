@@ -52,6 +52,7 @@ async function main() {
     minDeltaId,
     maxDeltaId,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     singleSided,
     config: {
       jupiterApiUrl: JUPITER_API_URL,
@@ -64,7 +65,6 @@ async function main() {
     maxActiveBinSlippage: 50,
     favorXInActiveId,
     indirectSwapEstimate: estimate.result,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 0,
     singleSided,
     ...estimate.context,

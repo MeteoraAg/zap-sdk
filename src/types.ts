@@ -73,11 +73,16 @@ export interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
+  /** Its `setupInstructions`, when present, add the token accounts the swap needs that the zap does not create. */
   jupiterSwapResponse: Pick<JupiterSwapInstructionResponse, "swapInstruction"> &
+    Partial<Pick<JupiterSwapInstructions, "setupInstructions">> &
     JupiterAddressLookupTableFields;
   maxSwapAmount: BN;
   percentageToZapOut: number;
 }
+
+/** Jupiter query parameter values. The SDK converts each value to a string. */
+export type JupiterQueryParams = Record<string, string | number | boolean>;
 
 export type GetJupiterQuoteParams = {
   inputMint: PublicKey;
@@ -85,36 +90,17 @@ export type GetJupiterQuoteParams = {
   amount: BN;
   /** Wallet the swap is built for. Sent as `taker` under v2, unused under v1. */
   user: PublicKey;
-  maxAccounts: number;
-  slippageBps: number;
-  // see `JupiterQuoteOptions`
-  dynamicSlippage?: boolean;
-  onlyDirectRoutes?: boolean;
-  restrictIntermediateTokens?: boolean;
-  forJitoBundle?: boolean;
-  additionalQueryParams?: Record<string, string>;
+  /**
+   * Any other Jupiter query parameter, such as `slippageBps` or `maxAccounts`. The SDK forwards them
+   * to Jupiter as-is and sends nothing else, so Jupiter uses its own default for every parameter not
+   * given here. `inputMint`, `outputMint`, `amount` and, under v2, `taker` always come from the fields
+   * above, even when they are also given here.
+   * Jupiter's API docs are the source of truth for the accepted parameters:
+   * - v1 `GET /swap/v1/quote`: https://developers.jup.ag/docs/api-reference/swap/v1/quote
+   * - v2 `GET /swap/v2/build`: https://developers.jup.ag/docs/api-reference/swap/build
+   */
+  queryParams?: JupiterQueryParams;
 };
-
-/**
- * Jupiter options for the quote request. The SDK forwards them to Jupiter as-is and does not decide
- * which ones Jupiter honours, because Jupiter also accepts options it does not document.
- * Jupiter's API docs are the source of truth for what each option does:
- * - v1 `GET /swap/v1/quote`: https://developers.jup.ag/docs/api-reference/swap/v1/quote
- * - v2 `GET /swap/v2/build`: https://developers.jup.ag/docs/api-reference/swap/build
- *
- * `dynamicSlippage`, `onlyDirectRoutes`, `restrictIntermediateTokens` and `forJitoBundle` fall back to
- * `DEFAULT_JUPITER_QUOTE_OPTIONS` when omitted.
- * `additionalQueryParams` holds any other Jupiter query parameter, as a name to string value map. It is
- * added last, so it overrides parameters the SDK sets, except `taker` under v2.
- */
-export type JupiterQuoteOptions = Pick<
-  GetJupiterQuoteParams,
-  | "dynamicSlippage"
-  | "onlyDirectRoutes"
-  | "restrictIntermediateTokens"
-  | "forJitoBundle"
-  | "additionalQueryParams"
->;
 
 export type GetJupAndDammV2QuotesParams = {
   connection: Connection;
@@ -125,8 +111,11 @@ export type GetJupAndDammV2QuotesParams = {
   tokenBDecimal: number;
   dammV2SlippageBps: number;
   jupSlippageBps: number;
-  maxAccounts: number;
-  jupiterQuoteOptions?: JupiterQuoteOptions;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 };
 
@@ -256,7 +245,6 @@ export type GetZapInDammV2DirectPoolParams = {
   positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
-  maxAccounts: number;
   slippageBps: number;
   dammV2Quote: {
     swapInAmount: BN;
@@ -267,7 +255,11 @@ export type GetZapInDammV2DirectPoolParams = {
     priceImpact: Decimal;
   } | null;
   jupiterQuote: JupiterQuoteResponse | null;
-  jupiterQuoteOptions?: JupiterQuoteOptions;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
 };
 
 export type GetZapInDammV2IndirectPoolParams = {
@@ -278,11 +270,14 @@ export type GetZapInDammV2IndirectPoolParams = {
   positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
-  maxAccounts: number;
   slippageBps: number;
   jupiterQuoteToA: JupiterQuoteResponse | null;
   jupiterQuoteToB: JupiterQuoteResponse | null;
-  jupiterQuoteOptions?: JupiterQuoteOptions;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
 };
 
 export enum ZapInDammV2PoolSwapRoute {
@@ -390,7 +385,11 @@ export interface EstimateDlmmDirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
-  jupiterQuoteOptions?: JupiterQuoteOptions;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -429,7 +428,11 @@ export interface EstimateDlmmRebalanceSwapParams {
   maxDeltaId: number;
   swapSlippageBps: number;
   strategy: StrategyType;
-  jupiterQuoteOptions?: JupiterQuoteOptions;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -460,7 +463,11 @@ export interface EstimateDlmmIndirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
-  jupiterQuoteOptions?: JupiterQuoteOptions;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -500,7 +507,6 @@ export interface RebalanceDlmmPositionParams {
   strategy: StrategyType;
   favorXInActiveId: boolean;
   directSwapEstimate: DlmmDirectEstimateResult;
-  maxAccounts?: number;
 }
 
 export interface RebalanceDlmmPositionResponse extends ZapInstructionsResponse {
@@ -526,7 +532,6 @@ export interface GetZapInDlmmIndirectParams {
   maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  maxAccounts: number;
   swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
   indirectSwapEstimate: DlmmIndirectSwapEstimateResult;
@@ -543,7 +548,6 @@ export interface GetZapInDlmmDirectParams {
   maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  maxAccounts: number;
   swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
   directSwapEstimate: DlmmDirectEstimateResult;

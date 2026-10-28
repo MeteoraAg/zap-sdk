@@ -146,8 +146,7 @@ async function main() {
           outputMint: outputMint,
           amount: amountARemoved,
           user: wallet.publicKey,
-          maxAccounts: 50,
-          slippageBps: 50,
+          queryParams: { maxAccounts: 50, slippageBps: 50 },
         },
         {
           jupiterApiUrl: JUPITER_API_URL,
