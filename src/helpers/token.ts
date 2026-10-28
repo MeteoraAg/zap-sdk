@@ -1,8 +1,12 @@
 import {
+  ACCOUNT_SIZE,
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
+  ExtensionType,
+  getAccountLen,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  NATIVE_MINT_2022,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   unpackAccount,
@@ -83,15 +87,57 @@ export function unwrapSOLInstruction(
  * Get token account balance
  * @param connection - Solana connection
  * @param tokenAccount - The token account address
- * @returns The token account balance as a string, or "0" if the account does not exist
+ * @param creation - ATA identity when idempotent creation precedes token use
+ * @returns The balance as a string, including tokens created by pending native ATA initialization
  * @throws If the RPC request fails or the account is not a valid SPL token account
  */
 export async function getTokenAccountBalance(
   connection: Connection,
   tokenAccount: PublicKey,
+  creation?: { mint: PublicKey; owner: PublicKey; tokenProgram: PublicKey },
 ): Promise<string> {
   const accountInfo = await connection.getAccountInfo(tokenAccount);
   if (accountInfo === null) return "0";
+
+  if (
+    creation &&
+    !accountInfo.executable &&
+    accountInfo.owner.equals(SystemProgram.programId) &&
+    accountInfo.data.length === 0 &&
+    (creation.tokenProgram.equals(TOKEN_PROGRAM_ID) ||
+      creation.tokenProgram.equals(TOKEN_2022_PROGRAM_ID)) &&
+    tokenAccount.equals(
+      getAssociatedTokenAddressSync(
+        creation.mint,
+        creation.owner,
+        true,
+        creation.tokenProgram,
+      ),
+    )
+  ) {
+    const token2022 = creation.tokenProgram.equals(TOKEN_2022_PROGRAM_ID);
+    const nativeMint = token2022 ? NATIVE_MINT_2022 : NATIVE_MINT;
+    if (!creation.mint.equals(nativeMint)) return "0";
+
+    // Native ATA initialization turns lamports above its rent reserve into tokens.
+    // Preserve that pre-funded balance instead of counting it as newly received.
+    const accountSize = token2022
+      ? getAccountLen([ExtensionType.ImmutableOwner])
+      : ACCOUNT_SIZE;
+    const rent =
+      await connection.getMinimumBalanceForRentExemption(accountSize);
+    if (
+      !Number.isSafeInteger(accountInfo.lamports) ||
+      !Number.isSafeInteger(rent) ||
+      accountInfo.lamports < 0 ||
+      rent < 0
+    ) {
+      throw new Error(
+        "Cannot determine the pre-funded native ATA balance exactly",
+      );
+    }
+    return BigInt(Math.max(0, accountInfo.lamports - rent)).toString();
+  }
 
   const tokenProgram = accountInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
     ? TOKEN_2022_PROGRAM_ID
