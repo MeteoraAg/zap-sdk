@@ -3,7 +3,9 @@ import {
   createCloseAccountInstruction,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  unpackAccount,
 } from "@solana/spl-token";
 import {
   Connection,
@@ -81,21 +83,24 @@ export function unwrapSOLInstruction(
  * Get token account balance
  * @param connection - Solana connection
  * @param tokenAccount - The token account address
- * @returns The token account balance as a string
+ * @returns The token account balance as a string, or "0" if the account does not exist
+ * @throws If the RPC request fails or the account is not a valid SPL token account
  */
 export async function getTokenAccountBalance(
   connection: Connection,
   tokenAccount: PublicKey,
 ): Promise<string> {
-  let balance: string;
-  try {
-    balance = (await connection.getTokenAccountBalance(tokenAccount)).value
-      .amount;
-  } catch {
-    balance = "0";
-  }
+  const accountInfo = await connection.getAccountInfo(tokenAccount);
+  if (accountInfo === null) return "0";
 
-  return balance;
+  const tokenProgram = accountInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
+    ? TOKEN_2022_PROGRAM_ID
+    : TOKEN_PROGRAM_ID;
+  return unpackAccount(
+    tokenAccount,
+    accountInfo,
+    tokenProgram,
+  ).amount.toString();
 }
 
 /**

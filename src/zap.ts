@@ -2387,19 +2387,10 @@ export class Zap {
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
-    let preUserTokenBalance;
-
-    try {
-      preUserTokenBalance = await getTokenAccountBalance(
-        this.connection,
-        inputTokenAccount,
-      );
-    } catch {
-      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
-      // maxSwapAmount is > the actual in token amonut
-
-      preUserTokenBalance = "0";
-    }
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+    );
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -2510,19 +2501,10 @@ export class Zap {
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
-    let preUserTokenBalance;
-
-    try {
-      preUserTokenBalance = await getTokenAccountBalance(
-        this.connection,
-        inputTokenAccount,
-      );
-    } catch {
-      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
-      // maxSwapAmount is > the actual in token amonut
-
-      preUserTokenBalance = "0";
-    }
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+    );
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
@@ -2625,19 +2607,10 @@ export class Zap {
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
-    let preUserTokenBalance;
-
-    try {
-      preUserTokenBalance = await getTokenAccountBalance(
-        this.connection,
-        inputTokenAccount,
-      );
-    } catch {
-      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
-      // maxSwapAmount is > the actual in token amonut
-
-      preUserTokenBalance = "0";
-    }
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+    );
 
     const { remainingAccounts, remainingAccountsInfo } =
       await getDlmmRemainingAccounts(
