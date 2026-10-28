@@ -1,0 +1,9 @@
+DLMM test program (dlmm.so)
+
+Source: MeteoraAg/zap-sdk pull request #33
+Commit: f63f576d64bfdecaa6830abb1d0231287a15a37b
+URL: https://github.com/MeteoraAg/zap-sdk/blob/f63f576d64bfdecaa6830abb1d0231287a15a37b/tests/fixtures/dlmm.so
+SHA-256: 4cf090c9787f38add8d1ca218c2b0432cea26185d4b23707929bd08a1fa1dc29
+
+Used by the local LiteSVM regression test for swaps across a bin-array boundary.
+The test uses the installed @meteora-ag/dlmm IDL; no generated IDL copy is needed.
