@@ -1251,6 +1251,11 @@ export class Zap {
         const preTokenBalance = await getTokenAccountBalance(
           this.connection,
           tokenAccount,
+          {
+            mint: isTokenA ? tokenBMint : tokenAMint,
+            owner: user,
+            tokenProgram: isTokenA ? tokenBProgram : tokenAProgram,
+          },
         );
 
         const updateLedgerBalanceAfterSwapTx =
@@ -1267,11 +1272,13 @@ export class Zap {
       const preTokenABalance = await getTokenAccountBalance(
         this.connection,
         tokenAAccount,
+        { mint: tokenAMint, owner: user, tokenProgram: tokenAProgram },
       );
 
       const preTokenBBalance = await getTokenAccountBalance(
         this.connection,
         tokenBAccount,
+        { mint: tokenBMint, owner: user, tokenProgram: tokenBProgram },
       );
 
       const updateLedgerBalanceTokenAAfterSwapTx =
@@ -1826,6 +1833,11 @@ export class Zap {
           const preSwappedTokenBalance = await getTokenAccountBalance(
             this.connection,
             swappedTokenAccount,
+            {
+              mint: singleSidedX ? tokenXMint : tokenYMint,
+              owner: user,
+              tokenProgram: singleSidedX ? tokenXProgram : tokenYProgram,
+            },
           );
           const updateLedgerBalanceAfterSwapTx =
             await this.updateLedgerBalanceAfterSwap(
@@ -1859,6 +1871,11 @@ export class Zap {
           const preSwappedTokenBalance = await getTokenAccountBalance(
             this.connection,
             swappedTokenAccount,
+            {
+              mint: isTokenX ? tokenYMint : tokenXMint,
+              owner: user,
+              tokenProgram: isTokenX ? tokenYProgram : tokenXProgram,
+            },
           );
 
           const updateLedgerBalanceAfterSwapTx =
@@ -1885,6 +1902,11 @@ export class Zap {
         const preSwappedTokenBalance = await getTokenAccountBalance(
           this.connection,
           swappedTokenAccount,
+          {
+            mint: singleSidedX ? tokenXMint : tokenYMint,
+            owner: user,
+            tokenProgram: singleSidedX ? tokenXProgram : tokenYProgram,
+          },
         );
         const updateLedgerBalanceAfterSwapTx =
           await this.updateLedgerBalanceAfterSwap(
@@ -1900,10 +1922,12 @@ export class Zap {
         const preTokenXBalance = await getTokenAccountBalance(
           this.connection,
           tokenXAccount,
+          { mint: tokenXMint, owner: user, tokenProgram: tokenXProgram },
         );
         const preTokenYBalance = await getTokenAccountBalance(
           this.connection,
           tokenYAccount,
+          { mint: tokenYMint, owner: user, tokenProgram: tokenYProgram },
         );
         const updateLedgerBalanceTokenXAfterSwapTx =
           await this.updateLedgerBalanceAfterSwap(
@@ -2162,10 +2186,20 @@ export class Zap {
     const preTokenXBalance = await getTokenAccountBalance(
       this.connection,
       userTokenX,
+      {
+        mint: dlmm.lbPair.tokenXMint,
+        owner: user,
+        tokenProgram: tokenXProgram,
+      },
     );
     const preTokenYBalance = await getTokenAccountBalance(
       this.connection,
       userTokenY,
+      {
+        mint: dlmm.lbPair.tokenYMint,
+        owner: user,
+        tokenProgram: tokenYProgram,
+      },
     );
 
     const tokenXAmountAfterSwap =
@@ -2387,19 +2421,11 @@ export class Zap {
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
-    let preUserTokenBalance;
-
-    try {
-      preUserTokenBalance = await getTokenAccountBalance(
-        this.connection,
-        inputTokenAccount,
-      );
-    } catch {
-      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
-      // maxSwapAmount is > the actual in token amonut
-
-      preUserTokenBalance = "0";
-    }
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+      { mint: inputMint, owner: user, tokenProgram: inputTokenProgram },
+    );
 
     const remainingAccounts = jupiterSwapResponse.swapInstruction.accounts.map(
       (account) => {
@@ -2510,19 +2536,11 @@ export class Zap {
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
-    let preUserTokenBalance;
-
-    try {
-      preUserTokenBalance = await getTokenAccountBalance(
-        this.connection,
-        inputTokenAccount,
-      );
-    } catch {
-      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
-      // maxSwapAmount is > the actual in token amonut
-
-      preUserTokenBalance = "0";
-    }
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+      { mint: inputMint, owner: user, tokenProgram: inputTokenProgram },
+    );
 
     const remainingAccounts = await getDammV2RemainingAccounts(
       poolAddress,
@@ -2625,19 +2643,11 @@ export class Zap {
 
     // DO NOT NEED WRAP AS THIS WILL BE HANDLED BY REMOVE LIQUIDITY'S SKIPUNWRAPSOL BOOLEAN
 
-    let preUserTokenBalance;
-
-    try {
-      preUserTokenBalance = await getTokenAccountBalance(
-        this.connection,
-        inputTokenAccount,
-      );
-    } catch {
-      // assume there's no ATA and fallback preUserTokenBalance as 0. But if the error was due to general RPC error (e.g network error) we can actually over swap if
-      // maxSwapAmount is > the actual in token amonut
-
-      preUserTokenBalance = "0";
-    }
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+      { mint: inputMint, owner: user, tokenProgram: inputTokenProgram },
+    );
 
     const { remainingAccounts, remainingAccountsInfo } =
       await getDlmmRemainingAccounts(
