@@ -2649,6 +2649,7 @@ export class Zap {
         getTokenProgram(lbPairState.tokenMintXProgramFlag),
         getTokenProgram(lbPairState.tokenMintYProgramFlag),
         lbPairState,
+        inputMint.equals(lbPairState.tokenXMint),
       );
 
     const payloadData = createDlmmSwapPayload(
