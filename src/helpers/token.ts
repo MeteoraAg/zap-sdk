@@ -1,4 +1,5 @@
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
   getAssociatedTokenAddressSync,
@@ -23,7 +24,7 @@ import {
  * @returns The token account and the instruction to create it if it doesn't exist
  */
 export const getOrCreateATAInstruction = async (
-  connection: Connection,
+  _connection: Connection,
   tokenMint: PublicKey,
   owner: PublicKey,
   payer: PublicKey,
@@ -149,6 +150,68 @@ export function filterOutCloseSplTokenAccountInstructions(
     if (ix.programId.equals(TOKEN_PROGRAM_ID)) {
       return ix.data[0] !== CLOSE_ACCOUNT_DISCRIMINATOR;
     }
+    return true;
+  });
+}
+
+/**
+ * The user's associated token account for each token, and a `CreateIdempotent` instruction for each,
+ * paid by the user. The instructions succeed whether or not the accounts already exist.
+ * @param user - The owner of the token accounts and the payer of their creation
+ * @param tokens - The mint and token program of each token
+ * @returns The token accounts and their create instructions, both in the order of `tokens`
+ */
+export function getCreateAtaInstructions(
+  user: PublicKey,
+  tokens: { mint: PublicKey; tokenProgram: PublicKey }[],
+): { tokenAccounts: PublicKey[]; instructions: TransactionInstruction[] } {
+  const tokenAccounts = tokens.map(({ mint, tokenProgram }) =>
+    getAssociatedTokenAddressSync(mint, user, true, tokenProgram),
+  );
+  const instructions = tokens.map(({ mint, tokenProgram }, i) =>
+    createAssociatedTokenAccountIdempotentInstruction(
+      user,
+      tokenAccounts[i],
+      user,
+      mint,
+      tokenProgram,
+    ),
+  );
+  return { tokenAccounts, instructions };
+}
+
+/**
+ * Whether `ix` is an associated token program `Create` or `CreateIdempotent` instruction.
+ * `Create` has empty data or data `0`, and `CreateIdempotent` has data `1`.
+ */
+export function isCreateAtaInstruction(ix: TransactionInstruction): boolean {
+  return (
+    ix.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID) &&
+    (ix.data.length === 0 || ix.data[0] === 0 || ix.data[0] === 1)
+  );
+}
+
+/**
+ * Removes repeated associated token account create instructions, keeping the first one for each
+ * token account (`keys[1]`). Other instructions are kept in place.
+ * Use it only on setup instructions that run before anything closes a token account, because a
+ * closed account would need its later create instruction.
+ * @param instructions - Setup instructions, such as the zap's token account creation followed by the Jupiter swap's
+ * @returns The instructions with each token account created once
+ */
+export function dedupeCreateAtaInstructions(
+  instructions: TransactionInstruction[],
+): TransactionInstruction[] {
+  const createdAccounts = new Set<string>();
+  return instructions.filter((ix) => {
+    if (!isCreateAtaInstruction(ix)) {
+      return true;
+    }
+    const account = ix.keys[1].pubkey.toBase58();
+    if (createdAccounts.has(account)) {
+      return false;
+    }
+    createdAccounts.add(account);
     return true;
   });
 }

@@ -1,28 +1,26 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import {
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+import { StrategyType } from "@meteora-ag/dlmm";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { Zap, estimateDlmmIndirectSwap, DlmmSingleSided } from "../src";
 import Decimal from "decimal.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
-import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
-import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import {
+  buildV0Transactions,
+  createJitoTipIx,
+  loadKeypairFromEnv,
+  sendJitoBundle,
+  signV0Transaction,
+} from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL, RPC_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
-const SEED_PHRASE = process.env.SEED_PHRASE!;
-
 async function main() {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
-  // const user = getKeypairFromSeed(SEED_PHRASE);
-  const user = Keypair.fromSecretKey(Uint8Array.from([]));
+  const connection = new Connection(RPC_URL);
+  const user = loadKeypairFromEnv();
   // MET-USDC pool (x = MET, y = USDC)
   const dlmmPool = new PublicKey(
     "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd",
@@ -35,7 +33,6 @@ async function main() {
     jupiterApiUrl: JUPITER_API_URL,
     jupiterApiKey: JUPITER_API_KEY,
   });
-  const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 34;
   const singleSided = DlmmSingleSided.X; // MET
   // @ts-ignore this is intentional
@@ -46,6 +43,7 @@ async function main() {
 
   // Pass singleSided to estimateIndirectSwap
   const estimate = await estimateDlmmIndirectSwap({
+    user: user.publicKey,
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,
@@ -54,6 +52,7 @@ async function main() {
     minDeltaId,
     maxDeltaId,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     singleSided,
     config: {
       jupiterApiUrl: JUPITER_API_URL,
@@ -66,7 +65,6 @@ async function main() {
     maxActiveBinSlippage: 50,
     favorXInActiveId,
     indirectSwapEstimate: estimate.result,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 0,
     singleSided,
     ...estimate.context,
@@ -80,7 +78,6 @@ async function main() {
 
   // return;
 
-  const finalTx = [];
   const res: { landed50: number } = (await fetch(
     "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
@@ -92,45 +89,21 @@ async function main() {
     .toDP(0)
     .toNumber();
 
-  const jitoTipsTx = createJitoTipIx({
+  const jitoTipsIx = createJitoTipIx({
     payer: user.publicKey,
     lamports: jitoTip.toString(),
   });
 
-  if (zapInDlmmTx.setupTransaction) {
-    finalTx.push(zapInDlmmTx.setupTransaction);
-  }
-  for (const swapTx of zapInDlmmTx.swapTransactions) {
-    finalTx.push(swapTx);
-  }
-  finalTx.push(
-    new Transaction().add(
-      ...[
-        zapInDlmmTx.ledgerTransaction,
-        zapInDlmmTx.zapInTransaction,
-        zapInDlmmTx.cleanUpTransaction,
-        jitoTipsTx,
-      ],
-    ),
-  );
-
-  const blockhash = (await connection.getLatestBlockhash()).blockhash;
+  const { blockhash } = await connection.getLatestBlockhash();
+  const finalTx = buildV0Transactions({
+    payer: user.publicKey,
+    blockhash,
+    instructions: [...zapInDlmmTx.instructions, jitoTipsIx],
+    addressLookupTableAccounts: zapInDlmmTx.addressLookupTableAccounts,
+    computeUnitLimit: 1_400_000,
+  });
   for (const tx of finalTx) {
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = user.publicKey;
-
-    const txAccounts = tx.instructions.flatMap(({ keys }) =>
-      keys.map((key) => key),
-    );
-    if (
-      txAccounts.some(
-        ({ isSigner, pubkey }) => isSigner && pubkey.equals(position.publicKey),
-      )
-    ) {
-      tx.partialSign(position);
-    }
-
-    tx.partialSign(user);
+    signV0Transaction(tx, [user, position]);
 
     // const simulate = await connection.simulateTransaction(tx);
     // console.log(simulate.value.logs);

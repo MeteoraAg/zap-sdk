@@ -1,43 +1,37 @@
-import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import {
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+import { StrategyType } from "@meteora-ag/dlmm";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { estimateDlmmDirectSwap, Zap, DlmmSingleSided } from "../src";
 import Decimal from "decimal.js";
 import BN from "bn.js";
-import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
-import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import {
+  buildV0Transactions,
+  createJitoTipIx,
+  loadKeypairFromEnv,
+  sendJitoBundle,
+  signV0Transaction,
+} from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL, RPC_URL } from "./constants";
+import { NATIVE_MINT } from "@solana/spl-token";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
-const SEED_PHRASE = process.env.SEED_PHRASE!;
-
 async function main() {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
-  // const user = getKeypairFromSeed(SEED_PHRASE);
-  const user = Keypair.fromSecretKey(Uint8Array.from([]));
-  // PUMP-SOL (x = PUMP, y = SOL)
+  const connection = new Connection(RPC_URL);
+  const user = loadKeypairFromEnv();
   const dlmmPool = new PublicKey(
-    "HbjYfcWZBjCBYTJpZkLGxqArVmZVu3mQcRudb6Wg1sVh",
+    "AsSyvUnbfaZJPRrNh3kUuvZTeHKoMVWEoHz86f4Q5D9x", // MET-SOL
   );
-  const inputTokenMint = new PublicKey(
-    "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
-  );
-  const amountUseToAddLiquidity = new BN(100 * 10 ** 6); // 100 PUMP
+  const inputTokenMint = NATIVE_MINT;
+  const amountUseToAddLiquidity = new BN(0.1 * 10 ** 9); // 0.1 SOL
 
   const zap = new Zap(connection, {
     jupiterApiUrl: JUPITER_API_URL,
     jupiterApiKey: JUPITER_API_KEY,
   });
-  const dlmm = await DLMM.create(connection, dlmmPool);
   const binDelta = 68;
-  const isInputTokenX = inputTokenMint.equals(dlmm.lbPair.tokenXMint);
   const singleSided = DlmmSingleSided.Y; // SOL
   // @ts-ignore this is intentional
   const isSingleSidedX = singleSided === DlmmSingleSided.X;
@@ -46,6 +40,7 @@ async function main() {
   const favorXInActiveId = isSingleSidedX;
 
   const estimate = await estimateDlmmDirectSwap({
+    user: user.publicKey,
     amountIn: amountUseToAddLiquidity,
     inputTokenMint: inputTokenMint,
     lbPair: dlmmPool,
@@ -54,6 +49,7 @@ async function main() {
     minDeltaId,
     maxDeltaId,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     singleSided,
     config: {
       jupiterApiUrl: JUPITER_API_URL,
@@ -65,7 +61,6 @@ async function main() {
     user: user.publicKey,
     maxActiveBinSlippage: 50,
     favorXInActiveId,
-    maxAccounts: 50,
     maxTransferAmountExtendPercentage: 0,
     directSwapEstimate: estimate.result,
     ...estimate.context,
@@ -77,7 +72,6 @@ async function main() {
     position: position.publicKey,
   });
 
-  const finalTx = [];
   const res: { landed50: number } = (await fetch(
     "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
@@ -89,45 +83,21 @@ async function main() {
     .toDP(0)
     .toNumber();
 
-  const jitoTipsTx = createJitoTipIx({
+  const jitoTipsIx = createJitoTipIx({
     payer: user.publicKey,
     lamports: jitoTip.toString(),
   });
 
-  if (zapInDlmmTx.setupTransaction) {
-    finalTx.push(zapInDlmmTx.setupTransaction);
-  }
-  for (const swapTx of zapInDlmmTx.swapTransactions) {
-    finalTx.push(swapTx);
-  }
-  finalTx.push(
-    new Transaction().add(
-      ...[
-        zapInDlmmTx.ledgerTransaction,
-        zapInDlmmTx.zapInTransaction,
-        zapInDlmmTx.cleanUpTransaction,
-        jitoTipsTx,
-      ],
-    ),
-  );
-
-  const blockhash = (await connection.getLatestBlockhash()).blockhash;
+  const { blockhash } = await connection.getLatestBlockhash();
+  const finalTx = buildV0Transactions({
+    payer: user.publicKey,
+    blockhash,
+    instructions: [...zapInDlmmTx.instructions, jitoTipsIx],
+    addressLookupTableAccounts: zapInDlmmTx.addressLookupTableAccounts,
+    computeUnitLimit: 1_400_000,
+  });
   for (const tx of finalTx) {
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = user.publicKey;
-
-    const txAccounts = tx.instructions.flatMap(({ keys }) =>
-      keys.map((key) => key),
-    );
-    if (
-      txAccounts.some(
-        ({ isSigner, pubkey }) => isSigner && pubkey.equals(position.publicKey),
-      )
-    ) {
-      tx.partialSign(position);
-    }
-
-    tx.partialSign(user);
+    signV0Transaction(tx, [user, position]);
 
     // const simulate = await connection.simulateTransaction(tx);
     // console.log(simulate.value.logs);
