@@ -1,28 +1,29 @@
 import {
   CpAmm,
   derivePositionAddress,
-  derivePositionNftAccount,
   getTokenDecimals,
 } from "@meteora-ag/cp-amm-sdk";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { Zap } from "../src";
 import Decimal from "decimal.js";
 import { getJupAndDammV2Quotes } from "../src/helpers/zapin";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { createJitoTipIx, sendJitoBundle } from "./helpers";
+import {
+  buildV0Transactions,
+  createJitoTipIx,
+  loadKeypairFromEnv,
+  sendJitoBundle,
+  signV0Transaction,
+} from "./helpers";
 import BN from "bn.js";
-import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import { JUPITER_API_KEY, JUPITER_API_URL, RPC_URL } from "./constants";
 
-const MAINNET_RPC_URL = "";
-
-const JITO_PRIVATE_KEY = "";
-
-const keypairPath = "";
+const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 async function main() {
-  const connection = new Connection(MAINNET_RPC_URL);
-  const user = Keypair.fromSecretKey(Uint8Array.from(require(keypairPath)));
+  const connection = new Connection(RPC_URL);
+  const user = loadKeypairFromEnv();
   const dammV2Instance = new CpAmm(connection);
   const pool = new PublicKey("BnztueWcXv93mgW7yJe8WYpnCxpz34nujPhfjQT6SLu1");
   const usdcMint = new PublicKey(
@@ -30,28 +31,16 @@ async function main() {
   );
   const poolState = await dammV2Instance.fetchPoolState(pool);
 
-  // const positionNft = Keypair.generate();
-  // const createPositionTx = await dammV2Instance.createPosition({
-  //   owner: user.publicKey,
-  //   payer: user.publicKey,
-  //   pool,
-  //   positionNft: positionNft.publicKey,
-  // });
-
-  // createPositionTx.feePayer = user.publicKey;
-  // createPositionTx.recentBlockhash = (
-  //   await connection.getLatestBlockhash()
-  // ).blockhash;
-
-  // const sig = await connection.sendTransaction(createPositionTx, [
-  //   user,
-  //   positionNft,
-  // ]);
-  // console.log(sig);
-
-  // return;
-
-  const positionNftMint = new PublicKey("ENTER POSITION NFT MINT");
+  // A new empty position for the zap in. Its create instruction goes in the same bundle as the
+  // zap in, so the position is only created if the zap in lands.
+  const positionNft = Keypair.generate();
+  const positionNftMint = positionNft.publicKey;
+  const createPositionTx = await dammV2Instance.createPosition({
+    owner: user.publicKey,
+    payer: user.publicKey,
+    pool,
+    positionNft: positionNftMint,
+  });
 
   const usdcDecimal = 6; // USDC has 6 decimals
   const amountUseToAddLiquidity = new BN(5 * 10 ** usdcDecimal); // 5 USDC
@@ -75,20 +64,21 @@ async function main() {
     TOKEN_PROGRAM_ID,
   );
 
-  const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes(
+  const { dammV2Quote, jupiterQuote } = await getJupAndDammV2Quotes({
     connection,
-    usdcMint,
+    user: user.publicKey,
+    inputTokenMint: usdcMint,
     poolState,
     tokenADecimal,
     tokenBDecimal,
-    300, //dammV2SlippageBps: 300,
-    300, // jup slippageBps:
-    40, // maxAccounts
-    {
+    dammV2SlippageBps: 300,
+    jupSlippageBps: 300,
+    jupiterQuoteOptions: { maxAccounts: 40 },
+    config: {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
     },
-  );
+  });
 
   const result = await zap.getZapInDammV2DirectPoolParams({
     user: user.publicKey,
@@ -97,7 +87,7 @@ async function main() {
     pool,
     positionNftMint,
     maxSqrtPriceChangeBps: 1000, // maxSqrtPriceChangeBps
-    maxAccounts: 40,
+    jupiterQuoteOptions: { maxAccounts: 40 },
     maxTransferAmountExtendPercentage: 20,
     slippageBps: 300,
     jupiterQuote,
@@ -108,7 +98,6 @@ async function main() {
 
   // return;
 
-  const finalTx = [];
   const res: { landed50: number } = (await fetch(
     "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
@@ -122,35 +111,24 @@ async function main() {
     .toDP(0)
     .toNumber();
 
-  const jitoTipsTx = createJitoTipIx({
+  const jitoTipsIx = createJitoTipIx({
     payer: user.publicKey,
     lamports: jitoTip.toString(),
   });
 
-  if (zapInDammV2Tx.setupTransaction) {
-    finalTx.push(zapInDammV2Tx.setupTransaction);
-  }
-
-  for (const swapTx of zapInDammV2Tx.swapTransactions) {
-    finalTx.push(swapTx);
-  }
-
-  finalTx.push(
-    new Transaction().add(
-      ...[
-        zapInDammV2Tx.ledgerTransaction,
-        zapInDammV2Tx.zapInTransaction,
-        zapInDammV2Tx.cleanUpTransaction,
-        jitoTipsTx,
-      ],
-    ),
-  );
-
-  const blockhash = (await connection.getLatestBlockhash()).blockhash;
+  const { blockhash } = await connection.getLatestBlockhash();
+  const finalTx = buildV0Transactions({
+    payer: user.publicKey,
+    blockhash,
+    instructions: [
+      ...createPositionTx.instructions,
+      ...zapInDammV2Tx.instructions,
+      jitoTipsIx,
+    ],
+    addressLookupTableAccounts: zapInDammV2Tx.addressLookupTableAccounts,
+  });
   for (const tx of finalTx) {
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = user.publicKey;
-    tx.sign(user);
+    signV0Transaction(tx, [user, positionNft]);
 
     // const simulate = await connection.simulateTransaction(tx);
     // console.log(simulate.value.logs);
@@ -163,6 +141,8 @@ async function main() {
   const jitoBundleResult = await sendJitoBundle(finalTx, JITO_PRIVATE_KEY);
   console.log(jitoBundleResult);
   console.log(`Zap bundle sent: ${jitoBundleResult?.result}`);
+  console.log(`Position NFT mint: ${positionNftMint.toBase58()}`);
+  console.log(`Position: ${derivePositionAddress(positionNftMint).toBase58()}`);
 }
 
 main();

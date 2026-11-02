@@ -2,6 +2,7 @@
 
 ## Table of Contents
 
+- [Building Transactions](#building-transactions)
 - [Zap Functions](#zap-functions)
   - [zapOut](#zapOut)
   - [zapOutThroughDammV2](#zapOutThroughDammV2)
@@ -15,6 +16,52 @@
 
 ---
 
+## Building Transactions
+
+Every Zap method that builds on-chain work returns the same shape, and the client builds the transactions itself, in any format (legacy or v0):
+
+```typescript
+type ZapInstructionsResponse = {
+  instructions: TransactionInstruction[];
+  addressLookupTableAccounts: AddressLookupTableAccount[];
+};
+```
+
+The methods are `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `rebalanceDlmmPosition` (which also returns `estimation`), `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2` and `zapOutThroughDlmm`.
+
+`instructions` is in execution order:
+
+- Zap in (DAMM v2 and DLMM): token account setup and SOL wrapping, then the swaps, then the ledger instructions, then the zap-in instruction, then closing the ledger and unwrapping SOL.
+- `rebalanceDlmmPosition`: token account setup, then bin array initialization, then the position rebalance, then the swap, then the ledger instructions, then the zap-in instruction, then closing the ledger and unwrapping SOL.
+- Zap out: token account setup, then the zap-out instruction, then SOL unwrapping.
+
+The instructions must run in that order, but they can be split across several transactions at any point, because the state passed between steps is kept in accounts. Pack them in order and start a new transaction when the next instruction does not fit. When the instructions are split, a later transaction can fail after earlier ones landed (for example, the swap lands but the zap-in fails), so send split transactions as a Jito bundle.
+
+`addressLookupTableAccounts` holds the lookup tables used by the Jupiter swap instructions, each table once, and is empty when no Jupiter swap is involved. Pass it to `compileToV0Message`. With Jupiter API v2 the tables come from the Jupiter response without an RPC call; their `state` fields other than `addresses` are placeholders, so do not rely on `isActive()`. With Jupiter API v1 the SDK fetches the tables with one RPC call.
+
+The returned instructions contain no compute budget instructions, including the ones the DLMM SDK adds to its swaps and rebalances, because the right limit depends on how the instructions are grouped. Set the compute unit limit and price for each transaction yourself, for example by simulating it. The DLMM zap-in instruction of `rebalanceDlmmPosition` was measured at about 462k compute units; without a compute unit limit a transaction gets 200k units per instruction (up to 1.4M), which may not cover it.
+
+#### Example
+
+```typescript
+const { instructions, addressLookupTableAccounts } =
+  await zap.buildZapInDammV2Transaction(params);
+
+const { blockhash } = await connection.getLatestBlockhash();
+const transaction = new VersionedTransaction(
+  new TransactionMessage({
+    payerKey: user.publicKey,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message(addressLookupTableAccounts),
+);
+transaction.sign([user]);
+```
+
+When the instructions do not fit in one transaction, split them in order. `buildV0Transactions` in `examples/helpers.ts` shows one way to do it.
+
+---
+
 ## Zap Functions
 
 ### zapOut
@@ -24,7 +71,7 @@ Executes a generic zap out operation with custom parameters.
 #### Function
 
 ```typescript
-async zapOut(params: ZapOutParams): Promise<Transaction>
+async zapOut(params: ZapOutParams): Promise<ZapInstructionsResponse>
 ```
 
 #### Parameters
@@ -42,7 +89,7 @@ interface ZapOutParams {
 
 #### Returns
 
-A transaction that can be signed and sent to the network.
+A `ZapInstructionsResponse`: the pre-instructions, the zap out instruction and the post-instructions in order, and an empty `addressLookupTableAccounts`. See [Building Transactions](#building-transactions).
 
 #### Example
 
@@ -92,7 +139,7 @@ Executes a zap out operation through Jupiter Aggregator v6.
 #### Function
 
 ```typescript
-async zapOutThroughJupiter(params: ZapOutThroughJupiterParams): Promise<Transaction>
+async zapOutThroughJupiter(params: ZapOutThroughJupiterParams): Promise<ZapInstructionsResponse>
 ```
 
 #### Parameters
@@ -104,7 +151,9 @@ interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
-  jupiterSwapResponse: JupiterSwapInstructionResponse;
+  jupiterSwapResponse: Pick<JupiterSwapInstructions, "swapInstruction"> &
+    Partial<Pick<JupiterSwapInstructions, "setupInstructions">> &
+    JupiterAddressLookupTableFields; // v2 build response or v1 swap-instructions response (deprecated)
   maxSwapAmount: BN;
   percentageToZapOut: number;
 }
@@ -112,25 +161,29 @@ interface ZapOutThroughJupiterParams {
 
 #### Returns
 
-A transaction that can be signed and sent to the network.
+A `ZapInstructionsResponse`: the ordered instructions and the lookup tables of the Jupiter swap. The tables come from `addressesByLookupTableAddress` (v2) or are fetched from `addressLookupTableAddresses` (v1) when the response carries them. See [Building Transactions](#building-transactions).
+
+The instructions create the user's input and output token accounts. When `jupiterSwapResponse` carries `setupInstructions`, they also create the other token accounts Jupiter asks for, such as one for an intermediate token of a multi-hop route. Each token account is created once. Pass the whole Jupiter response so these are included.
 
 #### Example
 
 ```typescript
 const quoteResponse = await getJupiterQuote(
-  inputMint,
-  outputMint,
-  swapAmount,
-  40,
-  50,
-  false,
-  true,
-  true,
+  {
+    inputMint,
+    outputMint,
+    amount: swapAmount,
+    user: wallet.publicKey,
+    queryParams: { maxAccounts: 40, slippageBps: 50 },
+  },
   {
     jupiterApiUrl: "https://api.jup.ag",
     jupiterApiKey: "YOUR_JUPITER_API_KEY",
   },
 );
+if (!quoteResponse) {
+  throw new Error("Failed to get Jupiter quote");
+}
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
@@ -162,8 +215,8 @@ const zapOutTx = await zap.zapOutThroughJupiter({
   - Get quote response from Jupiter API
   - Get swap instruction from Jupiter API using quote response
   - Get token programs for input and output mints
-  - Build zap transaction using the swap instruction
-  - Send zap transaction
+  - Build the zap out instructions using the swap instruction
+  - Build and send a v0 transaction with the returned lookup tables
 
 ---
 
@@ -174,7 +227,7 @@ Executes a zap out operation through DAMM v2 pool.
 #### Function
 
 ```typescript
-async zapOutThroughDammV2(params: ZapOutThroughDammV2Params): Promise<Transaction>
+async zapOutThroughDammV2(params: ZapOutThroughDammV2Params): Promise<ZapInstructionsResponse>
 ```
 
 #### Parameters
@@ -196,7 +249,7 @@ interface ZapOutThroughDammV2Params {
 
 #### Returns
 
-A transaction that can be signed and sent to the network.
+A `ZapInstructionsResponse`: the ordered instructions and an empty `addressLookupTableAccounts`. See [Building Transactions](#building-transactions).
 
 #### Example
 
@@ -223,8 +276,8 @@ const zapOutTx = await zap.zapOutThroughDlmm({
 - This function is used to zap out through DAMM v2 pool.
 - The flow is as such:
   - Get token programs for input mint
-  - Build zap transaction
-  - Send zap transaction
+  - Build the zap out instructions
+  - Build and send a transaction from them
 
 ---
 
@@ -235,7 +288,7 @@ Executes a zap out operation through DLMM.
 #### Function
 
 ```typescript
-async zapOutThroughDlmm(params: ZapOutThroughDlmmParams): Promise<Transaction>
+async zapOutThroughDlmm(params: ZapOutThroughDlmmParams): Promise<ZapInstructionsResponse>
 ```
 
 #### Parameters
@@ -257,7 +310,7 @@ interface ZapOutThroughDlmmParams {
 
 #### Returns
 
-A transaction that can be signed and sent to the network.
+A `ZapInstructionsResponse`: the ordered instructions and an empty `addressLookupTableAccounts`. See [Building Transactions](#building-transactions).
 
 #### Example
 
@@ -284,8 +337,8 @@ const zapOutTx = await zap.zapOutThroughDlmm({
 - This function is used to zap out through DLMM.
 - The flow is as such:
   - Get token programs for input mint
-  - Build zap transaction
-  - Send zap transaction
+  - Build the zap out instructions
+  - Build and send a transaction from them
 
 ---
 
@@ -337,14 +390,7 @@ Get Jupiter quote from Jupiter API.
 
 ```typescript
 async getJupiterQuote(
-  inputMint: PublicKey,
-  outputMint: PublicKey,
-  amount: BN,
-  maxAccounts: number,
-  slippageBps: number,
-  dynamicSlippage: boolean = false,
-  onlyDirectRoutes: boolean,
-  restrictIntermediateTokens: boolean,
+  params: GetJupiterQuoteParams,
   config: ZapConfig = {}
 ): Promise<JupiterQuoteResponse | null>
 ```
@@ -352,40 +398,39 @@ async getJupiterQuote(
 #### Parameters
 
 ```typescript
-interface GetJupiterQuoteParams {
+type GetJupiterQuoteParams = {
   inputMint: PublicKey;
   outputMint: PublicKey;
   amount: BN;
-  maxAccounts: number;
-  slippageBps: number;
-  dynamicSlippage: boolean;
-  onlyDirectRoutes: boolean;
-  restrictIntermediateTokens: boolean;
-  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
-}
+  user: PublicKey; // Wallet the swap is built for. Sent as `taker` under v2, unused under v1.
+  queryParams?: Record<string, string | number | boolean>; // Any other Jupiter query parameter, such as slippageBps or maxAccounts
+};
 
-interface ZapConfig {
+type ZapConfig = {
   jupiterApiUrl?: string; // Default: "https://api.jup.ag"
   jupiterApiKey?: string; // Default: ""
-}
+  jupiterApiVersion?: JupiterApiVersion; // Default: JupiterApiVersion.V2
+};
 ```
 
 #### Returns
 
-A Jupiter quote response.
+A Jupiter quote response, or `null` when the request fails.
+
+- v2 (default): the `GET /swap/v2/build` response (`JupiterBuildResponse`), which contains the quote fields and the swap instructions built for `user`.
+- v1: the `GET /swap/v1/quote` response. (deprecated)
 
 #### Example
 
 ```typescript
 const quoteResponse = await getJupiterQuote(
-  new PublicKey("So11111111111111111111111111111111111111112"),
-  new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  new BN(1000000000),
-  40,
-  50,
-  false,
-  true,
-  true,
+  {
+    inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
+    outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    amount: new BN(1000000000),
+    user: wallet.publicKey,
+    queryParams: { maxAccounts: 40, slippageBps: 50 },
+  },
   {
     jupiterApiUrl: "https://api.jup.ag",
     jupiterApiKey: "YOUR_JUPITER_API_KEY",
@@ -396,25 +441,26 @@ const quoteResponse = await getJupiterQuote(
 #### Notes
 
 - This function is used to get Jupiter quote from Jupiter API.
-- Any issues with the api you can check out [Jupiter's Quote API Documentation](https://dev.jup.ag/docs/swap-api/get-quote)
-- `onlyDirectRoutes=true` and a low `maxAccounts` (examples use `40` or `50`) restrict Jupiter to single-hop / account-capped routes. That is **not** the same as a Jupiter UI quote.
+- Any issues with the api you can check out [Jupiter's Build API Documentation](https://developers.jup.ag/docs/swap/build)
+- `queryParams` is forwarded to Jupiter as-is, and nothing else is sent, so Jupiter uses its own default for every parameter not given. Check Jupiter's docs for the parameters each API version accepts. `queryParams` cannot override `inputMint`, `outputMint`, `amount` or `taker`.
+- With a low `maxAccounts` (examples use `40` or `50`), the route is **not** the same as a Jupiter UI quote.
 - `slippageBps` only covers move within the quoted route. It does **not** mean `outAmount` is a fair market vs input. Validate output / impact / simulated balances before signing. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).
-- Direct zap-in estimators currently call this helper with `onlyDirectRoutes=true` and `maxAccounts=50`.
+- The zap-in helpers call this helper with their slippage argument as `slippageBps`, plus the Jupiter query parameters in `jupiterQuoteOptions`, which can override it. When `jupiterQuoteOptions` is omitted, they send only `slippageBps`.
 
 ---
 
 ### getJupiterSwapInstruction
 
-Get Jupiter swap instruction from Jupiter API.
+Get Jupiter swap instruction for a quote.
 
 #### Function
 
 ```typescript
 async getJupiterSwapInstruction(
   userPublicKey: PublicKey,
-  quoteResponse: any,
+  quoteResponse: JupiterQuoteResponse,
   config: ZapConfig = {}
-): Promise<JupiterSwapInstructionResponse>
+): Promise<JupiterSwapInstructions>
 ```
 
 #### Parameters
@@ -422,37 +468,37 @@ async getJupiterSwapInstruction(
 ```typescript
 interface GetJupiterSwapInstructionParams {
   userPublicKey: PublicKey;
-  quoteResponse: any;
-  config?: ZapConfig; // Optional config object containing jupiterApiUrl and jupiterApiKey
-}
-
-interface ZapConfig {
-  jupiterApiUrl?: string; // Default: "https://api.jup.ag"
-  jupiterApiKey?: string; // Default: ""
+  quoteResponse: JupiterQuoteResponse; // From getJupiterQuote
+  config?: ZapConfig; // Optional config object containing jupiterApiUrl, jupiterApiKey and jupiterApiVersion
 }
 ```
 
 #### Returns
 
-A Jupiter swap instruction response.
+The swap instructions (`swapInstruction`, `setupInstructions`, `cleanupInstruction`, `addressesByLookupTableAddress`, ...).
+
+- v2 (default): `quoteResponse` must come from `getJupiterQuote` under v2 for the same `userPublicKey`, and it is returned as is without another request, so the executed swap is the quoted one. Otherwise it throws.
+- v1: `POST /swap/v1/swap-instructions`.
 
 #### Example
 
 ```typescript
 const quoteResponse = await getJupiterQuote(
-  new PublicKey("So11111111111111111111111111111111111111112"),
-  new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  new BN(1000000000),
-  40,
-  50,
-  false,
-  true,
-  true,
+  {
+    inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
+    outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    amount: new BN(1000000000),
+    user: wallet.publicKey,
+    queryParams: { maxAccounts: 40, slippageBps: 50 },
+  },
   {
     jupiterApiUrl: "https://api.jup.ag",
     jupiterApiKey: "YOUR_JUPITER_API_KEY",
   },
 );
+if (!quoteResponse) {
+  throw new Error("Failed to get Jupiter quote");
+}
 
 const swapInstructionResponse = await getJupiterSwapInstruction(
   wallet.publicKey,
@@ -467,4 +513,4 @@ const swapInstructionResponse = await getJupiterSwapInstruction(
 #### Notes
 
 - This function is used to get Jupiter swap instruction from Jupiter API.
-- Any issues with the api you can check out [Jupiter's Swap Instruction API Documentation](https://dev.jup.ag/docs/swap-api/build-swap-transaction#build-your-own-transaction-with-instructions)
+- Any issues with the api you can check out [Jupiter's Build API Documentation](https://developers.jup.ag/docs/swap/build)

@@ -1,66 +1,65 @@
 import DLMM, { StrategyType } from "@meteora-ag/dlmm";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import {
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
+import BN from "bn.js";
 import { estimateDlmmRebalanceSwap, Zap } from "../src";
 import Decimal from "decimal.js";
-import BN from "bn.js";
-import { createJitoTipIx, getKeypairFromSeed, sendJitoBundle } from "./helpers";
-import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import {
+  buildV0Transactions,
+  createJitoTipIx,
+  loadKeypairFromEnv,
+  sendJitoBundle,
+  signV0Transaction,
+} from "./helpers";
+import { JUPITER_API_KEY, JUPITER_API_URL, RPC_URL } from "./constants";
 
 const JITO_PRIVATE_KEY = process.env.JITO_PRIVATE_KEY!;
 
 const SWAP_SLIPPAGE_BPS = 1.5 * 100;
 
-const keypairPath = "";
-
 async function main() {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
-  // const user = getKeypairFromSeed(process.env.SEED_PHRASE!);
-  const user = Keypair.fromSecretKey(Uint8Array.from([]));
-  // ZEC-USDC
+  // The rebalance reads the position right after it is created, so reads must not wait for finalization.
+  const connection = new Connection(RPC_URL, "confirmed");
+  const user = loadKeypairFromEnv();
+  // MET-SOL (x = MET, y = SOL)
   const dlmmPool = new PublicKey(
-    "9ToMYnmEeYKc1AWYAFo8yjPKM1bt3vPhgw1U6qh9RxBd",
-  );
-  const usdcMint = new PublicKey(
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "AsSyvUnbfaZJPRrNh3kUuvZTeHKoMVWEoHz86f4Q5D9x",
   );
   const binDelta = 34;
 
+  // Create a SOL-only position in the active bin and the bins below it. The DLMM SDK wraps the SOL.
+  // Unlike the DAMM v2 zap in, this cannot share a bundle with the rebalance, because the rebalance
+  // reads the position's token amounts from the chain when it is built.
   const dlmm = await DLMM.create(connection, dlmmPool);
+  const activeBin = await dlmm.getActiveBin();
+  const amountToAddLiquidity = new BN(0.1 * LAMPORTS_PER_SOL); // 0.1 SOL
+  const position = Keypair.generate();
+  const createPositionTx =
+    await dlmm.initializePositionAndAddLiquidityByStrategy({
+      positionPubKey: position.publicKey,
+      user: user.publicKey,
+      totalXAmount: new BN(0),
+      totalYAmount: amountToAddLiquidity,
+      strategy: {
+        minBinId: activeBin.binId - binDelta,
+        maxBinId: activeBin.binId,
+        strategyType: StrategyType.Spot,
+      },
+    });
+  const createPositionSignature = await sendAndConfirmTransaction(
+    connection,
+    createPositionTx,
+    [user, position],
+    { commitment: "confirmed" },
+  );
+  console.log(`Position created: ${createPositionSignature}`);
 
-  // const activeBin = await dlmm.getActiveBin();
-  // const minBinId = activeBin.binId - binDelta;
-  // const maxBinId = activeBin.binId + binDelta;
-  // const isTokenX = usdcMint.equals(dlmm.lbPair.tokenXMint);
-  // const amountToAddLiquidity = new BN(5).mul(new BN(10 ** 6)); // 5 USDC
-  // const newPosition = Keypair.generate();
-  // const createPositionTx =
-  //   await dlmm.initializePositionAndAddLiquidityByStrategy({
-  //     positionPubKey: newPosition.publicKey,
-  //     user: user.publicKey,
-  //     totalXAmount: isTokenX ? amountToAddLiquidity : new BN(0),
-  //     totalYAmount: isTokenX ? new BN(0) : amountToAddLiquidity,
-  //     strategy: {
-  //       maxBinId,
-  //       minBinId,
-  //       strategyType: StrategyType.Spot,
-  //     },
-  //   });
-
-  // createPositionTx.feePayer = user.publicKey;
-  // createPositionTx.recentBlockhash = (
-  //   await connection.getLatestBlockhash()
-  // ).blockhash;
-
-  // const sig = await connection.sendTransaction(createPositionTx, [
-  //   user,
-  //   newPosition,
-  // ]);
-  // console.log(sig);
-  // console.log(`Position created: ${newPosition.publicKey.toString()}`);
-  // return;
-
-  const positionAddress = new PublicKey("YOUR POSITION ADDRESS");
+  const positionAddress = position.publicKey;
 
   const zap = new Zap(connection, {
     jupiterApiUrl: JUPITER_API_URL,
@@ -68,6 +67,7 @@ async function main() {
   });
 
   const estimate = await estimateDlmmRebalanceSwap({
+    user: user.publicKey,
     lbPair: dlmmPool,
     position: positionAddress,
     connection,
@@ -75,6 +75,7 @@ async function main() {
     minDeltaId: -binDelta,
     maxDeltaId: binDelta,
     strategy: StrategyType.Spot,
+    jupiterQuoteOptions: { maxAccounts: 50 },
     config: {
       jupiterApiUrl: JUPITER_API_URL,
       jupiterApiKey: JUPITER_API_KEY,
@@ -91,7 +92,6 @@ async function main() {
 
   // return;
 
-  const finalTx = [];
   const res: { landed50: number } = (await fetch(
     "https://worker.jup.ag/jito-floor",
   ).then((res) => res.json())) as { landed50: number };
@@ -105,46 +105,21 @@ async function main() {
     .toDP(0)
     .toNumber();
 
-  const jitoTipsTx = createJitoTipIx({
+  const jitoTipsIx = createJitoTipIx({
     payer: user.publicKey,
     lamports: jitoTip.toString(),
   });
 
-  if (result.setupTransaction) {
-    finalTx.push(result.setupTransaction);
-  }
-
-  if (result.initBinArrayTransaction) {
-    finalTx.push(result.initBinArrayTransaction);
-  }
-
-  if (result.rebalancePositionTransaction) {
-    finalTx.push(result.rebalancePositionTransaction);
-  }
-
-  if (result.swapTransaction) {
-    finalTx.push(result.swapTransaction);
-  }
-  finalTx.push(
-    new Transaction().add(
-      ...[
-        result.ledgerTransaction,
-        result.zapInTransaction,
-        result.cleanUpTransaction,
-        jitoTipsTx,
-      ],
-    ),
-  );
-
-  const blockhash = (await connection.getLatestBlockhash()).blockhash;
+  const { blockhash } = await connection.getLatestBlockhash();
+  const finalTx = buildV0Transactions({
+    payer: user.publicKey,
+    blockhash,
+    instructions: [...result.instructions, jitoTipsIx],
+    addressLookupTableAccounts: result.addressLookupTableAccounts,
+    computeUnitLimit: 1_400_000,
+  });
   for (const tx of finalTx) {
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = user.publicKey;
-    tx.sign(user);
-
-    // const simulate = await connection.simulateTransaction(tx);
-    // console.log(simulate.value.logs);
-    // console.log(simulate.value.err);
+    signV0Transaction(tx, [user]);
   }
 
   // return;
@@ -153,6 +128,7 @@ async function main() {
   const jitoBundleResult = await sendJitoBundle(finalTx, JITO_PRIVATE_KEY);
   console.log(jitoBundleResult);
   console.log(`Zap bundle sent: ${jitoBundleResult?.result}`);
+  console.log(`Position: ${positionAddress.toBase58()}`);
 }
 
 main();

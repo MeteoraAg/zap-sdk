@@ -1,25 +1,32 @@
-import { Program, IdlTypes } from "@coral-xyz/anchor";
+import { Program, IdlTypes } from "@anchor-lang/core";
 import {
   AccountMeta,
+  AddressLookupTableAccount,
   Connection,
   PublicKey,
-  Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
-import {
-  SwapQuote,
-  StrategyType,
-  RemainingAccountInfo,
-} from "@meteora-ag/dlmm";
+import { SwapQuote, StrategyType } from "@meteora-ag/dlmm";
+import { PoolState } from "@meteora-ag/cp-amm-sdk";
 
 export type ZapProgram = Program<Zap>;
+
+/** Jupiter Swap API version used for quotes and swap instructions. */
+export enum JupiterApiVersion {
+  /** @deprecated `GET /swap/v1/quote` + `POST /swap/v1/swap-instructions`. Use V2; v1 will be removed in a future major version. */
+  V1 = "v1",
+  /** `GET /swap/v2/build` (default) */
+  V2 = "v2",
+}
 
 export type ZapConfig = {
   jupiterApiUrl?: string;
   jupiterApiKey?: string;
+  /** Defaults to `JupiterApiVersion.V2`. */
+  jupiterApiVersion?: JupiterApiVersion;
 };
 
 ///// ZAPOUT TYPES /////
@@ -66,11 +73,53 @@ export interface ZapOutThroughJupiterParams {
   outputMint: PublicKey;
   inputTokenProgram: PublicKey;
   outputTokenProgram: PublicKey;
-  jupiterSwapResponse: JupiterSwapInstructionResponse;
+  /** Its `setupInstructions`, when present, add the token accounts the swap needs that the zap does not create. */
+  jupiterSwapResponse: Pick<JupiterSwapInstructionResponse, "swapInstruction"> &
+    Partial<Pick<JupiterSwapInstructions, "setupInstructions">> &
+    JupiterAddressLookupTableFields;
   maxSwapAmount: BN;
   percentageToZapOut: number;
 }
 
+/** Jupiter query parameter values. The SDK converts each value to a string. */
+export type JupiterQueryParams = Record<string, string | number | boolean>;
+
+export type GetJupiterQuoteParams = {
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  amount: BN;
+  /** Wallet the swap is built for. Sent as `taker` under v2, unused under v1. */
+  user: PublicKey;
+  /**
+   * Any other Jupiter query parameter, such as `slippageBps` or `maxAccounts`. The SDK forwards them
+   * to Jupiter as-is and sends nothing else, so Jupiter uses its own default for every parameter not
+   * given here. `inputMint`, `outputMint`, `amount` and, under v2, `taker` always come from the fields
+   * above, even when they are also given here.
+   * Jupiter's API docs are the source of truth for the accepted parameters:
+   * - v1 `GET /swap/v1/quote`: https://developers.jup.ag/docs/api-reference/swap/v1/quote
+   * - v2 `GET /swap/v2/build`: https://developers.jup.ag/docs/api-reference/swap/build
+   */
+  queryParams?: JupiterQueryParams;
+};
+
+export type GetJupAndDammV2QuotesParams = {
+  connection: Connection;
+  user: PublicKey;
+  inputTokenMint: PublicKey;
+  poolState: PoolState;
+  tokenADecimal: number;
+  tokenBDecimal: number;
+  dammV2SlippageBps: number;
+  jupSlippageBps: number;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
+  config?: ZapConfig;
+};
+
+/** Quote fields shared by v1 `/quote` and v2 `/build` responses. */
 export interface JupiterQuoteResponse {
   inputMint: string;
   inAmount: string;
@@ -79,19 +128,28 @@ export interface JupiterQuoteResponse {
   otherAmountThreshold: string;
   swapMode: string;
   slippageBps: number;
-  platformFee: any;
   priceImpactPct: string;
   routePlan: JupiterRoutePlan[];
-  contextSlot: number;
-  timeTaken: number;
-  swapUsdValue: string;
-  simplerRouteUsed: boolean;
-  mostReliableAmmsQuoteReport: {
+  /** @deprecated v1 only */
+  platformFee?: any;
+  /** @deprecated v1 only */
+  contextSlot?: number;
+  /** @deprecated v1 only */
+  timeTaken?: number;
+  /** @deprecated v1 only */
+  swapUsdValue?: string;
+  /** @deprecated v1 only */
+  simplerRouteUsed?: boolean;
+  /** @deprecated v1 only */
+  mostReliableAmmsQuoteReport?: {
     info: Record<string, string>;
   };
-  useIncurredSlippageForQuoting: any;
-  otherRoutePlans: any;
-  aggregatorVersion: any;
+  /** @deprecated v1 only */
+  useIncurredSlippageForQuoting?: any;
+  /** @deprecated v1 only */
+  otherRoutePlans?: any;
+  /** @deprecated v1 only */
+  aggregatorVersion?: any;
 }
 
 export interface JupiterRoutePlan {
@@ -106,6 +164,45 @@ export interface JupiterInstruction {
   data: string;
 }
 
+export interface JupiterInstructionLayout {
+  /** Byte offset of amount_in (u64 LE) inside the instruction data */
+  amountInOffset: (dataLength: number) => number;
+  /** Index of the user transfer authority in the instruction accounts */
+  userTransferAuthorityIndex: number;
+}
+
+export interface JupiterBlockhashWithMetadata {
+  blockhash: number[];
+  lastValidBlockHeight: number;
+  fetchedAt: {
+    secs_since_epoch: number;
+    nanos_since_epoch: number;
+  };
+}
+
+/** Instruction fields shared by v1 `/swap-instructions` and v2 `/build` responses. */
+export interface JupiterSwapInstructions {
+  computeBudgetInstructions: JupiterInstruction[];
+  setupInstructions: JupiterInstruction[];
+  swapInstruction: JupiterInstruction;
+  cleanupInstruction: JupiterInstruction | null;
+  otherInstructions: JupiterInstruction[];
+  tipInstruction?: JupiterInstruction | null;
+  addressesByLookupTableAddress: Record<string, string[]> | null;
+  blockhashWithMetadata: JupiterBlockhashWithMetadata;
+}
+
+/** Lookup table fields of a Jupiter swap instructions response: v2 returns the map, v1 returns only the table addresses. */
+export type JupiterAddressLookupTableFields = {
+  addressesByLookupTableAddress?: Record<string, string[]> | null;
+  addressLookupTableAddresses?: string[];
+};
+
+/** Response of v2 `GET /swap/v2/build`: quote and instructions in one object. */
+export type JupiterBuildResponse = JupiterQuoteResponse &
+  JupiterSwapInstructions;
+
+/** @deprecated v1 `POST /swap/v1/swap-instructions` response. Use `JupiterBuildResponse` / `JupiterSwapInstructions`. */
 export interface JupiterSwapInstructionResponse {
   tokenLedgerInstruction: JupiterInstruction | null;
   computeBudgetInstructions: JupiterInstruction[];
@@ -148,7 +245,6 @@ export type GetZapInDammV2DirectPoolParams = {
   positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
-  maxAccounts: number;
   slippageBps: number;
   dammV2Quote: {
     swapInAmount: BN;
@@ -159,6 +255,11 @@ export type GetZapInDammV2DirectPoolParams = {
     priceImpact: Decimal;
   } | null;
   jupiterQuote: JupiterQuoteResponse | null;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
 };
 
 export type GetZapInDammV2IndirectPoolParams = {
@@ -169,10 +270,14 @@ export type GetZapInDammV2IndirectPoolParams = {
   positionNftMint: PublicKey;
   maxSqrtPriceChangeBps: number;
   maxTransferAmountExtendPercentage: number;
-  maxAccounts: number;
   slippageBps: number;
   jupiterQuoteToA: JupiterQuoteResponse | null;
   jupiterQuoteToB: JupiterQuoteResponse | null;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
 };
 
 export enum ZapInDammV2PoolSwapRoute {
@@ -197,7 +302,8 @@ export type ZapInDammV2DirectPoolParam = {
   maxSqrtPriceChangeBps: number;
   amount: BN;
   preInstructions: TransactionInstruction[];
-  swapTransactions: Transaction[];
+  swapInstructions: TransactionInstruction[];
+  addressLookupTableAccounts: AddressLookupTableAccount[];
   cleanUpInstructions: TransactionInstruction[];
   isTokenA?: boolean;
   swapInEstimate: {
@@ -227,12 +333,14 @@ export type ZapInDammV2IndirectPoolParam = Omit<
   };
 };
 
-export type ZapInDammV2Response = {
-  setupTransaction?: Transaction;
-  swapTransactions: Transaction[];
-  ledgerTransaction: Transaction;
-  zapInTransaction: Transaction;
-  cleanUpTransaction: Transaction;
+/**
+ * Output of every Zap method that builds on-chain work. `instructions` must run in order but may be
+ * split across transactions; `addressLookupTableAccounts` lets the client compile v0 transactions.
+ */
+export type ZapInstructionsResponse = {
+  instructions: TransactionInstruction[];
+  /** Lookup tables used by the instructions, each table once. Empty when no Jupiter swap is involved. */
+  addressLookupTableAccounts: AddressLookupTableAccount[];
 };
 
 export enum DlmmDirectSwapQuoteRoute {
@@ -266,6 +374,8 @@ export enum DlmmSingleSided {
 }
 
 export interface EstimateDlmmDirectSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
   amountIn: BN;
   inputTokenMint: PublicKey;
   lbPair: PublicKey;
@@ -275,6 +385,11 @@ export interface EstimateDlmmDirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -304,6 +419,8 @@ export interface DlmmDirectSwapEstimate {
 }
 
 export interface EstimateDlmmRebalanceSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
   position: PublicKey;
   lbPair: PublicKey;
   connection: Connection;
@@ -311,6 +428,11 @@ export interface EstimateDlmmRebalanceSwapParams {
   maxDeltaId: number;
   swapSlippageBps: number;
   strategy: StrategyType;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -330,6 +452,8 @@ export interface DlmmDirectRebalanceEstimate {
 }
 
 export interface EstimateDlmmIndirectSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
   amountIn: BN;
   inputTokenMint: PublicKey;
   lbPair: PublicKey;
@@ -339,6 +463,11 @@ export interface EstimateDlmmIndirectSwapParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -378,17 +507,9 @@ export interface RebalanceDlmmPositionParams {
   strategy: StrategyType;
   favorXInActiveId: boolean;
   directSwapEstimate: DlmmDirectEstimateResult;
-  maxAccounts?: number;
 }
 
-export interface RebalanceDlmmPositionResponse {
-  setupTransaction?: Transaction;
-  initBinArrayTransaction?: Transaction;
-  rebalancePositionTransaction?: Transaction;
-  swapTransaction?: Transaction;
-  ledgerTransaction: Transaction;
-  zapInTransaction: Transaction;
-  cleanUpTransaction: Transaction;
+export interface RebalanceDlmmPositionResponse extends ZapInstructionsResponse {
   estimation: {
     currentBalances: {
       tokenX: BN;
@@ -411,7 +532,6 @@ export interface GetZapInDlmmIndirectParams {
   maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  maxAccounts: number;
   swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
   indirectSwapEstimate: DlmmIndirectSwapEstimateResult;
@@ -428,7 +548,6 @@ export interface GetZapInDlmmDirectParams {
   maxDeltaId: number;
   strategy: StrategyType;
   favorXInActiveId: boolean;
-  maxAccounts: number;
   swapSlippageBps: number;
   maxTransferAmountExtendPercentage: number;
   directSwapEstimate: DlmmDirectEstimateResult;
@@ -451,7 +570,8 @@ export type ZapInDlmmIndirectPoolParam = {
   maxTransferAmountX: BN;
   maxTransferAmountY: BN;
   preInstructions: TransactionInstruction[];
-  swapTransactions: Transaction[];
+  swapInstructions: TransactionInstruction[];
+  addressLookupTableAccounts: AddressLookupTableAccount[];
   cleanUpInstructions: TransactionInstruction[];
   binArrays: AccountMeta[];
   binArrayBitmapExtension: PublicKey | null;
@@ -475,21 +595,14 @@ export type ZapInDlmmDirectPoolParam = {
   amount: BN;
   maxTransferAmount: BN;
   preInstructions: TransactionInstruction[];
-  swapTransactions: Transaction[];
+  swapInstructions: TransactionInstruction[];
+  addressLookupTableAccounts: AddressLookupTableAccount[];
   cleanUpInstructions: TransactionInstruction[];
   binArrays: AccountMeta[];
   binArrayBitmapExtension: PublicKey | null;
   isDirectRoute: boolean;
   isTokenX: boolean;
   singleSided?: DlmmSingleSided;
-};
-
-export type ZapInDlmmResponse = {
-  setupTransaction?: Transaction;
-  swapTransactions: Transaction[];
-  ledgerTransaction: Transaction;
-  zapInTransaction: Transaction;
-  cleanUpTransaction: Transaction;
 };
 
 //#endregion Zap In Types

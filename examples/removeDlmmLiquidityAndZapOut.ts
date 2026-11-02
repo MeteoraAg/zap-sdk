@@ -1,9 +1,9 @@
 import {
   Connection,
   PublicKey,
-  Keypair,
   Transaction,
-  sendAndConfirmTransaction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
@@ -11,12 +11,13 @@ import { getJupiterQuote, getJupiterSwapInstruction } from "../src/helpers";
 import DLMM, { getTokenProgramId } from "@meteora-ag/dlmm";
 import { DLMM_PROGRAM_ID } from "../src";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import { JUPITER_API_KEY, JUPITER_API_URL, RPC_URL } from "./constants";
+import { loadKeypairFromEnv, signV0Transaction } from "./helpers";
 
 async function main() {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
+  const connection = new Connection(RPC_URL);
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
+  const wallet = loadKeypairFromEnv();
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
   const inputMint = new PublicKey(
@@ -27,7 +28,7 @@ async function main() {
   );
 
   const lbPairAddress = new PublicKey(
-    "9NRifL3nKQU84hMTbhE7spakkGy5vq4AvNHNQYr8LkW7",
+    "FXtA1E2VCBZvbRLHnUeYPW7TZuNF8AqyN11PGsjhG26i",
   );
 
   const zap = new Zap(connection, {
@@ -40,9 +41,6 @@ async function main() {
   });
 
   try {
-    const currentSlot = await connection.getSlot();
-    const currentTime = await connection.getBlockTime(currentSlot);
-
     const { userPositions } = await dlmm.getPositionsByUserAndLbPair(
       wallet.publicKey,
     );
@@ -120,15 +118,13 @@ async function main() {
           dlmm.swapQuote(amountXRemoved, true, new BN(50), binArrays),
         ),
       getJupiterQuote(
-        inputMint,
-        outputMint,
-        amountXRemoved,
-        50,
-        20,
-        false,
-        true,
-        true,
-        true,
+        {
+          inputMint: inputMint,
+          outputMint: outputMint,
+          amount: amountXRemoved,
+          user: wallet.publicKey,
+          queryParams: { maxAccounts: 50, slippageBps: 20 },
+        },
         {
           jupiterApiUrl: JUPITER_API_URL,
           jupiterApiKey: JUPITER_API_KEY,
@@ -225,22 +221,26 @@ async function main() {
       throw new Error(`Invalid protocol selected: ${bestProtocol}`);
     }
 
-    transaction.add(zapOutTx);
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
 
-    const { blockhash } = await connection.getLatestBlockhash();
+    const versionedTransaction = new VersionedTransaction(
+      new TransactionMessage({
+        payerKey: wallet.publicKey,
+        recentBlockhash: blockhash,
+        instructions: [...transaction.instructions, ...zapOutTx.instructions],
+      }).compileToV0Message(zapOutTx.addressLookupTableAccounts),
+    );
+    signV0Transaction(versionedTransaction, [wallet]);
 
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = wallet.publicKey;
-
-    const simulate = await connection.simulateTransaction(transaction);
+    const simulate = await connection.simulateTransaction(versionedTransaction);
     console.log(simulate.value.logs);
 
     console.log("Sending zap transaction...");
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      transaction,
-      [wallet],
-      { commitment: "confirmed" },
+    const signature = await connection.sendTransaction(versionedTransaction);
+    await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed",
     );
 
     console.log(`Zap transaction sent: ${signature}`);

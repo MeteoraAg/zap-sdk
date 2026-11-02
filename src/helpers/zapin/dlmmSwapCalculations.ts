@@ -17,6 +17,7 @@ import {
   DlmmDirectRebalanceEstimate,
   DlmmDirectSwapEstimate,
   DlmmDirectEstimateResult,
+  JupiterQueryParams,
   ZapConfig,
 } from "../../types";
 import { PublicKey } from "@solana/web3.js";
@@ -39,6 +40,7 @@ interface BinAmountDistribution {
 }
 
 interface EstimateDlmmDirectSwapCoreParams {
+  user: PublicKey;
   tokenXAmount: BN;
   tokenYAmount: BN;
   dlmm: DLMM;
@@ -47,6 +49,7 @@ interface EstimateDlmmDirectSwapCoreParams {
   maxDeltaId: number;
   strategy: StrategyType;
   singleSided?: DlmmSingleSided;
+  jupiterQuoteOptions?: JupiterQueryParams;
   config?: ZapConfig;
 }
 
@@ -131,13 +134,15 @@ function estimateSwapOutput(inAmount: BN, effectiveRate: Decimal): BN {
 
 async function getBestSwapQuoteJupiterDlmm(
   dlmm: DLMM,
+  user: PublicKey,
   inMint: PublicKey,
   outMint: PublicKey,
   inAmount: BN,
   swapSlippageBps: number,
   swapForY: boolean,
   binArrays: BinArrayAccount[],
-  config: ZapConfig = {},
+  config?: ZapConfig,
+  jupiterQuoteOptions?: JupiterQueryParams,
 ): Promise<SwapQuoteResult | null> {
   let dlmmQuoteResult = null;
   try {
@@ -151,18 +156,19 @@ async function getBestSwapQuoteJupiterDlmm(
     // dlmm quote can fail, if the pool has insufficient liquidity
     console.error("Error getting DLMM quote, using jupiter quote only:", error);
   }
-  // Direct Jupiter quote: onlyDirectRoutes=true, maxAccounts=50.
+  // Jupiter quote with jupiterQuoteOptions.
   // Not equivalent to Jupiter UI. Caller must validate outAmount.
   const jupiterQuoteResult = await getJupiterQuote(
-    inMint,
-    outMint,
-    inAmount,
-    50,
-    swapSlippageBps,
-    false,
-    true,
-    true,
-    true,
+    {
+      inputMint: inMint,
+      outputMint: outMint,
+      amount: inAmount,
+      user,
+      queryParams: {
+        slippageBps: swapSlippageBps,
+        ...jupiterQuoteOptions,
+      },
+    },
     config,
   );
 
@@ -356,12 +362,14 @@ function binarySearchRefineDirectSwapAmount(
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
  * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+ * @param params.jupiterQuoteOptions - Optional Jupiter query parameters, see `GetJupiterQuoteParams.queryParams`
  * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns IndirectSwapEstimate with swap details and post-swap token amounts
  * @throws if inputTokenMint matches any token in the DLMM pool
  * @throws if failed to get Jupiter swap quote
  */
 export async function estimateDlmmIndirectSwap({
+  user,
   amountIn,
   inputTokenMint,
   lbPair,
@@ -371,7 +379,8 @@ export async function estimateDlmmIndirectSwap({
   maxDeltaId,
   strategy,
   singleSided,
-  config = {},
+  jupiterQuoteOptions,
+  config,
 }: EstimateDlmmIndirectSwapParams): Promise<DlmmIndirectSwapEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
   const activeBin = await dlmm.getActiveBin();
@@ -399,15 +408,16 @@ export async function estimateDlmmIndirectSwap({
     const outputTokenMint = singleSidedX ? tokenXMint : tokenYMint;
 
     const quote = await getJupiterQuote(
-      inputTokenMint,
-      outputTokenMint,
-      amountIn,
-      50,
-      swapSlippageBps,
-      false,
-      true,
-      true,
-      true,
+      {
+        inputMint: inputTokenMint,
+        outputMint: outputTokenMint,
+        amount: amountIn,
+        user,
+        queryParams: {
+          slippageBps: swapSlippageBps,
+          ...jupiterQuoteOptions,
+        },
+      },
       config,
     );
 
@@ -435,27 +445,29 @@ export async function estimateDlmmIndirectSwap({
   const halfAmount = amountIn.div(new BN(2));
   const [quoteToXResult, quoteToYResult] = await Promise.allSettled([
     getJupiterQuote(
-      inputTokenMint,
-      tokenXMint,
-      halfAmount,
-      50,
-      swapSlippageBps,
-      false,
-      true,
-      true,
-      true,
+      {
+        inputMint: inputTokenMint,
+        outputMint: tokenXMint,
+        amount: halfAmount,
+        user,
+        queryParams: {
+          slippageBps: swapSlippageBps,
+          ...jupiterQuoteOptions,
+        },
+      },
       config,
     ),
     getJupiterQuote(
-      inputTokenMint,
-      tokenYMint,
-      halfAmount,
-      50,
-      swapSlippageBps,
-      false,
-      true,
-      true,
-      true,
+      {
+        inputMint: inputTokenMint,
+        outputMint: tokenYMint,
+        amount: halfAmount,
+        user,
+        queryParams: {
+          slippageBps: swapSlippageBps,
+          ...jupiterQuoteOptions,
+        },
+      },
       config,
     ),
   ]);
@@ -579,27 +591,29 @@ export async function estimateDlmmIndirectSwap({
   // Get final quotes with refined amounts
   const [finalQuoteToXResult, finalQuoteToYResult] = await Promise.allSettled([
     getJupiterQuote(
-      inputTokenMint,
-      tokenXMint,
-      bestAmountToX,
-      50,
-      swapSlippageBps,
-      false,
-      true,
-      true,
-      true,
+      {
+        inputMint: inputTokenMint,
+        outputMint: tokenXMint,
+        amount: bestAmountToX,
+        user,
+        queryParams: {
+          slippageBps: swapSlippageBps,
+          ...jupiterQuoteOptions,
+        },
+      },
       config,
     ),
     getJupiterQuote(
-      inputTokenMint,
-      tokenYMint,
-      bestAmountToY,
-      50,
-      swapSlippageBps,
-      false,
-      true,
-      true,
-      true,
+      {
+        inputMint: inputTokenMint,
+        outputMint: tokenYMint,
+        amount: bestAmountToY,
+        user,
+        queryParams: {
+          slippageBps: swapSlippageBps,
+          ...jupiterQuoteOptions,
+        },
+      },
       config,
     ),
   ]);
@@ -650,6 +664,7 @@ export async function estimateDlmmIndirectSwap({
  * @internal - Use estimateDlmmDirectSwap or estimateDlmmRebalanceSwap instead
  */
 async function estimateDlmmDirectSwapCore({
+  user,
   tokenXAmount,
   tokenYAmount,
   dlmm,
@@ -658,7 +673,8 @@ async function estimateDlmmDirectSwapCore({
   maxDeltaId,
   strategy,
   singleSided,
-  config = {},
+  jupiterQuoteOptions,
+  config,
 }: EstimateDlmmDirectSwapCoreParams): Promise<DlmmDirectEstimateResult> {
   if (singleSided !== undefined) {
     // swap all input to target token
@@ -671,6 +687,7 @@ async function estimateDlmmDirectSwapCore({
       );
       const quote = await getBestSwapQuoteJupiterDlmm(
         dlmm,
+        user,
         dlmm.lbPair.tokenYMint,
         dlmm.lbPair.tokenXMint,
         tokenYAmount,
@@ -678,6 +695,7 @@ async function estimateDlmmDirectSwapCore({
         swapForY,
         binArrayForSwap,
         config,
+        jupiterQuoteOptions,
       );
 
       if (!quote) {
@@ -702,6 +720,7 @@ async function estimateDlmmDirectSwapCore({
       );
       const quote = await getBestSwapQuoteJupiterDlmm(
         dlmm,
+        user,
         dlmm.lbPair.tokenXMint,
         dlmm.lbPair.tokenYMint,
         tokenXAmount,
@@ -709,6 +728,7 @@ async function estimateDlmmDirectSwapCore({
         swapForY,
         binArrayForSwap,
         config,
+        jupiterQuoteOptions,
       );
 
       if (!quote) {
@@ -819,6 +839,7 @@ async function estimateDlmmDirectSwapCore({
   );
   const initialQuote = await getBestSwapQuoteJupiterDlmm(
     dlmm,
+    user,
     inMint,
     outMint,
     initialSwapAmount,
@@ -826,6 +847,7 @@ async function estimateDlmmDirectSwapCore({
     swapForY,
     binArrayForSwap,
     config,
+    jupiterQuoteOptions,
   );
 
   if (!initialQuote) {
@@ -895,6 +917,7 @@ async function estimateDlmmDirectSwapCore({
   // get final quote for refinedAmount
   const finalQuote = await getBestSwapQuoteJupiterDlmm(
     dlmm,
+    user,
     inMint,
     outMint,
     refinedAmount,
@@ -902,6 +925,7 @@ async function estimateDlmmDirectSwapCore({
     swapForY,
     binArrayForSwap,
     config,
+    jupiterQuoteOptions,
   );
 
   if (!finalQuote) {
@@ -951,11 +975,13 @@ async function estimateDlmmDirectSwapCore({
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
  * @param params.singleSided - Optional single-sided deposit mode (X or Y only) - default is non-single-sided
+ * @param params.jupiterQuoteOptions - Optional Jupiter query parameters, see `GetJupiterQuoteParams.queryParams`
  * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */
 export async function estimateDlmmDirectSwap({
+  user,
   amountIn,
   inputTokenMint,
   lbPair,
@@ -965,7 +991,8 @@ export async function estimateDlmmDirectSwap({
   maxDeltaId,
   strategy,
   singleSided,
-  config = {},
+  jupiterQuoteOptions,
+  config,
 }: EstimateDlmmDirectSwapParams): Promise<DlmmDirectSwapEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
 
@@ -980,6 +1007,7 @@ export async function estimateDlmmDirectSwap({
   const tokenYAmount = isInputTokenX ? new BN(0) : amountIn;
 
   const result = await estimateDlmmDirectSwapCore({
+    user,
     tokenXAmount,
     tokenYAmount,
     dlmm,
@@ -988,6 +1016,7 @@ export async function estimateDlmmDirectSwap({
     maxDeltaId,
     strategy,
     singleSided,
+    jupiterQuoteOptions,
     config,
   });
 
@@ -1020,11 +1049,13 @@ export async function estimateDlmmDirectSwap({
  * @param params.minDeltaId - Minimum bin delta from active bin
  * @param params.maxDeltaId - Maximum bin delta from active bin
  * @param params.strategy - Strategy type for the position
+ * @param params.jupiterQuoteOptions - Optional Jupiter query parameters, see `GetJupiterQuoteParams.queryParams`
  * @param params.config - Optional configuration for Jupiter API URL (default: https://api.jup.ag) and API key (default: empty string)
  * @returns DirectSwapEstimate with swap details and post-swap token amounts
  * @throws if failed to get both Jupiter and DLMM swap quotes
  */
 export async function estimateDlmmRebalanceSwap({
+  user,
   lbPair,
   position,
   connection,
@@ -1032,12 +1063,14 @@ export async function estimateDlmmRebalanceSwap({
   minDeltaId,
   maxDeltaId,
   strategy,
-  config = {},
+  jupiterQuoteOptions,
+  config,
 }: EstimateDlmmRebalanceSwapParams): Promise<DlmmDirectRebalanceEstimate> {
   const dlmm = await DLMM.create(connection, lbPair);
   const userPosition = await dlmm.getPosition(position);
 
   const result = await estimateDlmmDirectSwapCore({
+    user,
     tokenXAmount: new BN(userPosition.positionData.totalXAmount),
     tokenYAmount: new BN(userPosition.positionData.totalYAmount),
     dlmm,
@@ -1046,6 +1079,7 @@ export async function estimateDlmmRebalanceSwap({
     maxDeltaId,
     strategy,
     singleSided: undefined, // rebalance does not use single-sided deposits
+    jupiterQuoteOptions,
     config,
   });
 

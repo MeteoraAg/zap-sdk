@@ -1,9 +1,10 @@
+import { NATIVE_MINT, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
-  NATIVE_MINT,
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
-import { Connection, PublicKey } from "@solana/web3.js";
+  ComputeBudgetProgram,
+  Connection,
+  PublicKey,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import Decimal from "decimal.js";
 
 export async function getTokenProgramFromMint(
@@ -50,4 +51,12 @@ export function convertUiAmountToLamports(
   decimals: number,
 ): Decimal {
   return amount.mul(Decimal.pow(10, decimals));
+}
+
+export function filterOutComputeBudgetInstructions(
+  instructions: TransactionInstruction[],
+): TransactionInstruction[] {
+  return instructions.filter(
+    (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
+  );
 }

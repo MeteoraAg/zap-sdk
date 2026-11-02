@@ -1,9 +1,9 @@
 import {
   Connection,
   PublicKey,
-  Keypair,
   Transaction,
-  sendAndConfirmTransaction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { Zap } from "../src/zap";
@@ -14,15 +14,16 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { getTokenProgramFromMint, wrapSOLInstruction } from "../src/helpers";
-import { JUPITER_API_KEY, JUPITER_API_URL } from "./constants";
+import { JUPITER_API_KEY, JUPITER_API_URL, RPC_URL } from "./constants";
+import { loadKeypairFromEnv, signV0Transaction } from "./helpers";
 
 async function main() {
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
+  const connection = new Connection(RPC_URL);
 
-  const wallet = Keypair.fromSecretKey(Uint8Array.from([]));
+  const wallet = loadKeypairFromEnv();
   console.log(`Using wallet: ${wallet.publicKey.toString()}`);
 
-  const anotherWallet = Keypair.fromSecretKey(Uint8Array.from([]));
+  const anotherWallet = loadKeypairFromEnv("ANOTHER_SECRET_KEY_PATH");
   console.log(`Using another wallet: ${anotherWallet.publicKey.toString()}`);
 
   const zap = new Zap(connection, {
@@ -43,7 +44,8 @@ async function main() {
   const swapAmount = new BN(1000000);
 
   try {
-    const { blockhash } = await connection.getLatestBlockhash();
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
 
     const inputTokenProgram = await getTokenProgramFromMint(
       connection,
@@ -109,20 +111,23 @@ async function main() {
       percentageToZapOut: 100,
     });
 
-    transaction.add(zapOutTx);
+    const versionedTransaction = new VersionedTransaction(
+      new TransactionMessage({
+        payerKey: wallet.publicKey,
+        recentBlockhash: blockhash,
+        instructions: [...transaction.instructions, ...zapOutTx.instructions],
+      }).compileToV0Message(zapOutTx.addressLookupTableAccounts),
+    );
+    signV0Transaction(versionedTransaction, [wallet, anotherWallet]);
 
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = wallet.publicKey;
-
-    const simulate = await connection.simulateTransaction(transaction);
+    const simulate = await connection.simulateTransaction(versionedTransaction);
     console.log(simulate.value.logs);
 
     console.log("Sending zap transaction...");
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      transaction,
-      [wallet, anotherWallet],
-      { commitment: "confirmed" },
+    const signature = await connection.sendTransaction(versionedTransaction);
+    await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed",
     );
 
     console.log(`Zap transaction sent: ${signature}`);
