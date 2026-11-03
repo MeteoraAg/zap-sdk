@@ -24,3 +24,32 @@ jobs:
         shell: bash
       - run: pnpm test
         shell: bash
+
+  # advisories of the published dependencies, ignored ones are in pnpm-workspace.yaml
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: pnpm audit --prod
+        shell: bash
+
+  # advisories of every dependency, dev ones included, ignored ones are in osv-scanner.toml
+  osv_scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.7.0
+        with:
+          scan-args: |-
+            scan
+            source
+            -L
+            pnpm-lock.yaml
