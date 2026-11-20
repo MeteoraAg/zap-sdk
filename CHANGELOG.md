@@ -20,6 +20,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Breaking Changes
 
+## [2.1.0] - [PR #41](https://github.com/MeteoraAg/zap-sdk/pull/41)
+
+### Added
+
+- Support Zap program release 0.3.0, which adds the endpoint `zap_in_dlmm_pro` and swaps through DLMM Pro in `zap_out`.
+- Added `zapOutThroughDlmmPro` to zap out by swapping through a DLMM Pro pool.
+- Added `getZapInDlmmProDirectParams`, `getZapInDlmmProIndirectParams` and `buildZapInDlmmProTransaction` to zap in to a new DLMM Pro position. The position is given as tick ranges with weights, for example the `ranges` from `buildLiquidityShape` of `@meteora-ag/dlmm-pro-sdk`. `maxTickSlippage` and the optional `minMultiplier` bound the price slippage, and the optional `leftover` ranges take what the ranges leave of the token that is not used up. The position NFT mint passed to `buildZapInDlmmProTransaction` must sign the zap-in transaction.
+- Added `estimateDlmmProDirectSwap` and `estimateDlmmProIndirectSwap` to size the swaps of a DLMM Pro zap in. They also return the pool tick and the multiplier expected when the zap in executes, to pass as the tick the ranges were built against and to derive `minMultiplier` from.
+- Added `getDlmmProZapInMultiplier`, which mirrors how the program sizes the deposit, and `getDlmmProZapInTickArrays`, which returns the tick arrays the zap in needs, including the ones the `leftover` ranges can resolve to.
+- Added the helpers `getDlmmProSwapInstruction`, `getDlmmProTickArraysForSwap`, `getDlmmProDepositTransferHookAccounts` and `deriveDlmmProEventAuthority`.
+- Added the constants `DLMM_PRO_PROGRAM_ID` and `AMOUNT_IN_DLMM_PRO_OFFSET`.
+- Added the examples `zapInDlmmProDirect`, `zapInDlmmProIndirect` and `zapOutThroughDlmmPro`.
+
+### Changed
+
+- Added the dependency `@meteora-ag/dlmm-pro-sdk`.
+- The IDL of release 0.3.0 names the types it shares between the pool programs after their program. In `ZapTypes`, `remainingAccountsInfo`, `remainingAccountsSlice` and `accountsType` are now `dlmmDlmmTypesRemainingAccountsInfo`, `dlmmDlmmTypesRemainingAccountsSlice` and `dlmmDlmmTypesAccountsType`, and `pool` is now `cpAmmStatePoolPool`. The methods of the SDK take the same arguments as before.
+
 ## [2.0.0] - [PR #33](https://github.com/MeteoraAg/zap-sdk/pull/33)
 
 ### Added

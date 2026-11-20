@@ -29,7 +29,7 @@ yarn add @meteora-ag/zap-sdk
 
 ## Jupiter API Setup
 
-All Jupiter-related functions (`getJupiterQuote`, `getJupiterSwapInstruction`, `getJupAndDammV2Quotes`, and the DLMM estimate functions) support custom API configuration.
+All Jupiter-related functions (`getJupiterQuote`, `getJupiterSwapInstruction`, `getJupAndDammV2Quotes`, and the DLMM and DLMM Pro estimate functions) support custom API configuration.
 
 ### API Version
 

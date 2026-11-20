@@ -29,6 +29,7 @@ import ZapIDL from "../../src/idl/zap/idl.json";
 import DammV2IDL from "../fixtures/damm_v2.json";
 import JupiterIDL from "../fixtures/jupiter.json";
 import DlmmIDL from "../fixtures/dlmm.json";
+import { DLMM_PRO_PROGRAM_ID } from "../../src/constants";
 
 export interface SvmAccount {
   lamports: number;
@@ -80,6 +81,10 @@ export function startSvm(): LiteSVM {
     "tests/fixtures/jupiter.so",
   );
   svm.addProgramFromFile(address(DlmmIDL.address), "tests/fixtures/dlmm.so");
+  svm.addProgramFromFile(
+    toAddress(DLMM_PRO_PROGRAM_ID),
+    "tests/fixtures/dlmm_pro.so",
+  );
 
   return svm;
 }

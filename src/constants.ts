@@ -17,6 +17,9 @@ export const DAMM_V2_PROGRAM_ID = new PublicKey(
 export const DLMM_PROGRAM_ID = new PublicKey(
   "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
 );
+export const DLMM_PRO_PROGRAM_ID = new PublicKey(
+  "dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n",
+);
 export const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
 );
@@ -105,6 +108,8 @@ export const AMOUNT_IN_DAMM_V2_OFFSET = 8;
 export const DAMM_V2_SWAP_DISCRIMINATOR = [
   248, 198, 158, 145, 225, 117, 135, 200,
 ];
+
+export const AMOUNT_IN_DLMM_PRO_OFFSET = 8;
 
 export const DEFAULT_JUPITER_API_URL = "https://api.jup.ag";
 export const DEFAULT_JUPITER_API_VERSION = JupiterApiVersion.V2;

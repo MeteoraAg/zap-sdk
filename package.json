@@ -1,6 +1,6 @@
 {
   "name": "@meteora-ag/zap-sdk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A Typescript SDK for interacting with the Zap program on Meteora.",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -16,6 +16,7 @@
     "zap",
     "damm-v2",
     "dlmm",
+    "dlmm-pro",
     "jupiter"
   ],
   "license": "MIT",
@@ -57,6 +58,7 @@
     "@anchor-lang/core": "^1.2.1",
     "@meteora-ag/cp-amm-sdk": "^1.5.1",
     "@meteora-ag/dlmm": "^1.9.14",
+    "@meteora-ag/dlmm-pro-sdk": "^0.1.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.99.0",
     "bn.js": "^5.2.5",
