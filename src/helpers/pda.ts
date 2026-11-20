@@ -1,6 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import {
   DAMM_V2_PROGRAM_ID,
+  DLMM_PRO_PROGRAM_ID,
   DLMM_PROGRAM_ID,
   ZAP_PROGRAM_ID,
 } from "../constants";
@@ -30,5 +31,12 @@ export function deriveDlmmEventAuthority() {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("__event_authority")],
     DLMM_PROGRAM_ID,
+  )[0];
+}
+
+export function deriveDlmmProEventAuthority() {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("__event_authority")],
+    DLMM_PRO_PROGRAM_ID,
   )[0];
 }

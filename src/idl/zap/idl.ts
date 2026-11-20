@@ -8,7 +8,7 @@ export type Zap = {
   "address": "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz",
   "metadata": {
     "name": "zap",
-    "version": "0.2.3",
+    "version": "0.3.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
@@ -392,7 +392,7 @@ export type Zap = {
           "name": "remainingAccountsInfo",
           "type": {
             "defined": {
-              "name": "remainingAccountsInfo"
+              "name": "dlmmDlmmTypesRemainingAccountsInfo"
             }
           }
         }
@@ -526,7 +526,132 @@ export type Zap = {
           "name": "remainingAccountsInfo",
           "type": {
             "defined": {
-              "name": "remainingAccountsInfo"
+              "name": "dlmmDlmmTypesRemainingAccountsInfo"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "zapInDlmmPro",
+      "discriminator": [
+        157,
+        12,
+        229,
+        99,
+        111,
+        11,
+        156,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "ledger",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "poolAuthority"
+        },
+        {
+          "name": "nftMint",
+          "docs": [
+            "position nft mint, created by dlmm-pro",
+            "Check it is different from owner and rent payer to avoid user passing them wrongly"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "nftAccount",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "tickArrayBitmapExtension",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "userTokenX",
+          "writable": true
+        },
+        {
+          "name": "userTokenY",
+          "writable": true
+        },
+        {
+          "name": "reserveX",
+          "writable": true
+        },
+        {
+          "name": "reserveY",
+          "writable": true
+        },
+        {
+          "name": "tokenXMint"
+        },
+        {
+          "name": "tokenYMint"
+        },
+        {
+          "name": "dlmmProProgram",
+          "address": "dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n"
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "owner of position"
+          ],
+          "signer": true,
+          "relations": [
+            "ledger"
+          ]
+        },
+        {
+          "name": "rentPayer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tokenXProgram"
+        },
+        {
+          "name": "tokenYProgram"
+        },
+        {
+          "name": "nftTokenProgram"
+        },
+        {
+          "name": "systemProgram"
+        },
+        {
+          "name": "associatedTokenProgram"
+        },
+        {
+          "name": "dlmmProEventAuthority"
+        }
+      ],
+      "args": [
+        {
+          "name": "parameters",
+          "type": {
+            "defined": {
+              "name": "dlmmProZapInParameters"
+            }
+          }
+        },
+        {
+          "name": "remainingAccountsInfo",
+          "type": {
+            "defined": {
+              "name": "dlmmProDlmmProTypesRemainingAccountsInfo"
             }
           }
         }
@@ -625,31 +750,45 @@ export type Zap = {
       "code": 6008,
       "name": "unsupportedFeeMode",
       "msg": "Unsupported fee mode"
+    },
+    {
+      "code": 6009,
+      "name": "invalidDlmmProZapInParameters",
+      "msg": "Invalid dlmm-pro zap in parameters"
+    },
+    {
+      "code": 6010,
+      "name": "zeroLiquidity",
+      "msg": "Zap in amounts are too small to add any liquidity"
+    },
+    {
+      "code": 6011,
+      "name": "missingDlmmProTickArray",
+      "msg": "Missing dlmm-pro tick array account"
     }
   ],
   "types": [
     {
-      "name": "accountsType",
+      "name": "baseFeeConfig",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
       "type": {
-        "kind": "enum",
-        "variants": [
+        "kind": "struct",
+        "fields": [
           {
-            "name": "transferHookX"
+            "name": "baseFeeMode",
+            "type": "u8"
           },
           {
-            "name": "transferHookY"
-          },
-          {
-            "name": "transferHookReward"
-          },
-          {
-            "name": "transferHookMultiReward",
-            "fields": [
-              "u8"
-            ]
-          },
-          {
-            "name": "transferHookReferral"
+            "name": "data",
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
           }
         ]
       }
@@ -695,6 +834,224 @@ export type Zap = {
           {
             "name": "padding1",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProLeftoverParameters",
+      "docs": [
+        "Single sided ranges that take the leftover after the balanced deposit. Only the side that is",
+        "not used up has a leftover, so only its range is opened, as the position range right after",
+        "`ranges`, and none when its liquidity rounds to 0. Which side it is only shows at execution,",
+        "so the client passes the tick arrays of both ranges, in any order with extra accounts, and zap",
+        "picks the ones dlmm-pro needs"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rangeX",
+            "docs": [
+              "Takes the x leftover, above the price: `[inner_tick_id, outer_tick_id)`. With absolute",
+              "ticks, `inner_tick_id` must be above `current_tick_id + max_tick_slippage`, so it only",
+              "takes x at any pool tick the slippage check lets through"
+            ],
+            "type": {
+              "defined": {
+                "name": "dlmmProLeftoverRange"
+              }
+            }
+          },
+          {
+            "name": "rangeY",
+            "docs": [
+              "Takes the y leftover, below the price: `[outer_tick_id, inner_tick_id)`. With absolute",
+              "ticks, `inner_tick_id` must be at or below `current_tick_id - max_tick_slippage`, so it",
+              "only takes y at any pool tick the slippage check lets through"
+            ],
+            "type": {
+              "defined": {
+                "name": "dlmmProLeftoverRange"
+              }
+            }
+          },
+          {
+            "name": "isInnerTickRelative",
+            "docs": [
+              "When true, `inner_tick_id` of the ranges is a distance in tick spacing (>= 0) away from",
+              "the price, from the closest tick a single sided range can start at for the pool tick at",
+              "execution:",
+              "- x: `align(pool tick) + tick_spacing + inner_tick_id * tick_spacing`, the first aligned",
+              "tick above the pool tick",
+              "- y: `align(pool tick) - inner_tick_id * tick_spacing`, the last aligned tick at or below",
+              "the pool tick",
+              "",
+              "where `align` rounds down to the tick spacing. With 0, the ranges start right next to the",
+              "price wherever it moved within the slippage. `outer_tick_id` stays absolute, so the client",
+              "covers every tick array the ranges can resolve to"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProLeftoverRange",
+      "docs": [
+        "A single sided leftover range, by its bound next to the price (`inner_tick_id`) and its bound",
+        "away from it (`outer_tick_id`)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "innerTickId",
+            "docs": [
+              "Absolute tick id, or a distance in tick spacing away from the price, see",
+              "`is_inner_tick_relative`"
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "outerTickId",
+            "docs": [
+              "Absolute tick id"
+            ],
+            "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProPositionRangeParameters",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tickLowerId",
+            "type": "i32"
+          },
+          {
+            "name": "tickUpperId",
+            "type": "i32"
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "Relative liquidity of the range, the range gets `multiplier * weight` liquidity"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProZapInParameters",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ranges",
+            "docs": [
+              "Horizontal slices of the position liquidity shape, opened as the position tick ranges"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "dlmmProPositionRangeParameters"
+                }
+              }
+            }
+          },
+          {
+            "name": "currentTickId",
+            "docs": [
+              "Pool `tick_current_id` the client built `ranges` against"
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "maxTickSlippage",
+            "docs": [
+              "Max allowed distance between `current_tick_id` and the pool tick at execution"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "minMultiplier",
+            "docs": [
+              "Min multiplier at execution, range i gets `multiplier * weight_i` liquidity. The tick",
+              "slippage alone can't bound it: when a range bound sits close to the price, a move within",
+              "a single tick can change the binding side's amount per liquidity many times over. `None`",
+              "skips the check"
+            ],
+            "type": {
+              "option": "u128"
+            }
+          },
+          {
+            "name": "leftover",
+            "docs": [
+              "Optional single sided ranges that take what is left over after the balanced deposit.",
+              "Without them the leftover stays in the ledger"
+            ],
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "dlmmProLeftoverParameters"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "dynamicFeeConfig",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maxVolatilityAccumulator",
+            "type": "u32"
+          },
+          {
+            "name": "variableFeeControl",
+            "type": "u32"
+          },
+          {
+            "name": "filterPeriod",
+            "type": "u16"
+          },
+          {
+            "name": "decayPeriod",
+            "type": "u16"
+          },
+          {
+            "name": "reductionFactor",
+            "type": "u16"
+          },
+          {
+            "name": "minDeltaTickForSignificantSwap",
+            "type": "u16"
+          },
+          {
+            "name": "initialized",
+            "type": "u8"
+          },
+          {
+            "name": "padding0",
+            "type": {
+              "array": [
+                "u8",
+                15
+              ]
+            }
           }
         ]
       }
@@ -764,6 +1121,34 @@ export type Zap = {
           {
             "name": "volatilityReference",
             "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "feeConfig",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "baseFee",
+            "type": {
+              "defined": {
+                "name": "baseFeeConfig"
+              }
+            }
+          },
+          {
+            "name": "dynamicFee",
+            "type": {
+              "defined": {
+                "name": "dynamicFeeConfig"
+              }
+            }
           }
         ]
       }
@@ -887,7 +1272,7 @@ export type Zap = {
               "array": [
                 {
                   "defined": {
-                    "name": "dlmm::dlmm::types::RewardInfo"
+                    "name": "dlmmDlmmTypesRewardInfo"
                   }
                 },
                 2
@@ -978,7 +1363,411 @@ export type Zap = {
       }
     },
     {
-      "name": "pool",
+      "name": "poolFeesStruct",
+      "docs": [
+        "Information regarding fee charges",
+        "trading_fee = amount * trade_fee_numerator / denominator",
+        "protocol_fee = trading_fee * protocol_fee_percentage / 100",
+        "referral_fee = protocol_fee * referral_percentage / 100"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "baseFee",
+            "docs": [
+              "Trade fees are extra token amounts that are held inside the token",
+              "accounts during a trade, making the value of liquidity tokens rise.",
+              "Trade fee numerator"
+            ],
+            "type": {
+              "defined": {
+                "name": "baseFeeStruct"
+              }
+            }
+          },
+          {
+            "name": "protocolFeePercent",
+            "docs": [
+              "Protocol trading fees are extra token amounts that are held inside the token",
+              "accounts during a trade, with the equivalent in pool tokens minted to",
+              "the protocol of the program.",
+              "Protocol trade fee numerator"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "padding0",
+            "docs": [
+              "padding for future use"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "referralFeePercent",
+            "docs": [
+              "referral fee"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "padding1",
+            "docs": [
+              "padding"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "compoundingFeeBps",
+            "docs": [
+              "compounding fee bps, only non-zero in CollectFeeMode::Compounding"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "dynamicFee",
+            "docs": [
+              "dynamic fee"
+            ],
+            "type": {
+              "defined": {
+                "name": "dynamicFeeStruct"
+              }
+            }
+          },
+          {
+            "name": "initSqrtPrice",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolMetrics",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "totalLpAFee",
+            "type": "u128"
+          },
+          {
+            "name": "totalLpBFee",
+            "type": "u128"
+          },
+          {
+            "name": "totalProtocolAFee",
+            "type": "u64"
+          },
+          {
+            "name": "totalProtocolBFee",
+            "type": "u64"
+          },
+          {
+            "name": "padding0",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "totalPosition",
+            "type": "u64"
+          },
+          {
+            "name": "padding",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolPartner",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "partner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pendingFeeX",
+            "type": "u64"
+          },
+          {
+            "name": "pendingFeeY",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolFee",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amountX",
+            "type": "u64"
+          },
+          {
+            "name": "amountY",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "staticParameters",
+      "docs": [
+        "Parameter that set by the protocol"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "baseFactor",
+            "type": "u16"
+          },
+          {
+            "name": "filterPeriod",
+            "type": "u16"
+          },
+          {
+            "name": "decayPeriod",
+            "type": "u16"
+          },
+          {
+            "name": "reductionFactor",
+            "type": "u16"
+          },
+          {
+            "name": "variableFeeControl",
+            "type": "u32"
+          },
+          {
+            "name": "maxVolatilityAccumulator",
+            "type": "u32"
+          },
+          {
+            "name": "minBinId",
+            "type": "i32"
+          },
+          {
+            "name": "maxBinId",
+            "type": "i32"
+          },
+          {
+            "name": "protocolShare",
+            "type": "u16"
+          },
+          {
+            "name": "baseFeePowerFactor",
+            "type": "u8"
+          },
+          {
+            "name": "functionType",
+            "type": "u8"
+          },
+          {
+            "name": "collectFeeMode",
+            "type": "u8"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "strategyType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "spot"
+          },
+          {
+            "name": "curve"
+          },
+          {
+            "name": "bidAsk"
+          }
+        ]
+      }
+    },
+    {
+      "name": "userLedger",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amountA",
+            "type": "u64"
+          },
+          {
+            "name": "amountB",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "variableFee",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sqrtPriceReference",
+            "type": "u128"
+          },
+          {
+            "name": "lastSignificantSwapTimestamp",
+            "type": "u64"
+          },
+          {
+            "name": "lastReferenceTimestamp",
+            "type": "u64"
+          },
+          {
+            "name": "volatilityAccumulator",
+            "type": "u32"
+          },
+          {
+            "name": "volatilityReference",
+            "type": "u32"
+          },
+          {
+            "name": "padding0",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "variableParameters",
+      "docs": [
+        "Parameters that changes based on dynamic of the market"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "volatilityAccumulator",
+            "type": "u32"
+          },
+          {
+            "name": "volatilityReference",
+            "type": "u32"
+          },
+          {
+            "name": "indexReference",
+            "type": "i32"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "lastUpdateTimestamp",
+            "type": "i64"
+          },
+          {
+            "name": "padding1",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "zapOutParameters",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "percentage",
+            "type": "u8"
+          },
+          {
+            "name": "offsetAmountIn",
+            "type": "u16"
+          },
+          {
+            "name": "preUserTokenBalance",
+            "type": "u64"
+          },
+          {
+            "name": "maxSwapAmount",
+            "type": "u64"
+          },
+          {
+            "name": "payloadData",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "cpAmmStatePoolPool",
       "serialization": "bytemuck",
       "repr": {
         "kind": "c"
@@ -1073,8 +1862,20 @@ export type Zap = {
             "type": "u64"
           },
           {
+            "name": "deadLiquidityFeeCheckpoint",
+            "docs": [
+              "Cumulative dead-liquidity fee (Compounding Pool only)"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "padding2",
-            "type": "u128"
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
           },
           {
             "name": "sqrtMinPrice",
@@ -1260,7 +2061,7 @@ export type Zap = {
               "array": [
                 {
                   "defined": {
-                    "name": "cp_amm::state::pool::RewardInfo"
+                    "name": "cpAmmStatePoolRewardInfo"
                   }
                 },
                 2
@@ -1271,389 +2072,7 @@ export type Zap = {
       }
     },
     {
-      "name": "poolFeesStruct",
-      "docs": [
-        "Information regarding fee charges",
-        "trading_fee = amount * trade_fee_numerator / denominator",
-        "protocol_fee = trading_fee * protocol_fee_percentage / 100",
-        "referral_fee = protocol_fee * referral_percentage / 100"
-      ],
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "baseFee",
-            "docs": [
-              "Trade fees are extra token amounts that are held inside the token",
-              "accounts during a trade, making the value of liquidity tokens rise.",
-              "Trade fee numerator"
-            ],
-            "type": {
-              "defined": {
-                "name": "baseFeeStruct"
-              }
-            }
-          },
-          {
-            "name": "protocolFeePercent",
-            "docs": [
-              "Protocol trading fees are extra token amounts that are held inside the token",
-              "accounts during a trade, with the equivalent in pool tokens minted to",
-              "the protocol of the program.",
-              "Protocol trade fee numerator"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "padding0",
-            "docs": [
-              "padding for future use"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "referralFeePercent",
-            "docs": [
-              "referral fee"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "padding1",
-            "docs": [
-              "padding"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                3
-              ]
-            }
-          },
-          {
-            "name": "compoundingFeeBps",
-            "docs": [
-              "compounding fee bps, only non-zero in CollectFeeMode::Compounding"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "dynamicFee",
-            "docs": [
-              "dynamic fee"
-            ],
-            "type": {
-              "defined": {
-                "name": "dynamicFeeStruct"
-              }
-            }
-          },
-          {
-            "name": "initSqrtPrice",
-            "type": "u128"
-          }
-        ]
-      }
-    },
-    {
-      "name": "poolMetrics",
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "totalLpAFee",
-            "type": "u128"
-          },
-          {
-            "name": "totalLpBFee",
-            "type": "u128"
-          },
-          {
-            "name": "totalProtocolAFee",
-            "type": "u64"
-          },
-          {
-            "name": "totalProtocolBFee",
-            "type": "u64"
-          },
-          {
-            "name": "padding0",
-            "type": {
-              "array": [
-                "u64",
-                2
-              ]
-            }
-          },
-          {
-            "name": "totalPosition",
-            "type": "u64"
-          },
-          {
-            "name": "padding",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "protocolFee",
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "amountX",
-            "type": "u64"
-          },
-          {
-            "name": "amountY",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "remainingAccountsInfo",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "slices",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "remainingAccountsSlice"
-                }
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "remainingAccountsSlice",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "accountsType",
-            "type": {
-              "defined": {
-                "name": "accountsType"
-              }
-            }
-          },
-          {
-            "name": "length",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "staticParameters",
-      "docs": [
-        "Parameter that set by the protocol"
-      ],
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "baseFactor",
-            "type": "u16"
-          },
-          {
-            "name": "filterPeriod",
-            "type": "u16"
-          },
-          {
-            "name": "decayPeriod",
-            "type": "u16"
-          },
-          {
-            "name": "reductionFactor",
-            "type": "u16"
-          },
-          {
-            "name": "variableFeeControl",
-            "type": "u32"
-          },
-          {
-            "name": "maxVolatilityAccumulator",
-            "type": "u32"
-          },
-          {
-            "name": "minBinId",
-            "type": "i32"
-          },
-          {
-            "name": "maxBinId",
-            "type": "i32"
-          },
-          {
-            "name": "protocolShare",
-            "type": "u16"
-          },
-          {
-            "name": "baseFeePowerFactor",
-            "type": "u8"
-          },
-          {
-            "name": "functionType",
-            "type": "u8"
-          },
-          {
-            "name": "collectFeeMode",
-            "type": "u8"
-          },
-          {
-            "name": "padding",
-            "type": {
-              "array": [
-                "u8",
-                3
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "strategyType",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "spot"
-          },
-          {
-            "name": "curve"
-          },
-          {
-            "name": "bidAsk"
-          }
-        ]
-      }
-    },
-    {
-      "name": "userLedger",
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "amountA",
-            "type": "u64"
-          },
-          {
-            "name": "amountB",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "variableParameters",
-      "docs": [
-        "Parameters that changes based on dynamic of the market"
-      ],
-      "serialization": "bytemuck",
-      "repr": {
-        "kind": "c"
-      },
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "volatilityAccumulator",
-            "type": "u32"
-          },
-          {
-            "name": "volatilityReference",
-            "type": "u32"
-          },
-          {
-            "name": "indexReference",
-            "type": "i32"
-          },
-          {
-            "name": "padding",
-            "type": {
-              "array": [
-                "u8",
-                4
-              ]
-            }
-          },
-          {
-            "name": "lastUpdateTimestamp",
-            "type": "i64"
-          },
-          {
-            "name": "padding1",
-            "type": {
-              "array": [
-                "u8",
-                8
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "zapOutParameters",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "percentage",
-            "type": "u8"
-          },
-          {
-            "name": "offsetAmountIn",
-            "type": "u16"
-          },
-          {
-            "name": "preUserTokenBalance",
-            "type": "u64"
-          },
-          {
-            "name": "maxSwapAmount",
-            "type": "u64"
-          },
-          {
-            "name": "payloadData",
-            "type": "bytes"
-          }
-        ]
-      }
-    },
-    {
-      "name": "cp_amm::state::pool::RewardInfo",
+      "name": "cpAmmStatePoolRewardInfo",
       "docs": [
         "Stores the state relevant for tracking liquidity mining rewards"
       ],
@@ -1770,7 +2189,71 @@ export type Zap = {
       }
     },
     {
-      "name": "dlmm::dlmm::types::RewardInfo",
+      "name": "dlmmDlmmTypesAccountsType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "transferHookX"
+          },
+          {
+            "name": "transferHookY"
+          },
+          {
+            "name": "transferHookReward"
+          },
+          {
+            "name": "transferHookMultiReward",
+            "fields": [
+              "u8"
+            ]
+          },
+          {
+            "name": "transferHookReferral"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmDlmmTypesRemainingAccountsInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slices",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "dlmmDlmmTypesRemainingAccountsSlice"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmDlmmTypesRemainingAccountsSlice",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "accountsType",
+            "type": {
+              "defined": {
+                "name": "dlmmDlmmTypesAccountsType"
+              }
+            }
+          },
+          {
+            "name": "length",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmDlmmTypesRewardInfo",
       "docs": [
         "Stores the state relevant for tracking liquidity mining rewards"
       ],
@@ -1812,6 +2295,232 @@ export type Zap = {
           {
             "name": "cumulativeSecondsWithEmptyLiquidityReward",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProDlmmProAccountsPool",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tokenXMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenYMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserveX",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserveY",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "feeConfig",
+            "type": {
+              "defined": {
+                "name": "feeConfig"
+              }
+            }
+          },
+          {
+            "name": "variableFee",
+            "type": {
+              "defined": {
+                "name": "variableFee"
+              }
+            }
+          },
+          {
+            "name": "poolPartner",
+            "type": {
+              "defined": {
+                "name": "poolPartner"
+              }
+            }
+          },
+          {
+            "name": "liquidity",
+            "type": "u128"
+          },
+          {
+            "name": "initSqrtPrice",
+            "type": "u128"
+          },
+          {
+            "name": "sqrtPrice",
+            "type": "u128"
+          },
+          {
+            "name": "feeGrowthGlobalX",
+            "type": "u128"
+          },
+          {
+            "name": "feeGrowthGlobalY",
+            "type": "u128"
+          },
+          {
+            "name": "tickArrayBitmap",
+            "type": {
+              "array": [
+                "u64",
+                16
+              ]
+            }
+          },
+          {
+            "name": "activationPoint",
+            "type": "u64"
+          },
+          {
+            "name": "protocolFeeX",
+            "type": "u64"
+          },
+          {
+            "name": "protocolFeeY",
+            "type": "u64"
+          },
+          {
+            "name": "tickCurrentId",
+            "type": "i32"
+          },
+          {
+            "name": "tickSpacing",
+            "type": "u16"
+          },
+          {
+            "name": "poolStatus",
+            "type": "u16"
+          },
+          {
+            "name": "partnerFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "poolType",
+            "type": "u8"
+          },
+          {
+            "name": "tokenXFlag",
+            "type": "u8"
+          },
+          {
+            "name": "tokenYFlag",
+            "type": "u8"
+          },
+          {
+            "name": "activationType",
+            "type": "u8"
+          },
+          {
+            "name": "collectFeeMode",
+            "type": "u8"
+          },
+          {
+            "name": "extensions",
+            "type": "u8"
+          },
+          {
+            "name": "isBitmapExtensionInitialized",
+            "type": "u8"
+          },
+          {
+            "name": "padding0",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "padding1",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "padding2",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProDlmmProTypesAccountsType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "transferHookX"
+          },
+          {
+            "name": "transferHookY"
+          },
+          {
+            "name": "transferHookReferral"
+          },
+          {
+            "name": "transferHookReward"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProDlmmProTypesRemainingAccountsInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "slices",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "dlmmProDlmmProTypesRemainingAccountsSlice"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "dlmmProDlmmProTypesRemainingAccountsSlice",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "accountsType",
+            "type": {
+              "defined": {
+                "name": "dlmmProDlmmProTypesAccountsType"
+              }
+            }
+          },
+          {
+            "name": "length",
+            "type": "u8"
           }
         ]
       }

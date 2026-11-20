@@ -7,6 +7,7 @@
   - [zapOut](#zapOut)
   - [zapOutThroughDammV2](#zapOutThroughDammV2)
   - [zapOutThroughDlmm](#zapOutThroughDlmm)
+  - [zapOutThroughDlmmPro](#zapOutThroughDlmmPro)
   - [zapOutThroughJupiter](#zapOutThroughJupiter)
 
 - [Helper Functions](#helper-functions)
@@ -27,11 +28,11 @@ type ZapInstructionsResponse = {
 };
 ```
 
-The methods are `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `rebalanceDlmmPosition` (which also returns `estimation`), `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2` and `zapOutThroughDlmm`.
+The methods are `buildZapInDammV2Transaction`, `buildZapInDlmmTransaction`, `buildZapInDlmmProTransaction`, `rebalanceDlmmPosition` (which also returns `estimation`), `zapOut`, `zapOutThroughJupiter`, `zapOutThroughDammV2`, `zapOutThroughDlmm` and `zapOutThroughDlmmPro`.
 
 `instructions` is in execution order:
 
-- Zap in (DAMM v2 and DLMM): token account setup and SOL wrapping, then the swaps, then the ledger instructions, then the zap-in instruction, then closing the ledger and unwrapping SOL.
+- Zap in (DAMM v2, DLMM and DLMM Pro): token account setup and SOL wrapping, then the swaps, then the ledger instructions, then the zap-in instruction, then closing the ledger and unwrapping SOL.
 - `rebalanceDlmmPosition`: token account setup, then bin array initialization, then the position rebalance, then the swap, then the ledger instructions, then the zap-in instruction, then closing the ledger and unwrapping SOL.
 - Zap out: token account setup, then the zap-out instruction, then SOL unwrapping.
 
@@ -40,6 +41,8 @@ The instructions must run in that order, but they can be split across several tr
 `addressLookupTableAccounts` holds the lookup tables used by the Jupiter swap instructions, each table once, and is empty when no Jupiter swap is involved. Pass it to `compileToV0Message`. With Jupiter API v2 the tables come from the Jupiter response without an RPC call; their `state` fields other than `addresses` are placeholders, so do not rely on `isActive()`. With Jupiter API v1 the SDK fetches the tables with one RPC call.
 
 The returned instructions contain no compute budget instructions, including the ones the DLMM SDK adds to its swaps and rebalances, because the right limit depends on how the instructions are grouped. Set the compute unit limit and price for each transaction yourself, for example by simulating it. The DLMM zap-in instruction of `rebalanceDlmmPosition` was measured at about 462k compute units; without a compute unit limit a transaction gets 200k units per instruction (up to 1.4M), which may not cover it.
+
+The DLMM Pro zap-in instruction opens a new position, so the position NFT mint passed to `buildZapInDlmmProTransaction` must sign the transaction that holds it. Its compute units grow with the number of position ranges, and each tick array it creates adds to them. The limits of the instruction are listed in [ZAPIN_DLMM_PRO.md](https://github.com/MeteoraAg/zap-program/blob/main/ZAPIN_DLMM_PRO.md) of the Zap program.
 
 #### Example
 
@@ -335,6 +338,69 @@ const zapOutTx = await zap.zapOutThroughDlmm({
 #### Notes
 
 - This function is used to zap out through DLMM.
+- The flow is as such:
+  - Get token programs for input mint
+  - Build the zap out instructions
+  - Build and send a transaction from them
+
+---
+
+### zapOutThroughDlmmPro
+
+Executes a zap out operation through a DLMM Pro pool.
+
+#### Function
+
+```typescript
+async zapOutThroughDlmmPro(params: ZapOutThroughDlmmProParams): Promise<ZapInstructionsResponse>
+```
+
+#### Parameters
+
+```typescript
+interface ZapOutThroughDlmmProParams {
+  user: PublicKey;
+  poolAddress: PublicKey;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
+  amountIn: BN;
+  minimumSwapAmountOut: BN;
+  maxSwapAmount: BN;
+  percentageToZapOut: number;
+}
+```
+
+#### Returns
+
+A `ZapInstructionsResponse`: the ordered instructions and an empty `addressLookupTableAccounts`. See [Building Transactions](#building-transactions).
+
+#### Example
+
+```typescript
+const inputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const outputMint = new PublicKey("So11111111111111111111111111111111111111112");
+
+const zapOutTx = await zap.zapOutThroughDlmmPro({
+  user: wallet.publicKey,
+  poolAddress: dlmmProPoolAddress,
+  inputMint,
+  outputMint,
+  inputTokenProgram,
+  outputTokenProgram,
+  amountIn: new BN(1000000000),
+  minimumSwapAmountOut: new BN(0),
+  maxSwapAmount: new BN(1000000000),
+  percentageToZapOut: 100,
+});
+```
+
+#### Notes
+
+- This function is used to zap out through a DLMM Pro pool.
+- `inputMint` and `outputMint` must be the two tokens of the pool.
+- The zap out swaps what the instructions before it add to the user's input token account. When the input token is SOL, leave it wrapped in that account: the DLMM Pro SDK closes the wrapped SOL account at the end of its withdrawal transactions, so take that close instruction out, for example with `filterOutCloseSplTokenAccountInstructions`.
 - The flow is as such:
   - Get token programs for input mint
   - Build the zap out instructions
