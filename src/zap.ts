@@ -34,6 +34,13 @@ import {
   ZapInDammV2PoolSwapRoute,
   ZapConfig,
   JupiterApiVersion,
+  DlmmProDirectSwapQuoteRoute,
+  DlmmProZapInParameters,
+  GetZapInDlmmProDirectParams,
+  GetZapInDlmmProIndirectParams,
+  ZapInDlmmProDirectPoolParam,
+  ZapInDlmmProIndirectPoolParam,
+  ZapOutThroughDlmmProParams,
 } from "./types";
 
 import {
@@ -51,6 +58,11 @@ import {
   deriveDammV2EventAuthority,
   deriveDammV2PoolAuthority,
   deriveDlmmEventAuthority,
+  deriveDlmmProEventAuthority,
+  getDlmmProDepositTransferHookAccounts,
+  getDlmmProSwapInstruction,
+  getDlmmProTickArraysForSwap,
+  getDlmmProZapInTickArrays,
   convertLamportsToUiAmount,
   buildJupiterSwapTransaction,
   toProgramStrategyType,
@@ -73,9 +85,11 @@ import { filterOutComputeBudgetInstructions } from "./helpers/common";
 import {
   AMOUNT_IN_DAMM_V2_OFFSET,
   AMOUNT_IN_DLMM_OFFSET,
+  AMOUNT_IN_DLMM_PRO_OFFSET,
   DAMM_V2_PROGRAM_ID,
   DEFAULT_JUPITER_API_URL,
   DEFAULT_JUPITER_API_VERSION,
+  DLMM_PRO_PROGRAM_ID,
   DLMM_PROGRAM_ID,
   JUP_V6_PROGRAM_ID,
   MEMO_PROGRAM_ID,
@@ -91,8 +105,10 @@ import {
   Rounding,
 } from "@meteora-ag/cp-amm-sdk";
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import DLMM, {
@@ -107,6 +123,16 @@ import DLMM, {
   buildLiquidityStrategyParameters,
   getLiquidityStrategyParameterBuilder,
 } from "@meteora-ag/dlmm";
+import {
+  DlmmProClient,
+  Pool as DlmmProPool,
+  derivePoolAuthority as deriveDlmmProPoolAuthority,
+  derivePosition as deriveDlmmProPosition,
+  deriveReserve as deriveDlmmProReserve,
+  deriveTickArrayBitmapExtension,
+  findNftAccount as findDlmmProNftAccount,
+  getTokenProgram as getDlmmProTokenProgram,
+} from "@meteora-ag/dlmm-pro-sdk";
 import Decimal from "decimal.js";
 import {
   calculateDirectPoolSwapAmount,
@@ -448,6 +474,145 @@ export class Zap {
       })
       .remainingAccounts(binArrays)
       .instruction();
+  }
+
+  private async zapInDlmmPro(params: {
+    user: PublicKey;
+    pool: PublicKey;
+    nftMint: PublicKey;
+    tokenXMint: PublicKey;
+    tokenYMint: PublicKey;
+    tokenXProgram: PublicKey;
+    tokenYProgram: PublicKey;
+    userTokenX: PublicKey;
+    userTokenY: PublicKey;
+    tickArrayBitmapExtension: PublicKey | null;
+    tickArrays: AccountMeta[];
+    parameters: DlmmProZapInParameters;
+  }): Promise<TransactionInstruction> {
+    const {
+      user,
+      pool,
+      nftMint,
+      tokenXMint,
+      tokenYMint,
+      tokenXProgram,
+      tokenYProgram,
+      userTokenX,
+      userTokenY,
+      tickArrayBitmapExtension,
+      tickArrays,
+      parameters,
+    } = params;
+
+    const { remainingAccounts, remainingAccountsInfo } =
+      await getDlmmProDepositTransferHookAccounts(this.connection, {
+        pool,
+        user,
+        tokenXMint,
+        tokenYMint,
+        userTokenX,
+        userTokenY,
+      });
+
+    return await this.zapProgram.methods
+      .zapInDlmmPro(parameters, remainingAccountsInfo)
+      .accountsPartial({
+        ledger: deriveLedgerAccount(user),
+        pool,
+        poolAuthority: deriveDlmmProPoolAuthority(),
+        nftMint,
+        nftAccount: findDlmmProNftAccount(nftMint, user),
+        position: deriveDlmmProPosition(nftMint),
+        tickArrayBitmapExtension,
+        userTokenX,
+        userTokenY,
+        reserveX: deriveDlmmProReserve(tokenXMint, pool),
+        reserveY: deriveDlmmProReserve(tokenYMint, pool),
+        tokenXMint,
+        tokenYMint,
+        dlmmProProgram: DLMM_PRO_PROGRAM_ID,
+        owner: user,
+        rentPayer: user,
+        tokenXProgram,
+        tokenYProgram,
+        nftTokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        dlmmProEventAuthority: deriveDlmmProEventAuthority(),
+      })
+      .remainingAccounts([...remainingAccounts, ...tickArrays])
+      .instruction();
+  }
+
+  private getZapInDlmmProCommonParams(
+    params: GetZapInDlmmProDirectParams | GetZapInDlmmProIndirectParams,
+    poolState: DlmmProPool,
+    currentTickId: number,
+  ) {
+    const { user, pool, inputTokenMint, amountIn, ranges, maxTickSlippage } =
+      params;
+    const { tokenXMint, tokenYMint } = poolState;
+
+    const preInstructions: TransactionInstruction[] = [];
+    if (inputTokenMint.equals(NATIVE_MINT)) {
+      const {
+        tokenAccounts: [userWrapSolAcc],
+        instructions: initializeWrapSolIxs,
+      } = getCreateAtaInstructions(user, [
+        { mint: NATIVE_MINT, tokenProgram: TOKEN_PROGRAM_ID },
+      ]);
+      preInstructions.push(
+        ...initializeWrapSolIxs,
+        ...wrapSOLInstruction(
+          user,
+          userWrapSolAcc,
+          BigInt(amountIn.toString()),
+        ),
+      );
+    }
+
+    const cleanUpInstructions: TransactionInstruction[] = [];
+    if (
+      inputTokenMint.equals(NATIVE_MINT) ||
+      tokenXMint.equals(NATIVE_MINT) ||
+      tokenYMint.equals(NATIVE_MINT)
+    ) {
+      const closeWrapSolIx = unwrapSOLInstruction(user, user);
+      if (closeWrapSolIx) {
+        cleanUpInstructions.push(closeWrapSolIx);
+      }
+    }
+
+    const zapInParameters: DlmmProZapInParameters = {
+      ranges,
+      currentTickId,
+      maxTickSlippage,
+      minMultiplier: params.minMultiplier ?? null,
+      leftover: params.leftover ?? null,
+    };
+
+    return {
+      user,
+      pool,
+      tokenXMint,
+      tokenYMint,
+      tokenXProgram: getDlmmProTokenProgram(poolState.tokenXFlag),
+      tokenYProgram: getDlmmProTokenProgram(poolState.tokenYFlag),
+      zapInParameters,
+      preInstructions,
+      cleanUpInstructions,
+      tickArrays: getDlmmProZapInTickArrays(
+        pool,
+        poolState.tickSpacing,
+        zapInParameters,
+      ),
+      // DLMM Pro reads it when a tick array lies outside the bitmap kept in the pool
+      tickArrayBitmapExtension:
+        poolState.isBitmapExtensionInitialized === 1
+          ? deriveTickArrayBitmapExtension(pool)
+          : null,
+    };
   }
 
   //#region Zap In
@@ -2329,6 +2494,357 @@ export class Zap {
       },
     };
   }
+
+  /**
+   * Get the parameters for building a DLMM Pro zap in transaction through a direct route
+   * Direct route means the input token matches either tokenX or tokenY in the pool
+   * so we can use the pool directly for swaps when it's the optimal route
+   *
+   * @param params.user - The user's public key
+   * @param params.pool - The DLMM Pro pool's public key
+   * @param params.amountIn - The amount of input token
+   * @param params.inputTokenMint - The input token mint
+   * @param params.ranges - The position ranges in absolute tick ids, with their weights. Each range gets `multiplier * weight` liquidity
+   * @param params.maxTickSlippage - The maximum distance between the pool tick of the estimate and the pool tick when the zap in executes
+   * @param params.minMultiplier - Optional minimum multiplier. The zap in fails below it. Derive it from the `multiplier` of the estimate: the tick slippage alone does not bound the liquidity when a range bound is close to the price
+   * @param params.leftover - Optional single sided ranges that take what the ranges leave of the token that is not used up. Without them it stays with the user
+   * @param params.swapSlippageBps - Swap slippage vs the **quoted route**, not vs a fair input/output price. Validate `directSwapEstimate` / `outAmount` before send.
+   * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
+   * @param params.directSwapEstimate - The result from the direct swap estimate
+   * @returns The zap-in transaction parameters for a DLMM Pro direct pool
+   * @throws if input token mint does not match either tokenX or tokenY in the pool
+   * @throws if fail to get jupiter quote or jupiter swap instruction
+   */
+  async getZapInDlmmProDirectParams(
+    params: GetZapInDlmmProDirectParams,
+  ): Promise<ZapInDlmmProDirectPoolParam> {
+    const {
+      user,
+      pool,
+      inputTokenMint,
+      swapSlippageBps,
+      maxTransferAmountExtendPercentage,
+      directSwapEstimate,
+    } = params;
+
+    const client = new DlmmProClient(this.connection);
+    const poolState = await client.state.fetchPool(pool);
+    const { tokenXMint, tokenYMint } = poolState;
+
+    invariant(
+      inputTokenMint.equals(tokenXMint) || inputTokenMint.equals(tokenYMint),
+      "Input token must be tokenX or tokenY for direct route",
+    );
+
+    const isTokenX = inputTokenMint.equals(tokenXMint);
+    const commonParams = this.getZapInDlmmProCommonParams(
+      params,
+      poolState,
+      directSwapEstimate.currentTickId,
+    );
+
+    const swapInstructions: TransactionInstruction[] = [];
+    let addressLookupTableAccounts: AddressLookupTableAccount[] = [];
+    let maxTransferAmount = new BN(0);
+
+    if (
+      directSwapEstimate.swapType !== DlmmSwapType.NoSwap &&
+      directSwapEstimate.quote
+    ) {
+      const swapQuote = directSwapEstimate.quote;
+      if (swapQuote.route === DlmmProDirectSwapQuoteRoute.Jupiter) {
+        const swap = await buildJupiterSwapTransaction(
+          this.connection,
+          user,
+          inputTokenMint,
+          isTokenX ? tokenYMint : tokenXMint,
+          directSwapEstimate.swapAmount,
+          swapSlippageBps,
+          swapQuote.originalQuote,
+          {
+            jupiterApiUrl: this.jupiterApiUrl,
+            jupiterApiKey: this.jupiterApiKey,
+            jupiterApiVersion: this.jupiterApiVersion,
+          },
+        );
+        commonParams.preInstructions.push(
+          ...getJupiterCreateAtaInstructions(swap.setupInstructions),
+        );
+        swapInstructions.push(swap.instruction);
+        addressLookupTableAccounts = swap.addressLookupTableAccounts;
+      } else {
+        const { tickArrays, tickArrayBitmapExtension } =
+          swapQuote.originalQuote;
+        swapInstructions.push(
+          await getDlmmProSwapInstruction(client, {
+            pool,
+            tokenXMint,
+            tokenYMint,
+            user,
+            swapForY: isTokenX,
+            tickArrays,
+            tickArrayBitmapExtension,
+            parameters: {
+              inputAmount: directSwapEstimate.swapAmount,
+              minimumOutputAmount: directSwapEstimate.expectedOutput
+                .muln(BASIS_POINT_MAX - swapSlippageBps)
+                .divn(BASIS_POINT_MAX),
+            },
+          }),
+        );
+      }
+      maxTransferAmount = getExtendMaxAmountTransfer(
+        directSwapEstimate.expectedOutput.toString(),
+        maxTransferAmountExtendPercentage,
+      );
+    }
+
+    return {
+      ...commonParams,
+      isDirectRoute: true,
+      isTokenX,
+      amount: isTokenX
+        ? directSwapEstimate.postSwapX
+        : directSwapEstimate.postSwapY,
+      maxTransferAmount,
+      swapInstructions,
+      addressLookupTableAccounts,
+    };
+  }
+
+  /**
+   * Get the parameters for building a DLMM Pro zap in transaction through an indirect route
+   * Indirect route means the input token does not match either tokenX or tokenY in the pool
+   * so we swap the input token to tokenX and tokenY through Jupiter when needed
+   *
+   * @param params.user - The user's public key
+   * @param params.pool - The DLMM Pro pool's public key
+   * @param params.amountIn - The amount of input token
+   * @param params.inputTokenMint - The input token mint
+   * @param params.ranges - The position ranges in absolute tick ids, with their weights. Each range gets `multiplier * weight` liquidity
+   * @param params.maxTickSlippage - The maximum distance between the pool tick of the estimate and the pool tick when the zap in executes
+   * @param params.minMultiplier - Optional minimum multiplier. The zap in fails below it. Derive it from the `multiplier` of the estimate: the tick slippage alone does not bound the liquidity when a range bound is close to the price
+   * @param params.leftover - Optional single sided ranges that take what the ranges leave of the token that is not used up. Without them it stays with the user
+   * @param params.swapSlippageBps - The swap slippage tolerance in basis points
+   * @param params.maxTransferAmountExtendPercentage - The percentage to extend the max transfer amount after the swap
+   * @param params.indirectSwapEstimate - The result from the indirect swap estimate
+   * @returns The zap-in transaction parameters for a DLMM Pro indirect pool
+   * @throws if input token mint matches either tokenX or tokenY in the pool
+   * @throws if fail to get jupiter quote or jupiter swap instruction
+   */
+  async getZapInDlmmProIndirectParams(
+    params: GetZapInDlmmProIndirectParams,
+  ): Promise<ZapInDlmmProIndirectPoolParam> {
+    const {
+      user,
+      pool,
+      inputTokenMint,
+      swapSlippageBps,
+      maxTransferAmountExtendPercentage,
+      indirectSwapEstimate,
+    } = params;
+
+    const poolState = await new DlmmProClient(this.connection).state.fetchPool(
+      pool,
+    );
+    const { tokenXMint, tokenYMint } = poolState;
+
+    invariant(
+      !inputTokenMint.equals(tokenXMint) && !inputTokenMint.equals(tokenYMint),
+      "Input token must not be tokenX or tokenY for indirect route",
+    );
+
+    const commonParams = this.getZapInDlmmProCommonParams(
+      params,
+      poolState,
+      indirectSwapEstimate.currentTickId,
+    );
+
+    const swapInstructions: TransactionInstruction[] = [];
+    const swapLookupTables: AddressLookupTableAccount[][] = [];
+
+    const swaps = [
+      {
+        outputMint: tokenXMint,
+        amount: indirectSwapEstimate.swapAmountToX,
+        quote: indirectSwapEstimate.swapToX,
+      },
+      {
+        outputMint: tokenYMint,
+        amount: indirectSwapEstimate.swapAmountToY,
+        quote: indirectSwapEstimate.swapToY,
+      },
+    ];
+    for (const { outputMint, amount, quote } of swaps) {
+      if (amount.isZero() || quote === null) {
+        continue;
+      }
+      const swap = await buildJupiterSwapTransaction(
+        this.connection,
+        user,
+        inputTokenMint,
+        outputMint,
+        amount,
+        swapSlippageBps,
+        quote,
+        {
+          jupiterApiUrl: this.jupiterApiUrl,
+          jupiterApiKey: this.jupiterApiKey,
+          jupiterApiVersion: this.jupiterApiVersion,
+        },
+      );
+      commonParams.preInstructions.push(
+        ...getJupiterCreateAtaInstructions(swap.setupInstructions),
+      );
+      swapInstructions.push(swap.instruction);
+      swapLookupTables.push(swap.addressLookupTableAccounts);
+    }
+
+    return {
+      ...commonParams,
+      isDirectRoute: false,
+      maxTransferAmountX: getExtendMaxAmountTransfer(
+        indirectSwapEstimate.postSwapX.toString(),
+        maxTransferAmountExtendPercentage,
+      ),
+      maxTransferAmountY: getExtendMaxAmountTransfer(
+        indirectSwapEstimate.postSwapY.toString(),
+        maxTransferAmountExtendPercentage,
+      ),
+      swapInstructions,
+      addressLookupTableAccounts: mergeAddressLookupTableAccounts(
+        ...swapLookupTables,
+      ),
+    };
+  }
+
+  /**
+   * Build the DLMM Pro zap-in instructions
+   *
+   * The zap in opens a new position, whose NFT mint must sign the transaction that holds the
+   * zap-in instruction, and deposits into every range in one instruction.
+   *
+   * Instructions are ordered: setup (token accounts, wrap SOL), swaps, ledger, zap in, clean up.
+   * They must run in that order but can be split across several transactions, because state
+   * between steps lives in accounts. Splitting loses atomicity, so send split transactions as a bundle.
+   * No compute budget instructions are included. The zap-in instruction alone can use more than the
+   * 200k compute units a transaction gets per instruction by default, so set a compute unit limit
+   * on the transaction that holds it.
+   *
+   * @param params.user - The user's public key
+   * @param params.pool - The DLMM Pro pool's public key
+   * @param params.nftMint - The NFT mint of the new position
+   * @param params.tokenXMint - The token X mint
+   * @param params.tokenYMint - The token Y mint
+   * @param params.tokenXProgram - The token X program
+   * @param params.tokenYProgram - The token Y program
+   * @param params.zapInParameters - The ranges, the pool tick they were built against, the slippage bounds and the leftover ranges
+   * @param params.preInstructions - Instructions to run before the zap in, including the token accounts the Jupiter swaps need. Token account creation repeated here is removed
+   * @param params.swapInstructions - Swap instructions to execute
+   * @param params.addressLookupTableAccounts - Lookup tables used by the swap instructions
+   * @param params.cleanUpInstructions - Instructions to run after the zap in
+   * @param params.tickArrays - The tick arrays the position can need
+   * @param params.tickArrayBitmapExtension - The tick array bitmap extension account if it exists
+   * @param params.isDirectRoute - Whether this is a direct route
+   * @returns The ordered instructions and the lookup tables they use
+   */
+  async buildZapInDlmmProTransaction(
+    params: (ZapInDlmmProDirectPoolParam | ZapInDlmmProIndirectPoolParam) & {
+      nftMint: PublicKey;
+    },
+  ): Promise<ZapInstructionsResponse> {
+    const {
+      user,
+      pool,
+      nftMint,
+      tokenXMint,
+      tokenYMint,
+      tokenXProgram,
+      tokenYProgram,
+      zapInParameters,
+      preInstructions,
+      swapInstructions,
+      addressLookupTableAccounts,
+      cleanUpInstructions,
+      tickArrays,
+      tickArrayBitmapExtension,
+    } = params;
+
+    const {
+      tokenAccounts: [tokenXAccount, tokenYAccount],
+      instructions: setupInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: tokenXMint, tokenProgram: tokenXProgram },
+      { mint: tokenYMint, tokenProgram: tokenYProgram },
+    ]);
+    setupInstructions.push(...preInstructions);
+
+    const ledgerInstructions = await this.resetOrInitializeLedgerAccount(user);
+
+    const updateLedgerBalanceAfterSwap = async (
+      isTokenX: boolean,
+      maxTransferAmount: BN,
+    ) => {
+      const tokenAccount = isTokenX ? tokenXAccount : tokenYAccount;
+      const preTokenBalance = await getTokenAccountBalance(
+        this.connection,
+        tokenAccount,
+      );
+      return this.updateLedgerBalanceAfterSwap(
+        user,
+        tokenAccount,
+        new BN(preTokenBalance),
+        maxTransferAmount,
+        isTokenX,
+      );
+    };
+
+    if (params.isDirectRoute) {
+      const { isTokenX, amount, maxTransferAmount } = params;
+      ledgerInstructions.push(
+        await this.setLedgerBalance(user, amount, isTokenX),
+      );
+      if (swapInstructions.length > 0) {
+        ledgerInstructions.push(
+          await updateLedgerBalanceAfterSwap(!isTokenX, maxTransferAmount),
+        );
+      }
+    } else {
+      ledgerInstructions.push(
+        await updateLedgerBalanceAfterSwap(true, params.maxTransferAmountX),
+        await updateLedgerBalanceAfterSwap(false, params.maxTransferAmountY),
+      );
+    }
+
+    const zapInInstruction = await this.zapInDlmmPro({
+      user,
+      pool,
+      nftMint,
+      tokenXMint,
+      tokenYMint,
+      tokenXProgram,
+      tokenYProgram,
+      userTokenX: tokenXAccount,
+      userTokenY: tokenYAccount,
+      tickArrayBitmapExtension,
+      tickArrays,
+      parameters: zapInParameters,
+    });
+
+    const closeLedgerInstruction = await this.closeLedgerAccount(user, user);
+
+    return {
+      instructions: [
+        ...dedupeCreateAtaInstructions(setupInstructions),
+        ...swapInstructions,
+        ...ledgerInstructions,
+        zapInInstruction,
+        closeLedgerInstruction,
+        ...cleanUpInstructions,
+      ],
+      addressLookupTableAccounts,
+    };
+  }
   //#endregion Zap In
 
   /////// ZAPOUT FUNTIONS ///////
@@ -2693,6 +3209,114 @@ export class Zap {
       },
       remainingAccounts,
       ammProgram: DLMM_PROGRAM_ID,
+      preInstructions,
+      postInstructions,
+    });
+  }
+
+  /**
+   * Performs a token swap through a DLMM Pro pool as part of a zap out operation.
+   * Swaps what the instructions before it add to the user's input token account.
+   *
+   * @param params - Dlmm Pro swap parameters
+   * @param params.user - Public key of the user performing the swap
+   * @param params.poolAddress - Address of the pool to swap through
+   * @param params.inputMint - Token mint being swapped from
+   * @param params.outputMint - Token mint being swapped to
+   * @param params.inputTokenProgram - Token program for the input token
+   * @param params.outputTokenProgram - Token program for the output token
+   * @param params.amountIn - Amount of input token to swap. The zap program replaces it with the amount it swaps
+   * @param params.minimumSwapAmountOut - Minimum amount of output token to receive
+   * @param params.maxSwapAmount - Maximum amount of input token to swap
+   * @param params.percentageToZapOut - Percentage of input token to zap out
+   * @returns The ordered instructions, with no lookup tables
+   * @throws if the input and output mints are not the two tokens of the pool
+   */
+  async zapOutThroughDlmmPro(
+    params: ZapOutThroughDlmmProParams,
+  ): Promise<ZapInstructionsResponse> {
+    const {
+      user,
+      poolAddress,
+      inputMint,
+      outputMint,
+      inputTokenProgram,
+      outputTokenProgram,
+      amountIn,
+      minimumSwapAmountOut,
+      maxSwapAmount,
+      percentageToZapOut,
+    } = params;
+
+    const client = new DlmmProClient(this.connection);
+    const poolState = await client.state.fetchPool(poolAddress);
+    const { tokenXMint, tokenYMint } = poolState;
+    const swapForY = inputMint.equals(tokenXMint);
+
+    invariant(
+      inputMint.equals(swapForY ? tokenXMint : tokenYMint) &&
+        outputMint.equals(swapForY ? tokenYMint : tokenXMint),
+      "Input and output mints must be tokenX and tokenY of the pool",
+    );
+
+    const preInstructions: TransactionInstruction[] = [];
+    const postInstructions: TransactionInstruction[] = [];
+
+    const {
+      tokenAccounts: [inputTokenAccount, outputTokenAccount],
+      instructions: createAtaInstructions,
+    } = getCreateAtaInstructions(user, [
+      { mint: inputMint, tokenProgram: inputTokenProgram },
+      { mint: outputMint, tokenProgram: outputTokenProgram },
+    ]);
+    preInstructions.push(...createAtaInstructions);
+
+    // SOL is not wrapped here: the zap out swaps what the earlier instructions add to the input
+    // token account, so a SOL withdrawal must stay wrapped in it
+    const preUserTokenBalance = await getTokenAccountBalance(
+      this.connection,
+      inputTokenAccount,
+    );
+
+    const swapInstruction = await getDlmmProSwapInstruction(client, {
+      pool: poolAddress,
+      tokenXMint,
+      tokenYMint,
+      userTokenIn: inputTokenAccount,
+      userTokenOut: outputTokenAccount,
+      user,
+      swapForY,
+      tickArrays: await getDlmmProTickArraysForSwap(
+        client,
+        poolAddress,
+        poolState,
+        swapForY,
+      ),
+      parameters: {
+        inputAmount: amountIn,
+        minimumOutputAmount: minimumSwapAmountOut,
+      },
+    });
+
+    if (inputMint.equals(NATIVE_MINT) || outputMint.equals(NATIVE_MINT)) {
+      const unwrapInstructions = unwrapSOLInstruction(user, user);
+
+      if (unwrapInstructions) {
+        postInstructions.push(unwrapInstructions);
+      }
+    }
+
+    return await this.zapOut({
+      userTokenInAccount: inputTokenAccount,
+      zapOutParams: {
+        percentage: percentageToZapOut,
+        offsetAmountIn: AMOUNT_IN_DLMM_PRO_OFFSET,
+        preUserTokenBalance: new BN(preUserTokenBalance),
+        maxSwapAmount,
+        payloadData: swapInstruction.data,
+      },
+      remainingAccounts: swapInstruction.keys,
+      ammProgram: DLMM_PRO_PROGRAM_ID,
       preInstructions,
       postInstructions,
     });

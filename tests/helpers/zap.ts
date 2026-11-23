@@ -8,6 +8,8 @@ import { Zap } from "../../src/zap";
 import {
   estimateDlmmDirectSwap,
   estimateDlmmIndirectSwap,
+  estimateDlmmProDirectSwap,
+  estimateDlmmProIndirectSwap,
   estimateDlmmRebalanceSwap,
 } from "../../src/helpers";
 import { toAddressLookupTableAccounts } from "../../src/helpers/jupiter";
@@ -19,6 +21,10 @@ import {
   DlmmDirectRebalanceEstimate,
   DlmmDirectSwapEstimate,
   DlmmIndirectSwapEstimate,
+  DlmmProDirectSwapEstimate,
+  DlmmProIndirectSwapEstimate,
+  DlmmProLeftoverParameters,
+  DlmmProPositionRangeParameters,
   DlmmSingleSided,
   JupiterQuoteResponse,
   RebalanceDlmmPositionResponse,
@@ -27,6 +33,7 @@ import {
 } from "../../src/types";
 import { getDammV2OutputMint, getDammV2Pool } from "./damm_v2";
 import { getDlmmOutputMint, getLbPair } from "./dlmm";
+import { getDlmmProOutputMint, getDlmmProPool } from "./dlmm_pro";
 import { getTokenBalance, getTokenProgram } from "./token";
 import { TOKEN_DECIMALS } from "./token";
 import { createLiteSvmConnection } from "./svm";
@@ -479,4 +486,135 @@ export async function rebalanceDlmmPosition(
   });
 
   return { estimate, ...result };
+}
+
+export async function zapOutDlmmPro(
+  svm: LiteSVM,
+  user: PublicKey,
+  inputTokenMint: PublicKey,
+  pool: PublicKey,
+  amountIn: BN,
+): Promise<ZapInstructionsResponse> {
+  const zap = new Zap(createLiteSvmConnection(svm));
+  const poolState = await getDlmmProPool(svm, pool);
+  const outputTokenMint = getDlmmProOutputMint(poolState, inputTokenMint);
+
+  return await zap.zapOutThroughDlmmPro({
+    user,
+    poolAddress: pool,
+    inputMint: inputTokenMint,
+    outputMint: outputTokenMint,
+    inputTokenProgram: getTokenProgram(svm, inputTokenMint),
+    outputTokenProgram: getTokenProgram(svm, outputTokenMint),
+    amountIn,
+    minimumSwapAmountOut: new BN(0),
+    maxSwapAmount: amountIn,
+    percentageToZapOut: 100,
+  });
+}
+
+export type ZapInDlmmProOptions = {
+  // Multiplier slippage bound from the estimate. No bound when omitted.
+  getMinMultiplier?: (estimatedMultiplier: BN) => BN;
+  leftover?: DlmmProLeftoverParameters;
+};
+
+const ZAP_IN_DLMM_PRO_MAX_TICK_SLIPPAGE = 10;
+
+// Estimate the pre-swap, build the direct zap-in params, and build the instructions for a new
+// position. The input token must be token X or token Y of the pool.
+export async function zapInDlmmProDirect(
+  svm: LiteSVM,
+  user: PublicKey,
+  inputTokenMint: PublicKey,
+  pool: PublicKey,
+  amountIn: BN,
+  ranges: DlmmProPositionRangeParameters[],
+  options: ZapInDlmmProOptions = {},
+): Promise<
+  {
+    nftMint: Keypair;
+    estimate: DlmmProDirectSwapEstimate;
+  } & ZapInstructionsResponse
+> {
+  const connection = createLiteSvmConnection(svm);
+  const zap = new Zap(connection);
+
+  const estimate = await estimateDlmmProDirectSwap({
+    user,
+    amountIn,
+    inputTokenMint,
+    pool,
+    connection,
+    swapSlippageBps: 150,
+    ranges,
+    jupiterQuoteOptions: { maxAccounts: 50 },
+  });
+
+  const params = await zap.getZapInDlmmProDirectParams({
+    user,
+    directSwapEstimate: estimate.result,
+    maxTickSlippage: ZAP_IN_DLMM_PRO_MAX_TICK_SLIPPAGE,
+    minMultiplier: options.getMinMultiplier?.(estimate.result.multiplier),
+    leftover: options.leftover,
+    maxTransferAmountExtendPercentage: 20,
+    ...estimate.context,
+  });
+
+  const nftMint = Keypair.generate();
+  const result = await zap.buildZapInDlmmProTransaction({
+    ...params,
+    nftMint: nftMint.publicKey,
+  });
+
+  return { nftMint, estimate, ...result };
+}
+
+// Same as zapInDlmmProDirect for an input token that is neither token X nor token Y, so the
+// needed side(s) are bought through Jupiter.
+export async function zapInDlmmProIndirect(
+  svm: LiteSVM,
+  user: PublicKey,
+  inputTokenMint: PublicKey,
+  pool: PublicKey,
+  amountIn: BN,
+  ranges: DlmmProPositionRangeParameters[],
+  options: ZapInDlmmProOptions = {},
+): Promise<
+  {
+    nftMint: Keypair;
+    estimate: DlmmProIndirectSwapEstimate;
+  } & ZapInstructionsResponse
+> {
+  const connection = createLiteSvmConnection(svm);
+  const zap = new Zap(connection);
+
+  const estimate = await estimateDlmmProIndirectSwap({
+    user,
+    amountIn,
+    inputTokenMint,
+    pool,
+    connection,
+    swapSlippageBps: 150,
+    ranges,
+    jupiterQuoteOptions: { maxAccounts: 50 },
+  });
+
+  const params = await zap.getZapInDlmmProIndirectParams({
+    user,
+    indirectSwapEstimate: estimate.result,
+    maxTickSlippage: ZAP_IN_DLMM_PRO_MAX_TICK_SLIPPAGE,
+    minMultiplier: options.getMinMultiplier?.(estimate.result.multiplier),
+    leftover: options.leftover,
+    maxTransferAmountExtendPercentage: 20,
+    ...estimate.context,
+  });
+
+  const nftMint = Keypair.generate();
+  const result = await zap.buildZapInDlmmProTransaction({
+    ...params,
+    nftMint: nftMint.publicKey,
+  });
+
+  return { nftMint, estimate, ...result };
 }

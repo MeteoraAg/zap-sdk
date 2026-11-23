@@ -11,6 +11,7 @@ import { Zap } from "./idl/zap/idl";
 import Decimal from "decimal.js";
 import { SwapQuote, StrategyType } from "@meteora-ag/dlmm";
 import { PoolState } from "@meteora-ag/cp-amm-sdk";
+import { QuoteExactInResponse } from "@meteora-ag/dlmm-pro-sdk";
 
 export type ZapProgram = Program<Zap>;
 
@@ -57,6 +58,19 @@ export type ZapOutThroughDammV2Params = {
 export type ZapOutThroughDlmmParams = {
   user: PublicKey;
   lbPairAddress: PublicKey;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  inputTokenProgram: PublicKey;
+  outputTokenProgram: PublicKey;
+  amountIn: BN;
+  minimumSwapAmountOut: BN;
+  maxSwapAmount: BN;
+  percentageToZapOut: number;
+};
+
+export type ZapOutThroughDlmmProParams = {
+  user: PublicKey;
+  poolAddress: PublicKey;
   inputMint: PublicKey;
   outputMint: PublicKey;
   inputTokenProgram: PublicKey;
@@ -603,6 +617,147 @@ export type ZapInDlmmDirectPoolParam = {
   isDirectRoute: boolean;
   isTokenX: boolean;
   singleSided?: DlmmSingleSided;
+};
+
+export type DlmmProZapInParameters = IdlTypes<Zap>["dlmmProZapInParameters"];
+export type DlmmProPositionRangeParameters =
+  IdlTypes<Zap>["dlmmProPositionRangeParameters"];
+export type DlmmProLeftoverParameters =
+  IdlTypes<Zap>["dlmmProLeftoverParameters"];
+
+export enum DlmmProDirectSwapQuoteRoute {
+  Jupiter,
+  DlmmPro,
+}
+
+export type DlmmProSwapQuoteResult =
+  | {
+      inAmount: BN;
+      outAmount: BN;
+      route: DlmmProDirectSwapQuoteRoute.Jupiter;
+      originalQuote: JupiterQuoteResponse;
+    }
+  | {
+      inAmount: BN;
+      outAmount: BN;
+      route: DlmmProDirectSwapQuoteRoute.DlmmPro;
+      originalQuote: QuoteExactInResponse;
+    };
+
+export interface DlmmProZapInEstimate {
+  /** Expected pool tick: after the swap when it goes through the pool itself. */
+  currentTickId: number;
+  /**
+   * Expected multiplier, each range gets `multiplier * weight` liquidity. Derive
+   * `minMultiplier` from it, minus your tolerance.
+   */
+  multiplier: BN;
+}
+
+export interface EstimateDlmmProDirectSwapParams {
+  /** Wallet the swap is built for. Sent as Jupiter `taker` under v2. */
+  user: PublicKey;
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  pool: PublicKey;
+  connection: Connection;
+  swapSlippageBps: number;
+  /** Position ranges in absolute tick ids, for example `buildLiquidityShape(...).ranges` of the DLMM Pro SDK. */
+  ranges: DlmmProPositionRangeParameters[];
+  /**
+   * Jupiter query parameters for the quotes this helper requests, see `GetJupiterQuoteParams.queryParams`.
+   * The helper sends its slippage argument as `slippageBps`, and these parameters override it.
+   */
+  jupiterQuoteOptions?: JupiterQueryParams;
+  config?: ZapConfig;
+}
+
+export interface DlmmProDirectSwapEstimateContext {
+  amountIn: BN;
+  inputTokenMint: PublicKey;
+  pool: PublicKey;
+  swapSlippageBps: number;
+  ranges: DlmmProPositionRangeParameters[];
+}
+
+export interface DlmmProDirectEstimateResult extends DlmmProZapInEstimate {
+  swapType: DlmmSwapType;
+  swapAmount: BN;
+  expectedOutput: BN;
+  postSwapX: BN;
+  postSwapY: BN;
+  quote: DlmmProSwapQuoteResult | null;
+}
+
+export interface DlmmProDirectSwapEstimate {
+  result: DlmmProDirectEstimateResult;
+  context: DlmmProDirectSwapEstimateContext;
+}
+
+export type EstimateDlmmProIndirectSwapParams = EstimateDlmmProDirectSwapParams;
+
+export type DlmmProIndirectSwapEstimateContext =
+  DlmmProDirectSwapEstimateContext;
+
+export interface DlmmProIndirectSwapEstimateResult
+  extends DlmmIndirectSwapEstimateResult, DlmmProZapInEstimate {}
+
+export interface DlmmProIndirectSwapEstimate {
+  result: DlmmProIndirectSwapEstimateResult;
+  context: DlmmProIndirectSwapEstimateContext;
+}
+
+type GetZapInDlmmProParams = {
+  user: PublicKey;
+  pool: PublicKey;
+  inputTokenMint: PublicKey;
+  amountIn: BN;
+  ranges: DlmmProPositionRangeParameters[];
+  /** Max distance between the estimated pool tick and the pool tick when the zap in executes. */
+  maxTickSlippage: number;
+  /** Fails the zap in when its multiplier is below it. `null` or omitted skips the check. */
+  minMultiplier?: BN | null;
+  /** Single sided ranges for what the shape does not take. Without them it stays with the user. */
+  leftover?: DlmmProLeftoverParameters | null;
+  swapSlippageBps: number;
+  maxTransferAmountExtendPercentage: number;
+};
+
+export type GetZapInDlmmProDirectParams = GetZapInDlmmProParams & {
+  directSwapEstimate: DlmmProDirectEstimateResult;
+};
+
+export type GetZapInDlmmProIndirectParams = GetZapInDlmmProParams & {
+  indirectSwapEstimate: DlmmProIndirectSwapEstimateResult;
+};
+
+type ZapInDlmmProPoolParam = {
+  user: PublicKey;
+  pool: PublicKey;
+  tokenXMint: PublicKey;
+  tokenYMint: PublicKey;
+  tokenXProgram: PublicKey;
+  tokenYProgram: PublicKey;
+  zapInParameters: DlmmProZapInParameters;
+  preInstructions: TransactionInstruction[];
+  swapInstructions: TransactionInstruction[];
+  addressLookupTableAccounts: AddressLookupTableAccount[];
+  cleanUpInstructions: TransactionInstruction[];
+  tickArrays: AccountMeta[];
+  tickArrayBitmapExtension: PublicKey | null;
+};
+
+export type ZapInDlmmProDirectPoolParam = ZapInDlmmProPoolParam & {
+  isDirectRoute: true;
+  isTokenX: boolean;
+  amount: BN;
+  maxTransferAmount: BN;
+};
+
+export type ZapInDlmmProIndirectPoolParam = ZapInDlmmProPoolParam & {
+  isDirectRoute: false;
+  maxTransferAmountX: BN;
+  maxTransferAmountY: BN;
 };
 
 //#endregion Zap In Types

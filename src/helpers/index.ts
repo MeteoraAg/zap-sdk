@@ -18,5 +18,7 @@ export {
   filterOutCloseSplTokenAccountInstructions,
 } from "./token";
 export * from "./dlmm";
+export * from "./dlmmPro";
 export * from "./token2022";
 export * from "./zapin/dlmmSwapCalculations";
+export * from "./zapin/dlmmProSwapCalculations";
