@@ -138,6 +138,7 @@ export async function getDlmmRemainingAccounts(
   tokenXProgram: PublicKey,
   tokenYProgram: PublicKey,
   lbPairState: LbPair,
+  swapForY = true,
 ): Promise<{
   remainingAccounts: AccountMeta[];
   remainingAccountsInfo: RemainingAccountInfo;
@@ -267,7 +268,7 @@ export async function getDlmmRemainingAccounts(
     cluster: "mainnet-beta",
     programId: new PublicKey(DLMM_PROGRAM_ID),
   });
-  const binArrays = await dlmmClient.getBinArrayForSwap(true, 5);
+  const binArrays = await dlmmClient.getBinArrayForSwap(swapForY, 5);
 
   const binArraysAccountMeta: AccountMeta[] = binArrays.map((binArray) => {
     return {

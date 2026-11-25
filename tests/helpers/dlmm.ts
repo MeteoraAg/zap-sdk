@@ -199,13 +199,18 @@ export async function createDlmmPositionAndAddLiquidity(
   lbPair: PublicKey,
   amountX: BN,
   amountY: BN,
+  range?: { lowerBinId: number; upperBinId: number },
 ): Promise<{ position: PublicKey; lowerBinId: number; upperBinId: number }> {
   const program = createDlmmProgram();
   const lbPairState = getLbPair(svm, lbPair);
 
-  const width = DEFAULT_BIN_PER_POSITION.toNumber();
-  const lowerBinId = lbPairState.activeId - Math.floor(width / 2);
-  const upperBinId = lowerBinId + width - 1;
+  const width = range
+    ? range.upperBinId - range.lowerBinId + 1
+    : DEFAULT_BIN_PER_POSITION.toNumber();
+  const lowerBinId = range
+    ? range.lowerBinId
+    : lbPairState.activeId - Math.floor(width / 2);
+  const upperBinId = range ? range.upperBinId : lowerBinId + width - 1;
 
   await createBinArrays(svm, user, lbPair, lowerBinId, upperBinId);
 

@@ -2,6 +2,16 @@ import { LiteSVM } from "litesvm";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import { expect } from "chai";
+import {
+  binIdToBinArrayIndex,
+  deriveBinArray,
+  MAX_BIN_ARRAY_SIZE,
+} from "@meteora-ag/dlmm";
+import {
+  createMintToInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 import {
   startSvm,
@@ -18,6 +28,9 @@ import {
   getAccount,
   mockJupiterFetch,
   JUPITER_API_VERSION_CASES,
+  createDlmmPool,
+  createDlmmPositionAndAddLiquidity,
+  getLbPair,
 } from "./helpers";
 import { Zap } from "../src/zap";
 import {
@@ -26,8 +39,7 @@ import {
   getJupiterSwapInstruction,
 } from "../src/helpers/jupiter";
 import { isCreateAtaInstruction } from "../src/helpers/token";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { DEFAULT_JUPITER_API_VERSION } from "../src/constants";
+import { DEFAULT_JUPITER_API_VERSION, DLMM_PROGRAM_ID } from "../src/constants";
 
 describe("Zap out DLMM", () => {
   let svm: LiteSVM;
@@ -265,4 +277,92 @@ describe("Zap out DLMM", () => {
       );
     });
   }
+
+  it("zap out y->x crosses into the upper bin array", async () => {
+    const activeId = MAX_BIN_ARRAY_SIZE.toNumber() - 1;
+    const lbPair = await createDlmmPool({
+      svm,
+      creator: admin,
+      tokenXMint,
+      tokenYMint,
+      activeId,
+    });
+    svm.warpToSlot(svm.getClock().slot + BigInt(1));
+
+    await createDlmmPositionAndAddLiquidity(
+      svm,
+      admin,
+      lbPair,
+      new BN(1_000),
+      new BN(0),
+      { lowerBinId: activeId, upperBinId: activeId },
+    );
+    await createDlmmPositionAndAddLiquidity(
+      svm,
+      admin,
+      lbPair,
+      new BN(1_000_000_000_000),
+      new BN(0),
+      { lowerBinId: activeId + 1, upperBinId: activeId + 1 },
+    );
+
+    const swapAmount = new BN(1_000_000_000);
+    const userTokenIn = getAssociatedTokenAddressSync(
+      tokenYMint,
+      user.publicKey,
+      true,
+      TOKEN_PROGRAM_ID,
+    );
+    const mintToUser = createMintToInstruction(
+      tokenYMint,
+      userTokenIn,
+      admin.publicKey,
+      BigInt(swapAmount.toString()),
+    );
+    const preUserTokenInBalance = getTokenBalance(svm, userTokenIn);
+
+    const yToX = await zapOutDlmm(
+      svm,
+      user.publicKey,
+      tokenYMint,
+      lbPair,
+      swapAmount,
+    );
+    const xToY = await zapOutDlmm(
+      svm,
+      user.publicKey,
+      tokenXMint,
+      lbPair,
+      swapAmount,
+    );
+    const [upperBinArray] = deriveBinArray(
+      lbPair,
+      binIdToBinArrayIndex(new BN(activeId + 1)),
+      DLMM_PROGRAM_ID,
+    );
+    const accountKeys = (tx: {
+      instructions: { keys: { pubkey: PublicKey }[] }[];
+    }) =>
+      tx.instructions.flatMap((ix) =>
+        ix.keys.map((key) => key.pubkey.toBase58()),
+      );
+
+    expect(accountKeys(yToX)).to.include(upperBinArray.toBase58());
+    expect(accountKeys(xToY)).to.not.include(upperBinArray.toBase58());
+
+    const creates = yToX.instructions.filter(isCreateAtaInstruction);
+    const rest = yToX.instructions.filter((ix) => !isCreateAtaInstruction(ix));
+    sendV0Instructions(
+      svm,
+      [...creates, mintToUser, ...rest],
+      yToX.addressLookupTableAccounts,
+      [user, admin],
+      1_400_000,
+    );
+
+    expect(getLbPair(svm, lbPair).activeId).to.be.greaterThan(activeId);
+    expect(getTokenBalance(svm, userTokenIn).toString()).to.equal(
+      preUserTokenInBalance.toString(),
+    );
+  });
 });

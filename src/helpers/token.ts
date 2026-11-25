@@ -1,12 +1,17 @@
+import BN from "bn.js";
 import {
+  ACCOUNT_SIZE,
+  AccountLayout,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import {
+  AccountInfo,
   Connection,
   PublicKey,
   SystemProgram,
@@ -79,24 +84,75 @@ export function unwrapSOLInstruction(
 }
 
 /**
- * Get token account balance
+ * Raw token amount in `tokenAccount`.
+ * A missing account is `"0"`. So is an uninitialized associated token account, except wrapped SOL,
+ * which keeps the lamports above rent.
  * @param connection - Solana connection
  * @param tokenAccount - The token account address
- * @returns The token account balance as a string
+ * @param ata - Mint, owner and token program, when `tokenAccount` may not be initialized yet
+ * @returns The raw token amount
  */
 export async function getTokenAccountBalance(
   connection: Connection,
   tokenAccount: PublicKey,
+  ata?: {
+    mint: PublicKey;
+    owner: PublicKey;
+    tokenProgram: PublicKey;
+  },
 ): Promise<string> {
-  let balance: string;
-  try {
-    balance = (await connection.getTokenAccountBalance(tokenAccount)).value
-      .amount;
-  } catch {
-    balance = "0";
+  const account = await connection.getAccountInfo(tokenAccount);
+  if (!account) {
+    return "0";
   }
 
-  return balance;
+  if (isTokenAccount(account)) {
+    return AccountLayout.decode(account.data).amount.toString();
+  }
+
+  if (ata && isUninitializedAta(tokenAccount, account, ata)) {
+    if (!ata.mint.equals(NATIVE_MINT)) {
+      return "0";
+    }
+    const rent = new BN(
+      await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE),
+    );
+    const balance = new BN(account.lamports).sub(rent);
+    return balance.isNeg() || balance.isZero() ? "0" : balance.toString();
+  }
+
+  throw new Error(`Could not read token account ${tokenAccount.toBase58()}`);
+}
+
+function isTokenAccount(account: AccountInfo<Buffer>): boolean {
+  return (
+    (account.owner.equals(TOKEN_PROGRAM_ID) ||
+      account.owner.equals(TOKEN_2022_PROGRAM_ID)) &&
+    account.data.length >= ACCOUNT_SIZE
+  );
+}
+
+function isUninitializedAta(
+  tokenAccount: PublicKey,
+  account: AccountInfo<Buffer>,
+  ata: {
+    mint: PublicKey;
+    owner: PublicKey;
+    tokenProgram: PublicKey;
+  },
+): boolean {
+  if (
+    !account.owner.equals(SystemProgram.programId) ||
+    account.data.length !== 0
+  ) {
+    return false;
+  }
+  return getAssociatedTokenAddressSync(
+    ata.mint,
+    ata.owner,
+    true,
+    ata.tokenProgram,
+  ).equals(tokenAccount);
 }
 
 /**

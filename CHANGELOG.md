@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
+- `getTokenAccountBalance` returns zero when the account is missing or is an uninitialized associated token account. A failed read, or an account that is neither, now stops the transaction from being built. Wrapped SOL keeps the lamports above rent. `zapOutThroughJupiter`, `zapOutThroughDammV2`, `zapOutThroughDlmm` and `zapOutThroughDlmmPro` use that balance instead of treating every lookup failure as zero.
+- `zapOutThroughDlmm` loads the bin arrays for the input mint. A Y-to-X zap out includes the bin arrays above the active bin.
+
 ### Security
 
 ### Breaking Changes
