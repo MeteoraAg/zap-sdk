@@ -1,12 +1,17 @@
+import BN from "bn.js";
 import {
+  ACCOUNT_SIZE,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  unpackAccount,
 } from "@solana/spl-token";
 import {
+  AccountInfo,
   Connection,
   PublicKey,
   SystemProgram,
@@ -79,24 +84,79 @@ export function unwrapSOLInstruction(
 }
 
 /**
- * Get token account balance
+ * Raw token amount in `tokenAccount`.
+ * A missing account is `"0"`. So is an uninitialized associated token account, except wrapped SOL,
+ * which keeps the lamports above rent. Any other account that is not a token account throws.
  * @param connection - Solana connection
  * @param tokenAccount - The token account address
- * @returns The token account balance as a string
+ * @param ata - Mint, owner and token program, when `tokenAccount` may not be initialized yet
+ * @returns The raw token amount
  */
 export async function getTokenAccountBalance(
   connection: Connection,
   tokenAccount: PublicKey,
+  ata?: {
+    mint: PublicKey;
+    owner: PublicKey;
+    tokenProgram: PublicKey;
+  },
 ): Promise<string> {
-  let balance: string;
-  try {
-    balance = (await connection.getTokenAccountBalance(tokenAccount)).value
-      .amount;
-  } catch {
-    balance = "0";
+  const account = await connection.getAccountInfo(tokenAccount);
+  if (!account) {
+    return "0";
   }
 
-  return balance;
+  if (
+    account.owner.equals(TOKEN_PROGRAM_ID) ||
+    account.owner.equals(TOKEN_2022_PROGRAM_ID)
+  ) {
+    return unpackAccount(
+      tokenAccount,
+      account,
+      account.owner,
+    ).amount.toString();
+  }
+
+  if (ata && isUninitializedAta(tokenAccount, account, ata)) {
+    if (!ata.mint.equals(NATIVE_MINT)) {
+      return "0";
+    }
+    const rent =
+      await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE);
+    // web3.js returns 0 instead of throwing when the RPC answers this request with an error
+    if (rent === 0) {
+      throw new Error(
+        "Could not read the rent-exempt minimum of a token account",
+      );
+    }
+    const balance = new BN(account.lamports).sub(new BN(rent));
+    return balance.isNeg() || balance.isZero() ? "0" : balance.toString();
+  }
+
+  throw new Error(`Could not read token account ${tokenAccount.toBase58()}`);
+}
+
+function isUninitializedAta(
+  tokenAccount: PublicKey,
+  account: AccountInfo<Buffer>,
+  ata: {
+    mint: PublicKey;
+    owner: PublicKey;
+    tokenProgram: PublicKey;
+  },
+): boolean {
+  if (
+    !account.owner.equals(SystemProgram.programId) ||
+    account.data.length !== 0
+  ) {
+    return false;
+  }
+  return getAssociatedTokenAddressSync(
+    ata.mint,
+    ata.owner,
+    true,
+    ata.tokenProgram,
+  ).equals(tokenAccount);
 }
 
 /**
