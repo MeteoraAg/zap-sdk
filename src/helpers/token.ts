@@ -1,7 +1,6 @@
 import BN from "bn.js";
 import {
   ACCOUNT_SIZE,
-  AccountLayout,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
@@ -9,6 +8,7 @@ import {
   NATIVE_MINT,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  unpackAccount,
 } from "@solana/spl-token";
 import {
   AccountInfo,
@@ -86,7 +86,7 @@ export function unwrapSOLInstruction(
 /**
  * Raw token amount in `tokenAccount`.
  * A missing account is `"0"`. So is an uninitialized associated token account, except wrapped SOL,
- * which keeps the lamports above rent.
+ * which keeps the lamports above rent. Any other account that is not a token account throws.
  * @param connection - Solana connection
  * @param tokenAccount - The token account address
  * @param ata - Mint, owner and token program, when `tokenAccount` may not be initialized yet
@@ -106,8 +106,15 @@ export async function getTokenAccountBalance(
     return "0";
   }
 
-  if (isTokenAccount(account)) {
-    return AccountLayout.decode(account.data).amount.toString();
+  if (
+    account.owner.equals(TOKEN_PROGRAM_ID) ||
+    account.owner.equals(TOKEN_2022_PROGRAM_ID)
+  ) {
+    return unpackAccount(
+      tokenAccount,
+      account,
+      account.owner,
+    ).amount.toString();
   }
 
   if (ata && isUninitializedAta(tokenAccount, account, ata)) {
@@ -122,14 +129,6 @@ export async function getTokenAccountBalance(
   }
 
   throw new Error(`Could not read token account ${tokenAccount.toBase58()}`);
-}
-
-function isTokenAccount(account: AccountInfo<Buffer>): boolean {
-  return (
-    (account.owner.equals(TOKEN_PROGRAM_ID) ||
-      account.owner.equals(TOKEN_2022_PROGRAM_ID)) &&
-    account.data.length >= ACCOUNT_SIZE
-  );
 }
 
 function isUninitializedAta(

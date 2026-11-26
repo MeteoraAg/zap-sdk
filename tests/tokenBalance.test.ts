@@ -4,9 +4,12 @@ import {
   AccountLayout,
   AccountState,
   getAssociatedTokenAddressSync,
+  MINT_SIZE,
   NATIVE_MINT,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TokenInvalidAccountError,
+  TokenInvalidAccountSizeError,
 } from "@solana/spl-token";
 import {
   AccountInfo,
@@ -21,6 +24,9 @@ import { getTokenAccountBalance } from "../src/helpers/token";
 import { Zap } from "../src/zap";
 
 const RENT = 2_039_280;
+// Token-2022 `AccountType`, the byte after the base token account or the padded mint
+const MINT_TYPE = 1;
+const ACCOUNT_TYPE = 2;
 const RAW_AMOUNT = BigInt("10000000000000000001");
 
 function tokenAccount(mint: PublicKey, owner: PublicKey, programId: PublicKey) {
@@ -114,6 +120,64 @@ describe("token account balance", () => {
         ata,
       );
       expect(balance).to.equal(RAW_AMOUNT.toString());
+    });
+  }
+
+  it("returns the raw amount of a token-2022 account with extensions", async () => {
+    const ata = getAssociatedTokenAddressSync(
+      mint,
+      owner,
+      true,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    const { data } = tokenAccount(mint, owner, TOKEN_2022_PROGRAM_ID);
+    const balance = await getTokenAccountBalance(
+      connectionFor(
+        new Map([
+          [
+            ata.toBase58(),
+            account(
+              TOKEN_2022_PROGRAM_ID,
+              Buffer.concat([data, Buffer.from([ACCOUNT_TYPE, 0, 0, 0, 0])]),
+            ),
+          ],
+        ]),
+      ),
+      ata,
+    );
+    expect(balance).to.equal(RAW_AMOUNT.toString());
+  });
+
+  // A token-2022 mint with extensions is padded to the token account size, so only its account
+  // type tells it from a token account.
+  for (const { name, programId, data, errorType } of [
+    {
+      name: "an spl token mint",
+      programId: TOKEN_PROGRAM_ID,
+      data: Buffer.alloc(MINT_SIZE),
+      errorType: TokenInvalidAccountSizeError,
+    },
+    {
+      name: "a token-2022 mint with extensions",
+      programId: TOKEN_2022_PROGRAM_ID,
+      data: Buffer.concat([
+        Buffer.alloc(ACCOUNT_SIZE),
+        Buffer.from([MINT_TYPE, 0, 0, 0, 0]),
+      ]),
+      errorType: TokenInvalidAccountError,
+    },
+  ]) {
+    it(`throws when the account is ${name}`, async () => {
+      const address = Keypair.generate().publicKey;
+      const error = await thrown(() =>
+        getTokenAccountBalance(
+          connectionFor(
+            new Map([[address.toBase58(), account(programId, data)]]),
+          ),
+          address,
+        ),
+      );
+      expect(error).to.be.instanceOf(errorType);
     });
   }
 
