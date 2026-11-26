@@ -66,6 +66,7 @@ function account(
 
 function connectionFor(
   accounts: Map<string, AccountInfo<Buffer> | "throw">,
+  rent = RENT,
 ): Connection {
   return {
     getAccountInfo: async (pubkey: PublicKey) => {
@@ -75,7 +76,7 @@ function connectionFor(
       }
       return accountInfo ?? null;
     },
-    getMinimumBalanceForRentExemption: async () => RENT,
+    getMinimumBalanceForRentExemption: async () => rent,
   } as unknown as Connection;
 }
 
@@ -203,26 +204,67 @@ describe("token account balance", () => {
     expect(balance).to.equal("0");
   });
 
-  it("keeps wrapped SOL above rent on an uninitialized account", async () => {
+  describe("uninitialized wrapped SOL account", () => {
     const ata = getAssociatedTokenAddressSync(
       NATIVE_MINT,
       owner,
       true,
       TOKEN_PROGRAM_ID,
     );
-    const balance = await getTokenAccountBalance(
-      connectionFor(
-        new Map([
-          [
-            ata.toBase58(),
-            account(SystemProgram.programId, Buffer.alloc(0), RENT + 12345),
-          ],
-        ]),
-      ),
-      ata,
-      { mint: NATIVE_MINT, owner, tokenProgram: TOKEN_PROGRAM_ID },
+    const balanceWith = (lamports: number, rent = RENT) =>
+      getTokenAccountBalance(
+        connectionFor(
+          new Map([
+            [
+              ata.toBase58(),
+              account(SystemProgram.programId, Buffer.alloc(0), lamports),
+            ],
+          ]),
+          rent,
+        ),
+        ata,
+        { mint: NATIVE_MINT, owner, tokenProgram: TOKEN_PROGRAM_ID },
+      );
+
+    it("keeps the lamports above rent", async () => {
+      expect(await balanceWith(RENT + 12345)).to.equal("12345");
+    });
+
+    for (const lamports of [RENT, RENT - 1]) {
+      it(`returns zero with ${lamports === RENT ? "exactly" : "less than"} rent`, async () => {
+        expect(await balanceWith(lamports)).to.equal("0");
+      });
+    }
+
+    // web3.js returns 0 for the rent lookup when the RPC answers with an error.
+    it("throws when the rent lookup fails", async () => {
+      const error = await thrown(() => balanceWith(RENT + 12345, 0));
+      expect(error?.message).to.equal(
+        "Could not read the rent-exempt minimum of a token account",
+      );
+    });
+  });
+
+  it("throws for an uninitialized account without the associated token account details", async () => {
+    const ata = getAssociatedTokenAddressSync(
+      mint,
+      owner,
+      true,
+      TOKEN_PROGRAM_ID,
     );
-    expect(balance).to.equal("12345");
+    const error = await thrown(() =>
+      getTokenAccountBalance(
+        connectionFor(
+          new Map([
+            [ata.toBase58(), account(SystemProgram.programId, Buffer.alloc(0))],
+          ]),
+        ),
+        ata,
+      ),
+    );
+    expect(error?.message).to.equal(
+      `Could not read token account ${ata.toBase58()}`,
+    );
   });
 
   it("throws when the account is not the associated token account", async () => {

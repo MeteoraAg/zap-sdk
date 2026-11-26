@@ -121,10 +121,15 @@ export async function getTokenAccountBalance(
     if (!ata.mint.equals(NATIVE_MINT)) {
       return "0";
     }
-    const rent = new BN(
-      await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE),
-    );
-    const balance = new BN(account.lamports).sub(rent);
+    const rent =
+      await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE);
+    // web3.js returns 0 instead of throwing when the RPC answers this request with an error
+    if (rent === 0) {
+      throw new Error(
+        "Could not read the rent-exempt minimum of a token account",
+      );
+    }
+    const balance = new BN(account.lamports).sub(new BN(rent));
     return balance.isNeg() || balance.isZero() ? "0" : balance.toString();
   }
 
